@@ -18,6 +18,88 @@ export interface ManaSource {
   lastRequestAt: number | null;
 }
 
+type ManaPerson = UsersPage["data"]["items"][number];
+type ManaHeldMembership = UserMembershipsPage["data"]["items"][number];
+
+/**
+ * Saves people from Mana. `runId` marks who a full sync has seen. Pass
+ * `keepRunId` for a single live lookup, so a person already known keeps the
+ * mark from the last full sync.
+ */
+export async function upsertMembers(
+  db: Db,
+  studioId: string,
+  people: ManaPerson[],
+  runId: string,
+  options: { keepRunId?: boolean } = {},
+) {
+  if (people.length === 0) return;
+  await db
+    .insert(manaMember)
+    .values(
+      people.map((u) => ({
+        studioId,
+        manaUserId: u.userId,
+        role: u.role,
+        name: u.profile.name,
+        email: u.profile.email,
+        emailNormalized: normalizeEmail(u.profile.email),
+        phone: u.profile.phone,
+        phoneNormalized: normalizePhone(u.profile.phone),
+        lastRunId: runId,
+        syncedAt: new Date(),
+      })),
+    )
+    .onConflictDoUpdate({
+      target: [manaMember.studioId, manaMember.manaUserId],
+      set: {
+        role: sql`excluded.role`,
+        name: sql`excluded.name`,
+        email: sql`excluded.email`,
+        emailNormalized: sql`excluded.email_normalized`,
+        phone: sql`excluded.phone`,
+        phoneNormalized: sql`excluded.phone_normalized`,
+        ...(options.keepRunId ? {} : { lastRunId: sql`excluded.last_run_id` }),
+        syncedAt: sql`excluded.synced_at`,
+      },
+    });
+}
+
+/** Replaces everything mirrored for one person's memberships with what Mana says now. */
+export async function replaceMemberships(
+  db: Db,
+  studioId: string,
+  manaUserId: string,
+  items: ManaHeldMembership[],
+) {
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(manaMembership)
+      .where(and(eq(manaMembership.studioId, studioId), eq(manaMembership.manaUserId, manaUserId)));
+    if (items.length > 0) {
+      await tx.insert(manaMembership).values(
+        items.map((m) => ({
+          studioId,
+          id: m.id,
+          manaUserId,
+          membershipId: m.membershipId,
+          name: m.name,
+          type: m.type,
+          status: m.status,
+          startDate: m.startDate.slice(0, 10),
+          commitmentEndDate: m.commitmentEndDate?.slice(0, 10) ?? null,
+          cancelEffectiveDate: m.cancelEffectiveDate?.slice(0, 10) ?? null,
+          pendingChangeKind: m.pendingChange?.kind ?? null,
+          pendingChangeDate: (m.pendingChange?.endDate ?? m.pendingChange?.freezeDate ?? null)?.slice(0, 10) ?? null,
+          priceAmount: m.price.amount,
+          priceCurrency: m.price.currency,
+          syncedAt: new Date(),
+        })),
+      );
+    }
+  });
+}
+
 export const initialProgress: SyncProgress = {
   phase: "users",
   nextUrl: null,
@@ -114,37 +196,7 @@ export async function runBatch(
   while (progress.phase === "users") {
     if (outOfTime()) return { done: false };
     const page = await source.getUsersPage(progress.nextUrl);
-    if (page.items.length > 0) {
-      await db
-        .insert(manaMember)
-        .values(
-          page.items.map((u) => ({
-            studioId,
-            manaUserId: u.userId,
-            role: u.role,
-            name: u.profile.name,
-            email: u.profile.email,
-            emailNormalized: normalizeEmail(u.profile.email),
-            phone: u.profile.phone,
-            phoneNormalized: normalizePhone(u.profile.phone),
-            lastRunId: runId,
-            syncedAt: new Date(),
-          })),
-        )
-        .onConflictDoUpdate({
-          target: [manaMember.studioId, manaMember.manaUserId],
-          set: {
-            role: sql`excluded.role`,
-            name: sql`excluded.name`,
-            email: sql`excluded.email`,
-            emailNormalized: sql`excluded.email_normalized`,
-            phone: sql`excluded.phone`,
-            phoneNormalized: sql`excluded.phone_normalized`,
-            lastRunId: sql`excluded.last_run_id`,
-            syncedAt: sql`excluded.synced_at`,
-          },
-        });
-    }
+    await upsertMembers(db, studioId, page.items, runId);
     progress.usersSeen += page.items.length;
     progress.usersTotal = page.total;
     progress.nextUrl = page.next;
@@ -200,32 +252,7 @@ export async function runBatch(
       // A person removed from Mana since the list was read has no memberships to mirror.
       if (!(error instanceof ManaError && error.code === "api" && error.details.status === 404)) throw error;
     }
-    await db.transaction(async (tx) => {
-      await tx
-        .delete(manaMembership)
-        .where(and(eq(manaMembership.studioId, studioId), eq(manaMembership.manaUserId, next.id)));
-      if (items.length > 0) {
-        await tx.insert(manaMembership).values(
-          items.map((m) => ({
-            studioId,
-            id: m.id,
-            manaUserId: next.id,
-            membershipId: m.membershipId,
-            name: m.name,
-            type: m.type,
-            status: m.status,
-            startDate: m.startDate.slice(0, 10),
-            commitmentEndDate: m.commitmentEndDate?.slice(0, 10) ?? null,
-            cancelEffectiveDate: m.cancelEffectiveDate?.slice(0, 10) ?? null,
-            pendingChangeKind: m.pendingChange?.kind ?? null,
-            pendingChangeDate: (m.pendingChange?.endDate ?? m.pendingChange?.freezeDate ?? null)?.slice(0, 10) ?? null,
-            priceAmount: m.price.amount,
-            priceCurrency: m.price.currency,
-            syncedAt: new Date(),
-          })),
-        );
-      }
-    });
+    await replaceMemberships(db, studioId, next.id, items);
     progress.memberCursor = next.id;
     progress.membersDone += 1;
     await touch();

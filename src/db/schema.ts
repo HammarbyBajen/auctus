@@ -52,6 +52,8 @@ export const studioSettings = pgTable("studio_settings", {
   manaStudioId: text("mana_studio_id"),
   manaBaseUrl: text("mana_base_url").notNull().default("https://www.getmana.app"),
   thresholds: jsonb("thresholds").$type<Thresholds>().notNull().default(defaultThresholds),
+  /** Mana memberships that are not real memberships (for example a locker), by Mana membership id. */
+  ignoredMembershipIds: jsonb("ignored_membership_ids").$type<string[]>().notNull().default([]),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -167,10 +169,15 @@ export const person = pgTable(
     phone: text("phone"),
     /** Phone reduced to a comparable form (see lib/leads/matching.ts). */
     phoneNormalized: text("phone_normalized"),
+    /** The same person in Mana, once matched by email or phone. */
+    manaUserId: text("mana_user_id"),
+    /** When this person was last looked up live in Mana (to avoid asking on every page view). */
+    manaCheckedAt: timestamp("mana_checked_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    index("person_studio_mana_idx").on(table.studioId, table.manaUserId),
     index("person_studio_email_idx").on(table.studioId, table.emailNormalized),
     index("person_studio_phone_idx").on(table.studioId, table.phoneNormalized),
   ],
@@ -246,6 +253,8 @@ export const leadEvent = pgTable(
     coldReason: text("cold_reason"),
     /** For contact_logged: called, no_answer, emailed or booked. */
     outcome: text("outcome"),
+    /** Set when the CRM did it by itself, for example "mana" for an automatic Won. */
+    via: text("via"),
     authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

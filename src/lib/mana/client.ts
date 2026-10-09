@@ -150,6 +150,13 @@ export class ManaClient {
     };
   }
 
+  /** People whose name, email or phone contains `term`. Used to look one person up live. */
+  async searchUsers(term: string) {
+    const url = this.studioUrl("/users", { search: term, pageSize: "20" });
+    const page = parseContract(usersPageSchema, await this.getJson(url), "personsökning");
+    return page.data.items;
+  }
+
   /** Every membership one person has, past, current and future. */
   async getUserMemberships(manaUserId: string) {
     let url: string | null = this.studioUrl("/user-memberships", {

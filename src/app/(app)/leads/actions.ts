@@ -5,7 +5,9 @@ import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { leadSources } from "@/lib/leads/constants";
-import { addNote, createOrMatchLead, LeadError, logContact, moveLeadStage } from "@/lib/leads/service";
+import { addNote, createOrMatchLead, getLead, LeadError, logContact, moveLeadStage } from "@/lib/leads/service";
+import { createManaClient } from "@/lib/mana/config";
+import { refreshPersonFromMana } from "@/lib/mana/leads";
 import { assignLead, createTask, deleteTask, setTaskDone, TaskError } from "@/lib/tasks/service";
 import { requirePermission } from "@/lib/session";
 import type { MessageKey } from "@/lib/i18n";
@@ -147,4 +149,23 @@ export async function assignAction(leadId: string, formData: FormData) {
   }
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
+}
+
+/**
+ * Looks the lead's person up in Mana right now. Called by the lead page after
+ * it has shown, so the page never waits for Mana. Any problem with Mana is
+ * ignored here: the page already shows what the last sync knew.
+ */
+export async function checkLeadInMana(leadId: string): Promise<{ changed: boolean }> {
+  const user = await requirePermission("leads", "read");
+  const found = await getLead(db, user.studioId, leadId);
+  if (!found) return { changed: false };
+  try {
+    const client = await createManaClient(db, user.studioId, null, { maxRetries: 1 });
+    const changed = await refreshPersonFromMana(db, client, user.studioId, found.person.id);
+    if (changed) revalidatePath(`/leads/${leadId}`);
+    return { changed };
+  } catch {
+    return { changed: false };
+  }
 }

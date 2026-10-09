@@ -12,7 +12,12 @@ type Db = typeof defaultDb;
  * studio's settings. The API key comes only from the environment, and this
  * module is server-only, so it can never reach the browser.
  */
-export async function createManaClient(db: Db, studioId: string, lastRequestAt: number | null = null) {
+export async function createManaClient(
+  db: Db,
+  studioId: string,
+  lastRequestAt: number | null = null,
+  options: { maxRetries?: number } = {},
+) {
   const [settings] = await db
     .select({ manaStudioId: studioSettings.manaStudioId, manaBaseUrl: studioSettings.manaBaseUrl })
     .from(studioSettings)
@@ -30,5 +35,6 @@ export async function createManaClient(db: Db, studioId: string, lastRequestAt: 
     studioId: settings.manaStudioId,
     apiKey,
     lastRequestAt,
+    maxRetries: options.maxRetries,
   });
 }

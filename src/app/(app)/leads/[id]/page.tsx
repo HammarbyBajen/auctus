@@ -10,6 +10,8 @@ import { listStudioUsers, listTasksForLead } from "@/lib/tasks/service";
 import { requirePermission } from "@/lib/session";
 import { t, type MessageKey } from "@/lib/i18n";
 import { assignAction, finishTask, logContactAction, moveStage, removeTask } from "../actions";
+import { getManaInfo } from "@/lib/mana/leads";
+import { ManaRefresher } from "./mana-refresher";
 import { NoteForm } from "./note-form";
 import { TaskForm } from "./task-form";
 
@@ -31,11 +33,12 @@ export default async function LeadPage({
   if (!found) notFound();
   const { lead, person, stage, assigneeName, history } = found;
   const today = todayInStockholm();
-  const [stages, reasons, taskLists, people] = await Promise.all([
+  const [stages, reasons, taskLists, people, mana] = await Promise.all([
     listStages(db, user.studioId),
     listColdReasons(db, user.studioId),
     listTasksForLead(db, user.studioId, lead.id),
     listStudioUsers(db, user.studioId),
+    getManaInfo(db, user.studioId, person.manaUserId),
   ]);
   const assign = assignAction.bind(null, lead.id);
   const stageName = (key: string | null) => stages.find((s) => s.key === key)?.name ?? key ?? "";
@@ -93,6 +96,50 @@ export default async function LeadPage({
         <dt className="text-stone-600">{t("lead.source")}</dt>
         <dd>{t(`source.${lead.source}` as MessageKey)}</dd>
       </dl>
+
+      <ManaRefresher leadId={lead.id} />
+      <section className="flex flex-col gap-2">
+        <h2 className="text-xl font-semibold">{t("lead.mana")}</h2>
+        {!mana ? (
+          <p className="text-stone-600">{t("lead.manaNone")}</p>
+        ) : (
+          <>
+            {mana.counting.length > 0 && stage.kind !== "won" && (
+              <p className="rounded-lg bg-amber-100 px-4 py-3">{t("lead.manaAlready")}</p>
+            )}
+            {mana.memberships.length === 0 ? (
+              <p className="text-stone-600">{t("lead.manaNoMembership")}</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {mana.memberships.map((m) => {
+                  const counts = !mana.ignored.includes(m.membershipId);
+                  return (
+                    <li key={m.id} className="rounded-lg border border-stone-200 bg-white px-4 py-3">
+                      <p className="text-lg font-medium">
+                        {m.name} · {t(`mstatus.${m.status}` as MessageKey)}
+                      </p>
+                      <p className="text-stone-600">
+                        {m.status === "future"
+                          ? t("lead.manaStarts", { date: formatDay(m.startDate) })
+                          : m.status === "ended" && m.cancelEffectiveDate
+                            ? t("lead.manaEnded", { date: formatDay(m.cancelEffectiveDate) })
+                            : t("lead.manaSince", { date: formatDay(m.startDate) })}
+                        {m.pendingChangeKind === "cancel" && m.pendingChangeDate
+                          ? ` · ${t("lead.manaCancel", { date: formatDay(m.pendingChangeDate) })}`
+                          : ""}
+                        {m.pendingChangeKind === "freeze" && m.pendingChangeDate
+                          ? ` · ${t("lead.manaFreeze", { date: formatDay(m.pendingChangeDate) })}`
+                          : ""}
+                      </p>
+                      {!counts && <p className="text-sm text-stone-500">{t("lead.manaNotCounted")}</p>}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </>
+        )}
+      </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-xl font-semibold">{t("lead.contactTitle")}</h2>
@@ -274,6 +321,7 @@ function HistoryLine({
       {item.coldReason && (
         <p className="text-stone-600">{t("history.coldBecause", { reason: reasonName(item.coldReason) })}</p>
       )}
+      {item.via === "mana" && <p className="text-stone-600">{t("history.viaMana")}</p>}
     </div>
   );
 }

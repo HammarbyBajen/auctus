@@ -1,16 +1,25 @@
 import { db } from "@/db";
 import { formatDateTime } from "@/lib/format";
+import { getIgnoredMembershipIds, listMembershipKinds } from "@/lib/mana/leads";
 import { getSyncStatus } from "@/lib/mana/status";
 import { requirePermission } from "@/lib/session";
 import { t, type MessageKey } from "@/lib/i18n";
-import { syncNow } from "./actions";
+import { saveMembershipRules, syncNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
-export default async function ManaPage({ searchParams }: { searchParams: Promise<{ startad?: string }> }) {
+export default async function ManaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ startad?: string; sparat?: string }>;
+}) {
   const user = await requirePermission("settings", "manage");
-  const { startad } = await searchParams;
-  const status = await getSyncStatus(db, user.studioId);
+  const { startad, sparat } = await searchParams;
+  const [status, kinds, ignored] = await Promise.all([
+    getSyncStatus(db, user.studioId),
+    listMembershipKinds(db, user.studioId),
+    getIgnoredMembershipIds(db, user.studioId),
+  ]);
 
   return (
     <main className="flex flex-col gap-6">
@@ -36,6 +45,35 @@ export default async function ManaPage({ searchParams }: { searchParams: Promise
           {status.running ? t("mana.syncing") : t("mana.syncNow")}
         </button>
       </form>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-xl font-semibold">{t("mana.rulesTitle")}</h2>
+        <p className="text-stone-700">{t("mana.rulesIntro")}</p>
+        {sparat === "1" && <p className="rounded-lg bg-stone-200 px-4 py-3">{t("mana.rulesSaved")}</p>}
+        {kinds.length === 0 ? (
+          <p className="text-stone-600">{t("mana.rulesEmpty")}</p>
+        ) : (
+          <form action={saveMembershipRules} className="flex flex-col gap-3">
+            {kinds.map((k) => (
+              <label key={k.membershipId} className="flex items-center gap-3 text-lg">
+                <input
+                  type="checkbox"
+                  name="counts"
+                  value={k.membershipId}
+                  defaultChecked={!ignored.includes(k.membershipId)}
+                  className="h-5 w-5"
+                />
+                <span>
+                  {k.name} <span className="text-stone-500">({t("mana.rulesActive", { n: String(k.active) })})</span>
+                </span>
+              </label>
+            ))}
+            <button className="self-start rounded-lg bg-stone-900 px-4 py-3 text-lg font-medium text-white">
+              {t("mana.rulesSave")}
+            </button>
+          </form>
+        )}
+      </section>
 
       <section className="flex flex-col gap-3">
         <h2 className="text-xl font-semibold">{t("mana.recent")}</h2>

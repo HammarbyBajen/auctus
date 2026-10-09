@@ -148,6 +148,7 @@ export type HistoryItem =
       fromStage: string | null;
       toStage: string | null;
       coldReason: string | null;
+      via: string | null;
     }
   | { kind: "contact_logged"; id: string; at: Date; authorName: string | null; outcome: string };
 
@@ -190,6 +191,7 @@ export async function getLead(db: Db, studioId: string, leadId: string) {
         toStage: leadEvent.toStage,
         coldReason: leadEvent.coldReason,
         outcome: leadEvent.outcome,
+        via: leadEvent.via,
         createdAt: leadEvent.createdAt,
         authorName: user.name,
       })
@@ -217,6 +219,7 @@ export async function getLead(db: Db, studioId: string, leadId: string) {
             fromStage: e.fromStage,
             toStage: e.toStage,
             coldReason: e.coldReason,
+            via: e.via,
           },
     ),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
@@ -246,7 +249,7 @@ export async function moveLeadStage(
   studioId: string,
   leadId: string,
   toStage: string,
-  options: { coldReason?: string | null; authorId?: string | null } = {},
+  options: { coldReason?: string | null; authorId?: string | null; via?: string | null } = {},
 ) {
   return db.transaction(async (tx) => {
     const [current] = await tx
@@ -291,6 +294,7 @@ export async function moveLeadStage(
       toStage: target.key,
       coldReason: reason,
       authorId: options.authorId ?? null,
+      via: options.via ?? null,
     });
     return updated;
   });

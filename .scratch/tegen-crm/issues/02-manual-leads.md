@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] A lead can be created with name, email, optional phone and a source (manual, contact form, chat bot, Mana win-back)
-- [ ] The list shows all leads, newest first
-- [ ] On a lead, the phone number opens the dialler and the email address opens the mail app with one click
-- [ ] Opening a lead shows its details and its notes, and notes can be added
-- [ ] Creating a lead with an email or phone that already exists adds to the existing lead instead of making a second one
+- [x] A lead can be created with name, email, optional phone and a source (manual, contact form, chat bot, Mana win-back)
+- [x] The list shows all leads, newest first
+- [x] On a lead, the phone number opens the dialler and the email address opens the mail app with one click
+- [x] Opening a lead shows its details and its notes, and notes can be added
+- [x] Creating a lead with an email or phone that already exists adds to the existing lead instead of making a second one

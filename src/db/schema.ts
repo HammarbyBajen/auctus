@@ -1,4 +1,5 @@
 import {
+  index,
   bigint,
   boolean,
   integer,
@@ -115,3 +116,47 @@ export const rateLimit = pgTable("rate_limit", {
   count: integer("count").notNull(),
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
+
+export const lead = pgTable(
+  "lead",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id),
+    name: text("name").notNull(),
+    email: text("email"),
+    /** Lower-cased email, used to match the same person across forms. */
+    emailNormalized: text("email_normalized"),
+    phone: text("phone"),
+    /** Phone reduced to a comparable form (see lib/leads/matching.ts). */
+    phoneNormalized: text("phone_normalized"),
+    source: text("source").notNull().default("manual"),
+    stage: text("stage").notNull().default("new_lead"),
+    createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("lead_studio_created_idx").on(table.studioId, table.createdAt),
+    index("lead_studio_email_idx").on(table.studioId, table.emailNormalized),
+    index("lead_studio_phone_idx").on(table.studioId, table.phoneNormalized),
+  ],
+);
+
+export const leadNote = pgTable(
+  "lead_note",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => lead.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("lead_note_lead_idx").on(table.leadId, table.createdAt)],
+);

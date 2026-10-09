@@ -20,5 +20,6 @@ A lead and retention CRM for CrossFit Tegen, built on top of Mana. See [docs/PRD
 | `pnpm db:generate` | Create a migration after changing `src/db/schema.ts` |
 | `pnpm db:migrate` | Apply migrations |
 | `pnpm db:seed` | Create the studio, settings and first owner |
+| `pnpm tsx scripts/dev-user.ts` | Create a throwaway local owner (`dev-owner@example.test`) for trying the app. Refuses to run unless the database is on localhost. The password is saved as `DEV_USER_PASSWORD` in `.env.local`. |
 
 Decisions are recorded in [docs/adr](docs/adr).

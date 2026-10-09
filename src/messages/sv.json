@@ -145,6 +145,7 @@
   "source.mana_freeze": "Mana: frysning",
   "source.mana_ended": "Mana: avslutat medlemskap",
   "source.mana_day_pass": "Mana: dagpass utan medlemskap",
+  "source.pipedrive": "Pipedrive",
   "winback.noteCancelled": "Mana: {name} är uppsagt, sista dag {date}",
   "winback.noteFreeze": "Mana: {name} fryses från {date}",
   "winback.noteEnded": "Mana: {name} avslutades {date}",

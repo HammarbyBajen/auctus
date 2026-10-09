@@ -224,6 +224,8 @@ export const lead = pgTable(
     coldReason: text("cold_reason"),
     /** For a win-back lead: why the person left or paused, picked by whoever handles it. */
     winBackReason: text("win_back_reason"),
+    /** Where an imported lead came from, for example "pipedrive:person:123", so a rerun of the import skips it. */
+    externalRef: text("external_ref"),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -231,6 +233,7 @@ export const lead = pgTable(
   (table) => [
     index("lead_studio_created_idx").on(table.studioId, table.createdAt),
     index("lead_person_idx").on(table.personId, table.createdAt),
+    uniqueIndex("lead_studio_external_ref_idx").on(table.studioId, table.externalRef),
     foreignKey({
       columns: [table.studioId, table.stage],
       foreignColumns: [pipelineStage.studioId, pipelineStage.key],

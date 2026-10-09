@@ -25,10 +25,13 @@ describe.skipIf(!hasDb)("leads", () => {
       .returning();
     studioA = rows[0].id;
     studioB = rows[1].id;
+    const { ensureDefaultPipeline } = await import("@/lib/pipeline/service");
+    await ensureDefaultPipeline(db, studioA);
+    await ensureDefaultPipeline(db, studioB);
   });
 
   afterAll(async () => {
-    // Leads (and their notes), then people: the database refuses to delete a studio that still has any.
+    // Leads (and their notes and events), then people, stages and reasons (the studio delete cascades the latter): the database refuses to delete a studio that still has any.
     await db.delete(schema.lead).where(inArray(schema.lead.studioId, [studioA, studioB]));
     await db.delete(schema.person).where(inArray(schema.person.studioId, [studioA, studioB]));
     await db.delete(schema.studio).where(inArray(schema.studio.id, [studioA, studioB]));
@@ -69,8 +72,9 @@ describe.skipIf(!hasDb)("leads", () => {
     expect(again.person.name).toBe("Bo Berg");
     expect(again.lead.source).toBe("manual");
     const found = await service.getLead(db, studioA, first.lead.id);
-    expect(found?.notes).toHaveLength(1);
-    expect(found?.notes[0].body).toContain("Bo B");
+    expect(found?.history).toHaveLength(1);
+    const item = found?.history[0];
+    expect(item?.kind === "note" && item.body).toContain("Bo B");
   });
 
   it("matches on phone when written in a different way", async () => {
@@ -151,7 +155,7 @@ describe.skipIf(!hasDb)("leads", () => {
     await new Promise((resolve) => setTimeout(resolve, 5));
     await service.addNote(db, studioA, lead.id, "Andra", null);
     const found = await service.getLead(db, studioA, lead.id);
-    expect(found?.notes.map((n) => n.body)).toEqual(["Andra", "Första"]);
+    expect(found?.history.map((h) => h.kind === "note" && h.body)).toEqual(["Andra", "Första"]);
     expect(await service.addNote(db, studioB, lead.id, "Fel studio", null)).toBeNull();
     expect(
       (await db.select().from(schema.leadNote).where(eq(schema.leadNote.leadId, lead.id))).length,

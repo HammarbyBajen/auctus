@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] A lead can be moved to any stage with one action
-- [ ] Stage history shows each move with who and when
-- [ ] Marking a lead Cold requires picking a reason
-- [ ] A Cold lead can be reopened and keeps its history
-- [ ] One tap logs what happened after contact (for example called, no answer, emailed, booked) and adds it to the lead's history
-- [ ] Won can be set by hand (automatic Won comes later)
+- [x] A lead can be moved to any stage with one action
+- [x] Stage history shows each move with who and when
+- [x] Marking a lead Cold requires picking a reason
+- [x] A Cold lead can be reopened and keeps its history
+- [x] One tap logs what happened after contact (for example called, no answer, emailed, booked) and adds it to the lead's history
+- [x] Won can be set by hand (automatic Won comes later)

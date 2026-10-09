@@ -11,6 +11,7 @@ async function main() {
   const { db, pool } = await import("../src/db");
   const { studio, studioSettings, user } = await import("../src/db/schema");
   const { auth } = await import("../src/lib/auth");
+  const { ensureDefaultPipeline } = await import("../src/lib/pipeline/service");
 
   const email = process.env.SEED_OWNER_EMAIL;
   const password = process.env.SEED_OWNER_PASSWORD;
@@ -24,6 +25,7 @@ async function main() {
     existingStudio ??
     (await db.insert(studio).values({ slug: "tegen", name: "CrossFit Tegen" }).returning())[0];
   await db.insert(studioSettings).values({ studioId: tegen.id }).onConflictDoNothing();
+  await ensureDefaultPipeline(db, tegen.id);
 
   const [existingUser] = await db.select().from(user).where(eq(user.email, email));
   if (existingUser) {

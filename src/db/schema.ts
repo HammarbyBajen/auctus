@@ -1,8 +1,10 @@
 import {
-  index,
   bigint,
   boolean,
+  foreignKey,
+  index,
   integer,
+  primaryKey,
   jsonb,
   pgTable,
   text,
@@ -117,6 +119,36 @@ export const rateLimit = pgTable("rate_limit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
+/** Pipeline stages of a studio, in order. Leads refer to them by key (kept stable when a stage is renamed). */
+export const pipelineStage = pgTable(
+  "pipeline_stage",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    position: integer("position").notNull(),
+    /** open: still being worked, won: became a member, cold: not going to join. */
+    kind: text("kind").notNull().default("open"),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.key] })],
+);
+
+/** The reasons offered when a lead is marked Cold. */
+export const coldReason = pgTable(
+  "cold_reason",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    position: integer("position").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.key] })],
+);
+
 /** A real person: contact details live here, once, however many leads they have over time. */
 export const person = pgTable(
   "person",
@@ -154,6 +186,8 @@ export const lead = pgTable(
       .references(() => person.id),
     source: text("source").notNull().default("manual"),
     stage: text("stage").notNull().default("new_lead"),
+    /** Why the lead went cold. Set only while the lead is in a cold stage. */
+    coldReason: text("cold_reason"),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -161,6 +195,14 @@ export const lead = pgTable(
   (table) => [
     index("lead_studio_created_idx").on(table.studioId, table.createdAt),
     index("lead_person_idx").on(table.personId, table.createdAt),
+    foreignKey({
+      columns: [table.studioId, table.stage],
+      foreignColumns: [pipelineStage.studioId, pipelineStage.key],
+    }),
+    foreignKey({
+      columns: [table.studioId, table.coldReason],
+      foreignColumns: [coldReason.studioId, coldReason.key],
+    }),
   ],
 );
 
@@ -179,4 +221,28 @@ export const leadNote = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [index("lead_note_lead_idx").on(table.leadId, table.createdAt)],
+);
+
+/** What happened to a lead: a stage move or a logged contact. Shown together with notes as the lead's history. */
+export const leadEvent = pgTable(
+  "lead_event",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => lead.id, { onDelete: "cascade" }),
+    /** stage_changed or contact_logged */
+    type: text("type").notNull(),
+    fromStage: text("from_stage"),
+    toStage: text("to_stage"),
+    coldReason: text("cold_reason"),
+    /** For contact_logged: called, no_answer, emailed or booked. */
+    outcome: text("outcome"),
+    authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("lead_event_lead_idx").on(table.leadId, table.createdAt)],
 );

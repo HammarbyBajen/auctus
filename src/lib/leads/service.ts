@@ -1,9 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { lead, leadNote, person, user } from "@/db/schema";
+import { coldReason, lead, leadEvent, leadNote, person, pipelineStage, user } from "@/db/schema";
 import { t } from "@/lib/i18n";
 import { initialStage, type LeadSource } from "./constants";
 import { normalizeEmail, normalizePhone } from "./matching";
+import { contactOutcomes, type ContactOutcome } from "@/lib/pipeline/defaults";
 
 type Db = typeof defaultDb;
 
@@ -108,37 +109,197 @@ export async function createOrMatchLead(db: Db, studioId: string, input: NewLead
   });
 }
 
-/** All leads of a studio with their person, newest first. */
+/** All leads of a studio with their person and stage, newest first. */
 export async function listLeads(db: Db, studioId: string) {
   return db
-    .select({ lead, person })
+    .select({ lead, person, stage: pipelineStage })
     .from(lead)
     .innerJoin(person, eq(person.id, lead.personId))
+    .innerJoin(
+      pipelineStage,
+      and(eq(pipelineStage.studioId, lead.studioId), eq(pipelineStage.key, lead.stage)),
+    )
     .where(eq(lead.studioId, studioId))
     .orderBy(desc(lead.createdAt));
 }
 
-/** One lead with its person and notes (newest first), or null when it does not belong to the studio. */
+export type HistoryItem =
+  | { kind: "note"; id: string; at: Date; authorName: string | null; body: string }
+  | {
+      kind: "stage_changed";
+      id: string;
+      at: Date;
+      authorName: string | null;
+      fromStage: string | null;
+      toStage: string | null;
+      coldReason: string | null;
+    }
+  | { kind: "contact_logged"; id: string; at: Date; authorName: string | null; outcome: string };
+
+/**
+ * One lead with its person, its current stage and its history (notes, stage
+ * moves and logged contacts together, newest first). Null when the lead does
+ * not belong to the studio.
+ */
 export async function getLead(db: Db, studioId: string, leadId: string) {
   const [found] = await db
-    .select({ lead, person })
+    .select({ lead, person, stage: pipelineStage })
     .from(lead)
     .innerJoin(person, eq(person.id, lead.personId))
+    .innerJoin(
+      pipelineStage,
+      and(eq(pipelineStage.studioId, lead.studioId), eq(pipelineStage.key, lead.stage)),
+    )
     .where(and(eq(lead.studioId, studioId), eq(lead.id, leadId)))
     .limit(1);
   if (!found) return null;
-  const notes = await db
-    .select({
-      id: leadNote.id,
-      body: leadNote.body,
-      createdAt: leadNote.createdAt,
-      authorName: user.name,
-    })
-    .from(leadNote)
-    .leftJoin(user, eq(user.id, leadNote.authorId))
-    .where(and(eq(leadNote.studioId, studioId), eq(leadNote.leadId, leadId)))
-    .orderBy(desc(leadNote.createdAt));
-  return { lead: found.lead, person: found.person, notes };
+
+  const [notes, events] = await Promise.all([
+    db
+      .select({
+        id: leadNote.id,
+        body: leadNote.body,
+        createdAt: leadNote.createdAt,
+        authorName: user.name,
+      })
+      .from(leadNote)
+      .leftJoin(user, eq(user.id, leadNote.authorId))
+      .where(and(eq(leadNote.studioId, studioId), eq(leadNote.leadId, leadId))),
+    db
+      .select({
+        id: leadEvent.id,
+        type: leadEvent.type,
+        fromStage: leadEvent.fromStage,
+        toStage: leadEvent.toStage,
+        coldReason: leadEvent.coldReason,
+        outcome: leadEvent.outcome,
+        createdAt: leadEvent.createdAt,
+        authorName: user.name,
+      })
+      .from(leadEvent)
+      .leftJoin(user, eq(user.id, leadEvent.authorId))
+      .where(and(eq(leadEvent.studioId, studioId), eq(leadEvent.leadId, leadId))),
+  ]);
+
+  const history: HistoryItem[] = [
+    ...notes.map((n): HistoryItem => ({
+      kind: "note",
+      id: n.id,
+      at: n.createdAt,
+      authorName: n.authorName,
+      body: n.body,
+    })),
+    ...events.map((e): HistoryItem =>
+      e.type === "contact_logged"
+        ? { kind: "contact_logged", id: e.id, at: e.createdAt, authorName: e.authorName, outcome: e.outcome ?? "" }
+        : {
+            kind: "stage_changed",
+            id: e.id,
+            at: e.createdAt,
+            authorName: e.authorName,
+            fromStage: e.fromStage,
+            toStage: e.toStage,
+            coldReason: e.coldReason,
+          },
+    ),
+  ].sort((a, b) => b.at.getTime() - a.at.getTime());
+
+  return { lead: found.lead, person: found.person, stage: found.stage, history };
+}
+
+export class LeadError extends Error {
+  constructor(public code: "not_found" | "unknown_stage" | "cold_reason_required" | "unknown_outcome") {
+    super(code);
+  }
+}
+
+/**
+ * Moves a lead to a stage and records who did it. A cold stage needs one of
+ * the studio's Cold reasons. Leaving a cold stage clears the reason from the
+ * lead (the history still shows it). Moving to the same stage does nothing.
+ */
+export async function moveLeadStage(
+  db: Db,
+  studioId: string,
+  leadId: string,
+  toStage: string,
+  options: { coldReason?: string | null; authorId?: string | null } = {},
+) {
+  return db.transaction(async (tx) => {
+    const [current] = await tx
+      .select()
+      .from(lead)
+      .where(and(eq(lead.studioId, studioId), eq(lead.id, leadId)))
+      .limit(1);
+    if (!current) throw new LeadError("not_found");
+
+    const [target] = await tx
+      .select()
+      .from(pipelineStage)
+      .where(and(eq(pipelineStage.studioId, studioId), eq(pipelineStage.key, toStage)))
+      .limit(1);
+    if (!target) throw new LeadError("unknown_stage");
+
+    let reason: string | null = null;
+    if (target.kind === "cold") {
+      const [found] = options.coldReason
+        ? await tx
+            .select()
+            .from(coldReason)
+            .where(and(eq(coldReason.studioId, studioId), eq(coldReason.key, options.coldReason)))
+            .limit(1)
+        : [];
+      if (!found) throw new LeadError("cold_reason_required");
+      reason = found.key;
+    }
+
+    if (current.stage === target.key && (current.coldReason ?? null) === reason) return current;
+
+    const [updated] = await tx
+      .update(lead)
+      .set({ stage: target.key, coldReason: reason, updatedAt: new Date() })
+      .where(eq(lead.id, leadId))
+      .returning();
+    await tx.insert(leadEvent).values({
+      studioId,
+      leadId,
+      type: "stage_changed",
+      fromStage: current.stage,
+      toStage: target.key,
+      coldReason: reason,
+      authorId: options.authorId ?? null,
+    });
+    return updated;
+  });
+}
+
+/**
+ * Records what happened after contacting someone (called, no answer, emailed,
+ * booked). A lead still in the first stage moves on to "contacted", so one tap
+ * is enough.
+ */
+export async function logContact(
+  db: Db,
+  studioId: string,
+  leadId: string,
+  outcome: string,
+  authorId: string | null,
+) {
+  if (!(contactOutcomes as readonly string[]).includes(outcome)) throw new LeadError("unknown_outcome");
+  const found = await getLead(db, studioId, leadId);
+  if (!found) throw new LeadError("not_found");
+
+  await db.insert(leadEvent).values({
+    studioId,
+    leadId,
+    type: "contact_logged",
+    outcome: outcome as ContactOutcome,
+    authorId,
+  });
+  await db.update(lead).set({ updatedAt: new Date() }).where(eq(lead.id, leadId));
+  if (found.lead.stage === initialStage) {
+    await moveLeadStage(db, studioId, leadId, "contacted", { authorId });
+  }
 }
 
 export async function addNote(

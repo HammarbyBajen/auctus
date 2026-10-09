@@ -21,7 +21,7 @@ export default async function LeadsPage() {
         <p className="text-lg text-stone-700">{t("leads.empty")}</p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {leads.map(({ lead, person }) => (
+          {leads.map(({ lead, person, stage }) => (
             <li key={lead.id}>
               <Link
                 href={`/leads/${lead.id}`}
@@ -29,7 +29,7 @@ export default async function LeadsPage() {
               >
                 <span className="text-lg font-medium">{person.name}</span>
                 <span className="text-stone-600">
-                  {t(`stage.${lead.stage}` as MessageKey)} · {t(`source.${lead.source}` as MessageKey)}
+                  {stage.name} · {t(`source.${lead.source}` as MessageKey)}
                 </span>
                 <span className="text-sm text-stone-500">
                   {t("leads.createdAt", { when: formatDateTime(lead.createdAt) })}

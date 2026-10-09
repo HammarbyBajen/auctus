@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { leadSources } from "@/lib/leads/constants";
-import { addNote, createOrMatchLead } from "@/lib/leads/service";
+import { addNote, createOrMatchLead, LeadError, logContact, moveLeadStage } from "@/lib/leads/service";
 import { requirePermission } from "@/lib/session";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -56,4 +56,34 @@ export async function addLeadNote(
   await addNote(db, user.studioId, leadId, body, user.id);
   revalidatePath(`/leads/${leadId}`);
   return {};
+}
+
+export async function moveStage(leadId: string, formData: FormData) {
+  const user = await requirePermission("leads", "write");
+  const toStage = String(formData.get("stage") ?? "");
+  const reason = String(formData.get("coldReason") ?? "") || null;
+  try {
+    await moveLeadStage(db, user.studioId, leadId, toStage, { coldReason: reason, authorId: user.id });
+  } catch (error) {
+    if (error instanceof LeadError) {
+      redirect(`/leads/${leadId}?fel=${error.code === "cold_reason_required" ? "anledning" : "steg"}`);
+    }
+    throw error;
+  }
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  redirect(`/leads/${leadId}`);
+}
+
+export async function logContactAction(leadId: string, formData: FormData) {
+  const user = await requirePermission("leads", "write");
+  try {
+    await logContact(db, user.studioId, leadId, String(formData.get("outcome") ?? ""), user.id);
+  } catch (error) {
+    if (error instanceof LeadError) redirect(`/leads/${leadId}?fel=steg`);
+    throw error;
+  }
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  redirect(`/leads/${leadId}`);
 }

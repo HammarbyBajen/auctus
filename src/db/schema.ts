@@ -117,8 +117,9 @@ export const rateLimit = pgTable("rate_limit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
-export const lead = pgTable(
-  "lead",
+/** A real person: contact details live here, once, however many leads they have over time. */
+export const person = pgTable(
+  "person",
   {
     id: uuid("id").primaryKey().defaultRandom(),
     studioId: uuid("studio_id")
@@ -126,11 +127,31 @@ export const lead = pgTable(
       .references(() => studio.id),
     name: text("name").notNull(),
     email: text("email"),
-    /** Lower-cased email, used to match the same person across forms. */
+    /** Lower-cased email, used to recognise the same person across forms. */
     emailNormalized: text("email_normalized"),
     phone: text("phone"),
     /** Phone reduced to a comparable form (see lib/leads/matching.ts). */
     phoneNormalized: text("phone_normalized"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("person_studio_email_idx").on(table.studioId, table.emailNormalized),
+    index("person_studio_phone_idx").on(table.studioId, table.phoneNormalized),
+  ],
+);
+
+/** One chapter of a person's contact with the gym: how they came in and where they are in the process. */
+export const lead = pgTable(
+  "lead",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id),
+    personId: uuid("person_id")
+      .notNull()
+      .references(() => person.id),
     source: text("source").notNull().default("manual"),
     stage: text("stage").notNull().default("new_lead"),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
@@ -139,8 +160,7 @@ export const lead = pgTable(
   },
   (table) => [
     index("lead_studio_created_idx").on(table.studioId, table.createdAt),
-    index("lead_studio_email_idx").on(table.studioId, table.emailNormalized),
-    index("lead_studio_phone_idx").on(table.studioId, table.phoneNormalized),
+    index("lead_person_idx").on(table.personId, table.createdAt),
   ],
 );
 

@@ -21,13 +21,13 @@ export default async function LeadsPage() {
         <p className="text-lg text-stone-700">{t("leads.empty")}</p>
       ) : (
         <ul className="flex flex-col gap-3">
-          {leads.map((lead) => (
+          {leads.map(({ lead, person }) => (
             <li key={lead.id}>
               <Link
                 href={`/leads/${lead.id}`}
                 className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-white px-4 py-3"
               >
-                <span className="text-lg font-medium">{lead.name}</span>
+                <span className="text-lg font-medium">{person.name}</span>
                 <span className="text-stone-600">
                   {t(`stage.${lead.stage}` as MessageKey)} · {t(`source.${lead.source}` as MessageKey)}
                 </span>

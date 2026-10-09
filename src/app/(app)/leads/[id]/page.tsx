@@ -22,33 +22,33 @@ export default async function LeadPage({
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const found = await getLead(db, user.studioId, id);
   if (!found) notFound();
-  const { lead, notes } = found;
+  const { lead, person, notes } = found;
 
   return (
     <main className="flex flex-col gap-6">
       <Link href="/leads" className="underline">
         {t("leads.back")}
       </Link>
-      <h1 className="text-2xl font-semibold">{lead.name}</h1>
+      <h1 className="text-2xl font-semibold">{person.name}</h1>
       {dubblett === "1" && (
         <p role="status" className="rounded-lg bg-amber-100 px-4 py-3">
           {t("leadForm.duplicate")}
         </p>
       )}
       <div className="flex flex-wrap gap-3">
-        {lead.phone ? (
-          <a href={`tel:${lead.phone.replace(/[^\d+]/g, "")}`} className={link}>
-            {t("lead.call")} {lead.phone}
+        {person.phone ? (
+          <a href={`tel:${person.phone.replace(/[^\d+]/g, "")}`} className={link}>
+            {t("lead.call")} {person.phone}
           </a>
         ) : null}
-        {lead.email ? (
-          <a href={`mailto:${lead.email}`} className={link}>
+        {person.email ? (
+          <a href={`mailto:${person.email}`} className={link}>
             {t("lead.mail")}
           </a>
         ) : null}
-        {!lead.phone && !lead.email && <span className="text-stone-600">{t("lead.noContact")}</span>}
+        {!person.phone && !person.email && <span className="text-stone-600">{t("lead.noContact")}</span>}
       </div>
-      {lead.email && <p className="text-stone-700">{lead.email}</p>}
+      {person.email && <p className="text-stone-700">{person.email}</p>}
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-lg">
         <dt className="text-stone-600">{t("lead.stage")}</dt>
         <dd>{t(`stage.${lead.stage}` as MessageKey)}</dd>

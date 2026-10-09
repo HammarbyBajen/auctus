@@ -28,14 +28,15 @@ describe.skipIf(!hasDb)("leads", () => {
   });
 
   afterAll(async () => {
-    // Leads (and their notes) first: the database refuses to delete a studio that still has leads.
+    // Leads (and their notes), then people: the database refuses to delete a studio that still has any.
     await db.delete(schema.lead).where(inArray(schema.lead.studioId, [studioA, studioB]));
+    await db.delete(schema.person).where(inArray(schema.person.studioId, [studioA, studioB]));
     await db.delete(schema.studio).where(inArray(schema.studio.id, [studioA, studioB]));
     await pool.end();
   });
 
   it("creates a lead in the first stage with its source", async () => {
-    const { lead, duplicate } = await service.createOrMatchLead(db, studioA, {
+    const { lead, person, duplicate } = await service.createOrMatchLead(db, studioA, {
       name: "Anna Svensson",
       email: "anna@example.test",
       phone: "070-111 22 33",
@@ -44,7 +45,8 @@ describe.skipIf(!hasDb)("leads", () => {
     expect(duplicate).toBe(false);
     expect(lead.stage).toBe("new_lead");
     expect(lead.source).toBe("contact_form");
-    expect(lead.name).toBe("Anna Svensson");
+    expect(person.name).toBe("Anna Svensson");
+    expect(lead.personId).toBe(person.id);
   });
 
   it("adds to the existing lead when the email matches, ignoring case", async () => {
@@ -61,9 +63,10 @@ describe.skipIf(!hasDb)("leads", () => {
     });
     expect(again.duplicate).toBe(true);
     expect(again.lead.id).toBe(first.lead.id);
-    // The missing phone number is filled in, the name and source stay.
-    expect(again.lead.phone).toBe("0702223344");
-    expect(again.lead.name).toBe("Bo Berg");
+    // The person is the same, the missing phone number is filled in, the name and source stay.
+    expect(again.person.id).toBe(first.person.id);
+    expect(again.person.phone).toBe("0702223344");
+    expect(again.person.name).toBe("Bo Berg");
     expect(again.lead.source).toBe("manual");
     const found = await service.getLead(db, studioA, first.lead.id);
     expect(found?.notes).toHaveLength(1);
@@ -85,6 +88,40 @@ describe.skipIf(!hasDb)("leads", () => {
     expect(again.lead.id).toBe(first.lead.id);
   });
 
+  it("creates a new lead for a known person who has none yet", async () => {
+    const [known] = await db
+      .insert(schema.person)
+      .values({
+        studioId: studioA,
+        name: "Fia Medlem",
+        email: "fia@example.test",
+        emailNormalized: "fia@example.test",
+      })
+      .returning();
+    const result = await service.createOrMatchLead(db, studioA, {
+      name: "Fia M",
+      email: "FIA@example.test",
+      source: "mana_win_back",
+    });
+    expect(result.duplicate).toBe(false);
+    expect(result.person.id).toBe(known.id);
+    expect(result.lead.personId).toBe(known.id);
+    expect(result.person.name).toBe("Fia Medlem");
+  });
+
+  it("keeps one person per contact: the same person never gets two leads from repeats", async () => {
+    await service.createOrMatchLead(db, studioA, { name: "Gus", email: "gus@example.test", source: "manual" });
+    await service.createOrMatchLead(db, studioA, { name: "Gus", email: "gus@example.test", source: "chat_bot" });
+    await service.createOrMatchLead(db, studioA, { name: "Gus", email: "gus@example.test", source: "contact_form" });
+    const rows = await db
+      .select()
+      .from(schema.person)
+      .where(eq(schema.person.emailNormalized, "gus@example.test"));
+    expect(rows.filter((p) => p.studioId === studioA)).toHaveLength(1);
+    const leads = await db.select().from(schema.lead).where(eq(schema.lead.personId, rows[0].id));
+    expect(leads).toHaveLength(1);
+  });
+
   it("creates two leads when neither email nor phone match", async () => {
     const a = await service.createOrMatchLead(db, studioA, { name: "D1", email: "d1@example.test", source: "manual" });
     const b = await service.createOrMatchLead(db, studioA, { name: "D2", email: "d2@example.test", source: "manual" });
@@ -101,10 +138,10 @@ describe.skipIf(!hasDb)("leads", () => {
     expect(other.duplicate).toBe(false);
 
     const listA = await service.listLeads(db, studioA);
-    const times = listA.map((l) => l.createdAt.getTime());
+    const times = listA.map((row) => row.lead.createdAt.getTime());
     expect(times).toEqual([...times].sort((x, y) => y - x));
-    expect(listA.every((l) => l.studioId === studioA)).toBe(true);
-    expect(listA.find((l) => l.id === other.lead.id)).toBeUndefined();
+    expect(listA.every((row) => row.lead.studioId === studioA && row.person.studioId === studioA)).toBe(true);
+    expect(listA.find((row) => row.lead.id === other.lead.id)).toBeUndefined();
     expect(await service.getLead(db, studioA, other.lead.id)).toBeNull();
   });
 

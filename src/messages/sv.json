@@ -1,0 +1,17 @@
+{
+  "app.name": "Tegen CRM",
+  "nav.home": "Hem",
+  "nav.settings": "Inställningar",
+  "nav.signOut": "Logga ut",
+  "login.title": "Logga in",
+  "login.email": "E-post",
+  "login.password": "Lösenord",
+  "login.submit": "Logga in",
+  "login.error": "Fel e-postadress eller lösenord.",
+  "login.tooMany": "För många försök. Vänta en stund och försök igen.",
+  "home.greeting": "Hej {name}!",
+  "home.empty": "Här kommer du se vilka leads som behöver din uppmärksamhet först.",
+  "home.noAccess": "Du har inte behörighet att öppna den sidan.",
+  "settings.title": "Inställningar",
+  "settings.intro": "Här kommer ägarna kunna ändra steg, regler och användare."
+}

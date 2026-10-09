@@ -41,8 +41,8 @@ function Row({ card, active, className }: { card: LeadCard; active: boolean; cla
 
 /**
  * The list beside an open lead (large screens): leads that need action first,
- * then every stage in pipeline order. Won and cold stages start collapsed, as
- * they hold most of the history.
+ * then every open stage in pipeline order. Members are left out, and cold
+ * leads start collapsed, as they hold most of the history.
  */
 export function LeadList({
   needsAction,
@@ -75,7 +75,7 @@ export function LeadList({
           </ul>
         </section>
       )}
-      {groups.map((group) => {
+      {groups.filter((group) => group.kind !== "won").map((group) => {
         const list = (
           <ul className="flex flex-col gap-0.5">
             {group.cards.map((card) => (

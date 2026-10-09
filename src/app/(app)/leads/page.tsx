@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Clock, Plus } from "lucide-react";
+import { AlertCircle, CheckCircle2, Clock, Plus, Snowflake } from "lucide-react";
 import { db } from "@/db";
 import { ButtonLink } from "@/components/ui/button";
 import { Chip } from "@/components/app/chip";
@@ -24,29 +24,27 @@ function Card({ card }: { card: LeadCard }) {
         href={`/leads/${card.id}`}
         className="focus-ring group flex flex-col gap-1.5 rounded-md bg-card p-3 elevation-1"
       >
-        <span className="flex items-start justify-between gap-2">
-          <span className={cn("min-w-0 text-sm font-medium break-words underline-offset-4 group-hover:underline", card.assignedElsewhere && "font-normal text-muted-foreground")}>
-            {card.name}
-          </span>
-          {card.chip && (
-            <Chip tone={card.chip.tone} icon={chipIcon[card.chip.tone]} className="shrink-0">
-              {card.chip.label}
-            </Chip>
-          )}
+        <span className={cn("text-sm font-medium break-words underline-offset-4 group-hover:underline", card.assignedElsewhere && "font-normal text-muted-foreground")}>
+          {card.name}
         </span>
         <span className="text-xs text-muted-foreground">{card.meta}</span>
         {card.assignedElsewhere && <span className="text-xs text-muted-foreground">{card.assignedElsewhere}</span>}
+        {card.chip && (
+          <Chip tone={card.chip.tone} icon={chipIcon[card.chip.tone]} className="self-start">
+            {card.chip.label}
+          </Chip>
+        )}
       </Link>
     </li>
   );
 }
 
-function Cards({ group }: { group: StageGroup }) {
+function Cards({ group, className }: { group: StageGroup; className?: string }) {
   const shown = group.cards.slice(0, perColumn);
   const hidden = group.cards.length - shown.length;
   return (
     <>
-      <ul className="flex flex-col gap-2">
+      <ul className={cn("flex flex-col gap-2", className)}>
         {shown.map((card) => (
           <Card key={card.id} card={card} />
         ))}
@@ -57,67 +55,91 @@ function Cards({ group }: { group: StageGroup }) {
 }
 
 /**
- * The pipeline: every lead in its stage, in the order the PRD describes
+ * The pipeline: the open stages side by side in the order the PRD describes
  * (New lead, Contacted, Booked meeting, Booked test training, Consultation
- * done, Price info, then Won and Cold). A board from tablet width up, stage
- * tabs on a phone (the chosen stage is in the address).
+ * done, Price info), fitted to the screen so nothing scrolls sideways. Members
+ * are left out, and cold leads only show when asked for (?steg=cold). A phone
+ * shows one stage at a time behind tabs.
  */
 export default async function PipelinePage({ searchParams }: { searchParams: Promise<{ steg?: string }> }) {
   const user = await requirePermission("leads", "read");
   const { steg } = await searchParams;
   const { groups } = await getPipeline(db, user.studioId, user.id);
-  const chosen = groups.find((g) => g.key === steg) ?? groups.find((g) => g.cards.length > 0 && g.kind === "open") ?? groups[0];
+  const open = groups.filter((g) => g.kind === "open");
+  const cold = groups.find((g) => g.kind === "cold");
+  const showCold = cold !== undefined && steg === cold.key;
+  const chosen = open.find((g) => g.key === steg) ?? open.find((g) => g.cards.length > 0) ?? open[0];
 
   return (
     <Page
       title={t("leads.title")}
       actions={
-        <ButtonLink href="/leads/ny" className="hidden md:inline-flex">
-          <Plus aria-hidden="true" />
-          {t("leads.new")}
-        </ButtonLink>
+        <>
+          {cold && (
+            <ButtonLink
+              href={showCold ? "/leads" : `/leads?steg=${cold.key}`}
+              variant={showCold ? "secondary" : "ghost"}
+              aria-pressed={showCold}
+            >
+              <Snowflake aria-hidden="true" />
+              {cold.name}
+              <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(cold.cards.length)}</span>
+            </ButtonLink>
+          )}
+          <ButtonLink href="/leads/ny" className="hidden md:inline-flex">
+            <Plus aria-hidden="true" />
+            {t("leads.new")}
+          </ButtonLink>
+        </>
       }
     >
-      {/* Phone: one stage at a time */}
-      <div className="flex flex-col gap-4 md:hidden">
-        <ScrollCurrent aria-label={t("leads.title")} className="relative -mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
-          <ul className="flex w-max gap-1 rounded-md bg-well p-1">
-            {groups.map((g) => (
-              <li key={g.key}>
-                <Link
-                  href={`/leads?steg=${g.key}`}
-                  aria-current={chosen?.key === g.key ? "page" : undefined}
-                  className={cn(
-                    "focus-ring inline-flex min-h-11 items-center gap-2 rounded-sm px-3 text-sm whitespace-nowrap transition-[background-color]",
-                    chosen?.key === g.key ? "bg-card font-medium elevation-1" : "text-muted-foreground hover:bg-accent",
-                  )}
-                >
-                  {g.name}
-                  <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(g.cards.length)}</span>
-                </Link>
+      {showCold ? (
+        <Cards group={cold} className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" />
+      ) : (
+        <>
+          {/* Phone: one stage at a time */}
+          <div className="flex flex-col gap-4 md:hidden">
+            <ScrollCurrent aria-label={t("leads.title")} className="relative -mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
+              <ul className="flex w-max gap-1 rounded-md bg-well p-1">
+                {open.map((g) => (
+                  <li key={g.key}>
+                    <Link
+                      href={`/leads?steg=${g.key}`}
+                      aria-current={chosen?.key === g.key ? "page" : undefined}
+                      className={cn(
+                        "focus-ring inline-flex min-h-11 items-center gap-2 rounded-sm px-3 text-sm whitespace-nowrap transition-[background-color]",
+                        chosen?.key === g.key ? "bg-card font-medium elevation-1" : "text-muted-foreground hover:bg-accent",
+                      )}
+                    >
+                      {g.name}
+                      <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(g.cards.length)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </ScrollCurrent>
+            {chosen && <Cards group={chosen} />}
+          </div>
+
+          {/* Tablet and desktop: the board, three stages a row until there is room for all */}
+          <ol
+            style={{ "--stages": open.length } as React.CSSProperties}
+            className="hidden gap-3 md:grid md:max-[1399px]:grid-cols-3 min-[1400px]:grid-cols-[repeat(var(--stages),minmax(0,1fr))]"
+          >
+            {open.map((group) => (
+              <li key={group.key} className="min-w-0">
+                <section aria-labelledby={`stage-${group.key}`} className="flex h-full flex-col gap-2 rounded-lg border border-well-border bg-well p-2">
+                  <h2 id={`stage-${group.key}`} className="flex items-start justify-between gap-2 px-1 pt-1">
+                    <MicroLabel className="min-w-0">{group.name}</MicroLabel>
+                    <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(group.cards.length)}</span>
+                  </h2>
+                  <Cards group={group} />
+                </section>
               </li>
             ))}
-          </ul>
-        </ScrollCurrent>
-        {chosen && <Cards group={chosen} />}
-      </div>
-
-      {/* Tablet and desktop: the board */}
-      <div className="hidden overflow-x-auto pb-2 md:block">
-        <ol className="flex w-max gap-3">
-          {groups.map((group) => (
-            <li key={group.key} className="w-56 shrink-0">
-              <section aria-labelledby={`stage-${group.key}`} className="flex flex-col gap-2 rounded-lg border border-well-border bg-well p-2">
-                <h2 id={`stage-${group.key}`} className="flex items-center justify-between gap-2 px-1 pt-1">
-                  <MicroLabel>{group.name}</MicroLabel>
-                  <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(group.cards.length)}</span>
-                </h2>
-                <Cards group={group} />
-              </section>
-            </li>
-          ))}
-        </ol>
-      </div>
+          </ol>
+        </>
+      )}
     </Page>
   );
 }

@@ -106,7 +106,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
       <div className="hidden overflow-x-auto pb-2 md:block">
         <ol className="flex w-max gap-3">
           {groups.map((group) => (
-            <li key={group.key} className="w-64 shrink-0">
+            <li key={group.key} className="w-56 shrink-0">
               <section aria-labelledby={`stage-${group.key}`} className="flex flex-col gap-2 rounded-lg border border-well-border bg-well p-2">
                 <h2 id={`stage-${group.key}`} className="flex items-center justify-between gap-2 px-1 pt-1">
                   <MicroLabel>{group.name}</MicroLabel>

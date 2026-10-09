@@ -121,10 +121,10 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
             {chosen && <Cards group={chosen} />}
           </div>
 
-          {/* Tablet and desktop: the board, three stages a row until there is room for all */}
+          {/* Tablet and desktop: the board, four stages a row until there is room for all */}
           <ol
             style={{ "--stages": open.length } as React.CSSProperties}
-            className="hidden gap-3 md:grid md:max-[1399px]:grid-cols-3 min-[1400px]:grid-cols-[repeat(var(--stages),minmax(0,1fr))]"
+            className="hidden gap-3 md:grid md:max-[1599px]:grid-cols-4 min-[1600px]:grid-cols-[repeat(var(--stages),minmax(0,1fr))]"
           >
             {open.map((group) => (
               <li key={group.key} className="min-w-0">

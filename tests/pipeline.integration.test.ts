@@ -58,6 +58,7 @@ describe.skipIf(!hasDb)("pipeline stages and contact log", () => {
       "booked_meeting",
       "booked_test_training",
       "consultation_done",
+      "cancelled_meeting",
       "price_info",
       "won",
       "cold",

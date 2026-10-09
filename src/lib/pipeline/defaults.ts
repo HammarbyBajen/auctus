@@ -11,6 +11,7 @@ export const defaultStages: { key: string; name: string; kind: StageKind }[] = [
   { key: "booked_meeting", name: "Bokat möte", kind: "open" },
   { key: "booked_test_training", name: "Bokat provträning", kind: "open" },
   { key: "consultation_done", name: "Konsultation klar", kind: "open" },
+  { key: "cancelled_meeting", name: "Avbokat möte", kind: "open" },
   { key: "price_info", name: "Prisinformation", kind: "open" },
   { key: "won", name: "Medlem", kind: "won" },
   { key: "cold", name: "Kall lead", kind: "cold" },

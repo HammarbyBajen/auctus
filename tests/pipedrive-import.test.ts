@@ -41,7 +41,7 @@ describe("planImport", () => {
     );
     expect(result.leads.map((l) => [l.ref, l.stage, l.coldReason])).toEqual([
       ["pipedrive:person:p1", "new_lead", null],
-      ["pipedrive:person:p5", "contacted", null],
+      ["pipedrive:person:p5", "cancelled_meeting", null],
       ["pipedrive:person:p6", "cold", "other"],
     ]);
     expect(result.skipped).toEqual({ won: 1, lost: 1, kids: 1, unmapped_stage: 1 });

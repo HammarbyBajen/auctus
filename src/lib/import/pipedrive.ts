@@ -19,7 +19,7 @@ export const stageMap: Record<string, string> = {
   "NY LEAD": "new_lead",
   KONTAKTAD: "contacted",
   KONTAKTADE: "contacted",
-  "AVBOKAT MÖTE": "contacted",
+  "AVBOKAT MÖTE": "cancelled_meeting",
   "BOKAT MÖTE": "booked_meeting",
   "BOKAT PROVTRÄNING": "booked_test_training",
   "INBOKAD PÅ PROVTRÄNING": "booked_test_training",

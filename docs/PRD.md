@@ -40,7 +40,7 @@ On top of that, the landing page carries the gym's main KPI: **MRR from recurrin
 9b. As an owner, I want test leads (containing `test-lab37`, `ignorer` or `testlead`) marked as tests and kept out of the lists and counts, so that testing never looks like real demand.
 
 ### Working the pipeline
-10. As an owner, I want leads to move through New lead, Contacted, Booked meeting, Booked test training, Consultation done, Price info, then Won or Cold, so that the CRM matches how Tegen actually sells.
+10. As an owner, I want leads to move through New lead, Contacted, Booked meeting, Booked test training, Consultation done, Cancelled meeting (as in Pipedrive), Price info, then Won or Cold, so that the CRM matches how Tegen actually sells.
 11. As an owner, I want to move a lead between stages with one action, so that updating the CRM is fast enough to actually happen.
 12. As an owner, I want to record a reason when I mark a lead Cold, so that I learn why people do not join.
 13. As an owner, I want to add notes to a lead, so that we remember what was agreed on a call.

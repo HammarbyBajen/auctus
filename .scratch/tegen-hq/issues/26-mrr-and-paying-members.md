@@ -4,7 +4,7 @@
 
 **Blocked by:** 10
 
-**Status:** ready-for-agent
+**Status:** waiting: Erik's notes say to check the definitions with him before building. Confirm MRR, paying member and the Förvaringsbox decision with Erik first.
 
 Definitions (from Erik's notes, decided 2026-10-08 where marked):
 - MRR: the sum of the monthly price of every active recurring membership with a price above 0, at the price that applies today (a discount period lowers it).

@@ -22,13 +22,13 @@ Max will Check Fredrik or Timmy if coaches ever has Tegenmöte and what the deal
 
 ## Lead intake (from "How leads reach Tegen HQ")
 
-10. Can I get read access to `tegen-web`, or copies of `contactPayloadSchema` and `qualificationPayloadSchema` (`src/lib/qualification-schema.ts`) and `formatAttribution` (`src/lib/notion-leads.ts`)? Lead intake is built against them.
+10. The notes say what we receive (`contactPayloadSchema` and `qualificationPayloadSchema`), but not the fields inside them. Could you paste the two schema definitions, or send one throwaway test lead (containing `testlead`) to the endpoint before the real copy is switched on?
 11. Which channel should be "our own test channel" for notifications until the review (for example a Discord channel only Max sees)?
-12. For history: should the import read from the Tegen Notion lead database or from Pipedrive, and can I get read-only access to that one?
+12. For history: should the import read from the Tegen Notion lead database or from Pipedrive, and can I get read-only access to that one? Max has asked for a CSV export of the existing Pipedrive leads (people, deals or leads, and notes and activities if possible).
 
 ## MRR and paying members
 
-13. Can I get read access to Bionic HQ's `src/lib/members/paying.ts`, as reference?
+13. Before building: please confirm the MRR and paying-member definitions (sum of the monthly price of active recurring memberships above 0 kr, at today's price, frozen excluded; a paying member holds at least one), including that Förvaringsbox counts in both. And can I get read access to Bionic HQ's `src/lib/members/paying.ts`, as reference?
 14. Do recurring add-ons with a price, such as Förvaringsbox (a locker, 45 active), count in MRR, and does a locker alone make someone a paying member? A (Max): yes to both, it is a recurring 50 kr per month and counts as a membership.
 
 ## Anything missed

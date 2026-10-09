@@ -72,3 +72,21 @@ export function parseContract<T>(schema: z.ZodType<T>, body: unknown, what: stri
     .join("; ");
   throw new ManaError("contract", `Mana svarade på ett oväntat sätt (${what}). Fält: ${problems}`);
 }
+
+export const paymentsPageSchema = z.object({
+  data: z.object({
+    items: z.array(
+      z.object({
+        id: z.string().min(1),
+        user: z.object({ id: z.string().min(1) }).nullable(),
+        paidAt: z.string().nullable(),
+        status: z.string(),
+        kind: z.string(),
+        description: z.string().nullable(),
+      }),
+    ),
+  }),
+  links,
+  meta,
+});
+export type PaymentsPage = z.infer<typeof paymentsPageSchema>;

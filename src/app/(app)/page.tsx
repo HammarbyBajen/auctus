@@ -6,7 +6,7 @@ import { getHomeData } from "@/lib/home/service";
 import { listStages } from "@/lib/pipeline/service";
 import { isGreyedOut } from "@/lib/tasks/dates";
 import { requireUser } from "@/lib/session";
-import { t } from "@/lib/i18n";
+import { t, type MessageKey } from "@/lib/i18n";
 
 const severityStyle = {
   red: "border-red-300 bg-red-50",
@@ -35,6 +35,8 @@ function reasonText(reason: Reason): string {
       return t("reason.taskToday", { title: reason.title });
     case "stalled":
       return t("reason.stalled", { days: String(reason.days) });
+    case "win_back":
+      return `${t(`source.${reason.source}` as MessageKey)} · ${t("reason.winBack")}`;
   }
 }
 

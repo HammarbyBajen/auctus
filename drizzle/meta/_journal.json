@@ -57,6 +57,13 @@
       "when": 1791542557848,
       "tag": "0007_late_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791549162149,
+      "tag": "0008_medical_chameleon",
+      "breakpoints": true
     }
   ]
 }

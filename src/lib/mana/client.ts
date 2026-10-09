@@ -4,6 +4,8 @@ import {
   usersPageSchema,
   userMembershipsSchema,
   type UserMembershipsPage,
+  paymentsPageSchema,
+  type PaymentsPage,
 } from "./contracts";
 import { ManaError } from "./errors";
 
@@ -155,6 +157,22 @@ export class ManaClient {
     const url = this.studioUrl("/users", { search: term, pageSize: "20" });
     const page = parseContract(usersPageSchema, await this.getJson(url), "personsökning");
     return page.data.items;
+  }
+
+  /** Paid purchases at the studio since `fromAt`, newest first, following every page. */
+  async getPaidPayments(fromAt: string) {
+    let url: string | null = this.studioUrl("/payment-transactions", {
+      status: "paid",
+      fromAt,
+      pageSize: "100",
+    });
+    const items: PaymentsPage["data"]["items"] = [];
+    while (url) {
+      const page: PaymentsPage = parseContract(paymentsPageSchema, await this.getJson(url), "betalningar");
+      items.push(...page.data.items);
+      url = page.links.next;
+    }
+    return items;
   }
 
   /** Every membership one person has, past, current and future. */

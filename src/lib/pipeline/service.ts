@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { coldReason, pipelineStage } from "@/db/schema";
-import { defaultColdReasons, defaultStages } from "./defaults";
+import { coldReason, pipelineStage, winBackReason } from "@/db/schema";
+import { defaultColdReasons, defaultStages, defaultWinBackReasons } from "./defaults";
 
 type Db = typeof defaultDb;
 
@@ -15,6 +15,18 @@ export async function ensureDefaultPipeline(db: Db, studioId: string) {
     .insert(coldReason)
     .values(defaultColdReasons.map((r, position) => ({ studioId, ...r, position })))
     .onConflictDoNothing();
+  await db
+    .insert(winBackReason)
+    .values(defaultWinBackReasons.map((r, position) => ({ studioId, ...r, position })))
+    .onConflictDoNothing();
+}
+
+export async function listWinBackReasons(db: Db, studioId: string) {
+  return db
+    .select()
+    .from(winBackReason)
+    .where(eq(winBackReason.studioId, studioId))
+    .orderBy(asc(winBackReason.position));
 }
 
 export async function listStages(db: Db, studioId: string) {

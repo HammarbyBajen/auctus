@@ -4,6 +4,7 @@ import { createManaClient } from "@/lib/mana/config";
 import { describeManaError } from "@/lib/mana/errors";
 import { afterSync } from "@/lib/mana/leads";
 import { failRun, runBatch, startRun } from "@/lib/mana/sync";
+import { detectWinBacks, syncPurchases } from "@/lib/mana/winback-service";
 
 /** How long one step may start new requests. Hobby allows 5 minutes per step, so stay well inside it. */
 const STEP_BUDGET_MS = 200_000;
@@ -27,10 +28,25 @@ async function batchStep(studioId: string, runId: string) {
   }
 }
 
+async function purchasesStep(studioId: string) {
+  "use step";
+  // Recent day passes, clip cards and drop-ins: a few requests. A failure here
+  // only means no day-pass leads today, so it does not fail the sync.
+  try {
+    const client = await createManaClient(db, studioId);
+    return await syncPurchases(db, client, studioId);
+  } catch {
+    return 0;
+  }
+}
+
 async function afterSyncStep(studioId: string) {
   "use step";
-  // Link CRM people to Mana and move leads whose person has just joined to Won.
-  return afterSync(db, studioId);
+  // Link CRM people to Mana, move leads whose person has just joined to Won,
+  // then make win-back leads (if switched on).
+  const won = await afterSync(db, studioId);
+  const winBack = await detectWinBacks(db, studioId);
+  return { won, winBack };
 }
 
 /**
@@ -47,6 +63,7 @@ export async function manaSyncWorkflow(studioId: string) {
   while (!done) {
     done = await batchStep(studioId, runId);
   }
-  const won = await afterSyncStep(studioId);
-  return { runId, skipped: false, won };
+  await purchasesStep(studioId);
+  const after = await afterSyncStep(studioId);
+  return { runId, skipped: false, ...after };
 }

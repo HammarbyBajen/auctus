@@ -28,3 +28,14 @@ export const defaultColdReasons: { key: string; name: string }[] = [
 /** What happened after contacting someone: one tap on the lead page. */
 export const contactOutcomes = ["called", "no_answer", "emailed", "booked"] as const;
 export type ContactOutcome = (typeof contactOutcomes)[number];
+
+/** Why a member left or paused, picked when a win-back lead is handled. Editable later, like Cold reasons. */
+export const defaultWinBackReasons: { key: string; name: string }[] = [
+  { key: "injury", name: "Skada" },
+  { key: "illness", name: "Sjukdom" },
+  { key: "moved", name: "Flyttat" },
+  { key: "other_gym", name: "Hittat ett annat gym, kommer inte tillbaka" },
+  { key: "price", name: "Pris" },
+  { key: "no_time", name: "Ingen tid" },
+  { key: "other", name: "Annat" },
+];

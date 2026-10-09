@@ -52,6 +52,8 @@ export const studioSettings = pgTable("studio_settings", {
   manaStudioId: text("mana_studio_id"),
   manaBaseUrl: text("mana_base_url").notNull().default("https://www.getmana.app"),
   thresholds: jsonb("thresholds").$type<Thresholds>().notNull().default(defaultThresholds),
+  /** Whether leads are made from Mana signals (cancellations, freezes, ended memberships, day passes). Off until an owner turns it on. */
+  winBackEnabled: boolean("win_back_enabled").notNull().default(false),
   /** Mana memberships that are not real memberships (for example a locker), by Mana membership id. */
   ignoredMembershipIds: jsonb("ignored_membership_ids").$type<string[]>().notNull().default([]),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -154,6 +156,20 @@ export const coldReason = pgTable(
   (table) => [primaryKey({ columns: [table.studioId, table.key] })],
 );
 
+/** The reasons offered when a win-back lead is handled (why someone left or paused). */
+export const winBackReason = pgTable(
+  "win_back_reason",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    name: text("name").notNull(),
+    position: integer("position").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.key] })],
+);
+
 /** A real person: contact details live here, once, however many leads they have over time. */
 export const person = pgTable(
   "person",
@@ -200,6 +216,8 @@ export const lead = pgTable(
     assignedToId: text("assigned_to_id").references(() => user.id, { onDelete: "set null" }),
     /** Why the lead went cold. Set only while the lead is in a cold stage. */
     coldReason: text("cold_reason"),
+    /** For a win-back lead: why the person left or paused, picked by whoever handles it. */
+    winBackReason: text("win_back_reason"),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -214,6 +232,10 @@ export const lead = pgTable(
     foreignKey({
       columns: [table.studioId, table.coldReason],
       foreignColumns: [coldReason.studioId, coldReason.key],
+    }),
+    foreignKey({
+      columns: [table.studioId, table.winBackReason],
+      foreignColumns: [winBackReason.studioId, winBackReason.key],
     }),
   ],
 );
@@ -382,5 +404,51 @@ export const syncRun = pgTable(
     uniqueIndex("sync_run_one_running")
       .on(table.studioId, table.kind)
       .where(sql`status = 'running'`),
+  ],
+);
+
+/**
+ * A Mana signal that has been turned into a lead (or deliberately skipped), so
+ * the same cancellation, freeze, ended membership or day pass never makes a
+ * second lead, even after the first one is closed.
+ */
+export const manaSignal = pgTable(
+  "mana_signal",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** What happened: cancelled, freeze, ended or day_pass. */
+    kind: text("kind").notNull(),
+    /** The membership (or, for a day pass, the payment) in Mana that the signal is about. */
+    manaRef: text("mana_ref").notNull(),
+    manaUserId: text("mana_user_id").notNull(),
+    /** The lead it became, or empty when it was skipped (for example the person is already an open lead). */
+    leadId: uuid("lead_id").references(() => lead.id, { onDelete: "set null" }),
+    /** Why no lead was made, when skipped. */
+    skipped: text("skipped"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.kind, table.manaRef] })],
+);
+
+/** A recent day pass, clip card or single-class purchase from Mana, kept so buyers without a membership can be found. */
+export const manaPurchase = pgTable(
+  "mana_purchase",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    manaUserId: text("mana_user_id").notNull(),
+    /** Mana's kind of item: class_credits_bundle or single_class. */
+    kind: text("kind").notNull(),
+    description: text("description"),
+    paidAt: timestamp("paid_at").notNull(),
+    syncedAt: timestamp("synced_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.studioId, table.id] }),
+    index("mana_purchase_user_idx").on(table.studioId, table.manaUserId),
   ],
 );

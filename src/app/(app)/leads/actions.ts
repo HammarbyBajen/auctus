@@ -8,6 +8,7 @@ import { leadSources } from "@/lib/leads/constants";
 import { addNote, createOrMatchLead, getLead, LeadError, logContact, moveLeadStage } from "@/lib/leads/service";
 import { createManaClient } from "@/lib/mana/config";
 import { refreshPersonFromMana } from "@/lib/mana/leads";
+import { setWinBackReason, WinBackError } from "@/lib/mana/winback-service";
 import { assignLead, createTask, deleteTask, setTaskDone, TaskError } from "@/lib/tasks/service";
 import { requirePermission } from "@/lib/session";
 import type { MessageKey } from "@/lib/i18n";
@@ -168,4 +169,17 @@ export async function checkLeadInMana(leadId: string): Promise<{ changed: boolea
   } catch {
     return { changed: false };
   }
+}
+
+export async function saveWinBackReason(leadId: string, formData: FormData) {
+  const user = await requirePermission("leads", "write");
+  try {
+    await setWinBackReason(db, user.studioId, leadId, String(formData.get("reason") ?? ""));
+  } catch (error) {
+    if (error instanceof WinBackError && error.code === "unknown_reason") redirect(`/leads/${leadId}?fel=vinnanledning`);
+    if (error instanceof WinBackError) notFound();
+    throw error;
+  }
+  revalidatePath("/");
+  revalidatePath(`/leads/${leadId}`);
 }

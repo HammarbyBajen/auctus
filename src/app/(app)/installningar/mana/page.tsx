@@ -4,21 +4,28 @@ import { getIgnoredMembershipIds, listMembershipKinds } from "@/lib/mana/leads";
 import { getSyncStatus } from "@/lib/mana/status";
 import { requirePermission } from "@/lib/session";
 import { t, type MessageKey } from "@/lib/i18n";
-import { saveMembershipRules, syncNow } from "./actions";
+import { saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
+import { eq } from "drizzle-orm";
+import { studioSettings } from "@/db/schema";
 
 export const dynamic = "force-dynamic";
 
 export default async function ManaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ startad?: string; sparat?: string }>;
+  searchParams: Promise<{ startad?: string; sparat?: string; vinnsparat?: string }>;
 }) {
   const user = await requirePermission("settings", "manage");
-  const { startad, sparat } = await searchParams;
-  const [status, kinds, ignored] = await Promise.all([
+  const { startad, sparat, vinnsparat } = await searchParams;
+  const [status, kinds, ignored, [settings]] = await Promise.all([
     getSyncStatus(db, user.studioId),
     listMembershipKinds(db, user.studioId),
     getIgnoredMembershipIds(db, user.studioId),
+    db
+      .select({ winBackEnabled: studioSettings.winBackEnabled })
+      .from(studioSettings)
+      .where(eq(studioSettings.studioId, user.studioId))
+      .limit(1),
   ]);
 
   return (
@@ -73,6 +80,21 @@ export default async function ManaPage({
             </button>
           </form>
         )}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-xl font-semibold">{t("mana.winbackTitle")}</h2>
+        <p className="text-stone-700">{t("mana.winbackIntro")}</p>
+        {vinnsparat === "1" && <p className="rounded-lg bg-stone-200 px-4 py-3">{t("mana.winbackSaved")}</p>}
+        <form action={saveWinBackSetting} className="flex flex-col gap-3">
+          <label className="flex items-center gap-3 text-lg">
+            <input type="checkbox" name="enabled" defaultChecked={settings?.winBackEnabled ?? false} className="h-5 w-5" />
+            {t("mana.winbackOn")}
+          </label>
+          <button className="self-start rounded-lg bg-stone-900 px-4 py-3 text-lg font-medium text-white">
+            {t("mana.winbackSave")}
+          </button>
+        </form>
       </section>
 
       <section className="flex flex-col gap-3">

@@ -53,6 +53,8 @@ export async function getHomeData(
       updatedAt: lead.updatedAt,
       assignedToId: lead.assignedToId,
       assigneeName: assignee.name,
+      source: lead.source,
+      winBackReason: lead.winBackReason,
     })
     .from(lead)
     .innerJoin(person, eq(person.id, lead.personId))

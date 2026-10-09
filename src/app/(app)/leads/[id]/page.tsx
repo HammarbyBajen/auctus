@@ -4,12 +4,13 @@ import { db } from "@/db";
 import { formatDateTime, formatDay } from "@/lib/format";
 import { getLead, type HistoryItem } from "@/lib/leads/service";
 import { contactOutcomes } from "@/lib/pipeline/defaults";
-import { listColdReasons, listStages } from "@/lib/pipeline/service";
+import { listColdReasons, listStages, listWinBackReasons } from "@/lib/pipeline/service";
+import { isWinBackSource } from "@/lib/leads/constants";
 import { dueState, isGreyedOut, todayInStockholm } from "@/lib/tasks/dates";
 import { listStudioUsers, listTasksForLead } from "@/lib/tasks/service";
 import { requirePermission } from "@/lib/session";
 import { t, type MessageKey } from "@/lib/i18n";
-import { assignAction, finishTask, logContactAction, moveStage, removeTask } from "../actions";
+import { assignAction, finishTask, logContactAction, moveStage, removeTask, saveWinBackReason } from "../actions";
 import { getManaInfo } from "@/lib/mana/leads";
 import { ManaRefresher } from "./mana-refresher";
 import { NoteForm } from "./note-form";
@@ -33,13 +34,15 @@ export default async function LeadPage({
   if (!found) notFound();
   const { lead, person, stage, assigneeName, history } = found;
   const today = todayInStockholm();
-  const [stages, reasons, taskLists, people, mana] = await Promise.all([
+  const [stages, reasons, taskLists, people, mana, winBackReasons] = await Promise.all([
     listStages(db, user.studioId),
     listColdReasons(db, user.studioId),
     listTasksForLead(db, user.studioId, lead.id),
     listStudioUsers(db, user.studioId),
     getManaInfo(db, user.studioId, person.manaUserId),
+    listWinBackReasons(db, user.studioId),
   ]);
+  const winBack = isWinBackSource(lead.source);
   const assign = assignAction.bind(null, lead.id);
   const stageName = (key: string | null) => stages.find((s) => s.key === key)?.name ?? key ?? "";
   const reasonName = (key: string | null) => reasons.find((r) => r.key === key)?.name ?? key ?? "";
@@ -97,6 +100,35 @@ export default async function LeadPage({
         <dd>{t(`source.${lead.source}` as MessageKey)}</dd>
       </dl>
 
+      {winBack && (
+        <section className={`flex flex-col gap-3 rounded-lg px-4 py-3 ${lead.winBackReason ? "border border-stone-200 bg-white" : "bg-amber-100"}`}>
+          <h2 className="text-xl font-semibold">{t("winback.title")}</h2>
+          {lead.winBackReason ? (
+            <p className="text-lg">
+              {t("winback.current", { reason: winBackReasons.find((r) => r.key === lead.winBackReason)?.name ?? lead.winBackReason })}
+            </p>
+          ) : (
+            <p>{t("winback.prompt")}</p>
+          )}
+          {fel === "vinnanledning" && (
+            <p role="alert" className="text-red-700">
+              {t("winback.error")}
+            </p>
+          )}
+          <form action={saveWinBackReason.bind(null, lead.id)} className="flex flex-col gap-2">
+            {winBackReasons.map((r) => (
+              <label key={r.key} className="flex items-center gap-3 text-lg">
+                <input type="radio" name="reason" value={r.key} defaultChecked={lead.winBackReason === r.key} required />
+                {r.name}
+              </label>
+            ))}
+            <button className="self-start rounded-lg bg-stone-900 px-4 py-3 text-lg font-medium text-white">
+              {t("winback.save")}
+            </button>
+          </form>
+        </section>
+      )}
+
       <ManaRefresher leadId={lead.id} />
       <section className="flex flex-col gap-2">
         <h2 className="text-xl font-semibold">{t("lead.mana")}</h2>
@@ -104,7 +136,7 @@ export default async function LeadPage({
           <p className="text-stone-600">{t("lead.manaNone")}</p>
         ) : (
           <>
-            {mana.counting.length > 0 && stage.kind !== "won" && (
+            {mana.counting.length > 0 && stage.kind !== "won" && !winBack && (
               <p className="rounded-lg bg-amber-100 px-4 py-3">{t("lead.manaAlready")}</p>
             )}
             {mana.memberships.length === 0 ? (
@@ -121,10 +153,12 @@ export default async function LeadPage({
                       <p className="text-stone-600">
                         {m.status === "future"
                           ? t("lead.manaStarts", { date: formatDay(m.startDate) })
-                          : m.status === "ended" && m.cancelEffectiveDate
-                            ? t("lead.manaEnded", { date: formatDay(m.cancelEffectiveDate) })
+                          : m.status === "ended"
+                            ? m.pendingChangeDate
+                              ? t("lead.manaEnded", { date: formatDay(m.pendingChangeDate) })
+                              : ""
                             : t("lead.manaSince", { date: formatDay(m.startDate) })}
-                        {m.pendingChangeKind === "cancel" && m.pendingChangeDate
+                        {m.status !== "ended" && m.pendingChangeKind === "cancel" && m.pendingChangeDate
                           ? ` · ${t("lead.manaCancel", { date: formatDay(m.pendingChangeDate) })}`
                           : ""}
                         {m.pendingChangeKind === "freeze" && m.pendingChangeDate

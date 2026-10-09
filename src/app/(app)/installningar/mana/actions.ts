@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { start } from "workflow/api";
 import { db } from "@/db";
 import { listMembershipKinds, saveIgnoredMemberships } from "@/lib/mana/leads";
+import { setWinBackEnabled } from "@/lib/mana/winback-service";
 import { requirePermission } from "@/lib/session";
 import { manaSyncWorkflow } from "@/workflows/mana-sync";
 
@@ -26,4 +27,12 @@ export async function saveMembershipRules(formData: FormData) {
   revalidatePath("/installningar/mana");
   revalidatePath("/leads");
   redirect("/installningar/mana?sparat=1");
+}
+
+/** Switches automatic win-back leads on or off. New leads appear after the next sync. */
+export async function saveWinBackSetting(formData: FormData) {
+  const user = await requirePermission("settings", "manage");
+  await setWinBackEnabled(db, user.studioId, formData.get("enabled") === "on");
+  revalidatePath("/installningar/mana");
+  redirect("/installningar/mana?vinnsparat=1");
 }

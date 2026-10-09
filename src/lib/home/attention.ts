@@ -1,4 +1,4 @@
-import { initialStage } from "@/lib/leads/constants";
+import { initialStage, isWinBackSource } from "@/lib/leads/constants";
 import type { StageKind } from "@/lib/pipeline/defaults";
 import { dueState } from "@/lib/tasks/dates";
 
@@ -18,6 +18,8 @@ export type AttentionLead = {
   updatedAt: Date;
   assignedToId: string | null;
   assigneeName: string | null;
+  source?: string;
+  winBackReason?: string | null;
 };
 
 export type AttentionTask = { id: string; leadId: string; title: string; dueDate: string };
@@ -29,7 +31,8 @@ export type Reason =
   | { type: "first_contact_ok"; msLeft: number }
   | { type: "task_overdue"; title: string; dueDate: string }
   | { type: "task_today"; title: string }
-  | { type: "stalled"; days: number };
+  | { type: "stalled"; days: number }
+  | { type: "win_back"; source: string };
 
 export type Severity = "red" | "amber" | "normal";
 
@@ -55,6 +58,8 @@ function rankOf(reason: Reason): { rank: number; magnitude: number } {
       return { rank: 4, magnitude: 0 };
     case "stalled":
       return { rank: 5, magnitude: reason.days };
+    case "win_back":
+      return { rank: 5, magnitude: 0 };
     case "first_contact_ok":
       return { rank: 6, magnitude: -reason.msLeft };
   }
@@ -119,6 +124,11 @@ export function buildAttention(input: {
       if (idleMs >= thresholds.stalledDays * DAY) {
         reasons.push({ type: "stalled", days: Math.floor(idleMs / DAY) });
       }
+    }
+
+    // A win-back lead whose reason is still unknown needs someone to find out why.
+    if (lead.source && isWinBackSource(lead.source) && !lead.winBackReason) {
+      reasons.push({ type: "win_back", source: lead.source });
     }
 
     if (reasons.length > 0) items.push({ lead, reasons, severity: severityOf(reasons) });

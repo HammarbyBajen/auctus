@@ -36,4 +36,13 @@ describe.skipIf(!live)("live Mana contract", () => {
       expect(m.price.currency).toMatch(/^[A-Z]{3}$/);
     }
   }, 30_000);
+
+  it("returns paid purchases in the shape the win-back reads", async () => {
+    const since = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    const payments = await client().getPaidPayments(since);
+    for (const p of payments) {
+      expect(typeof p.kind).toBe("string");
+      if (p.paidAt) expect(Number.isNaN(Date.parse(p.paidAt))).toBe(false);
+    }
+  }, 60_000);
 });

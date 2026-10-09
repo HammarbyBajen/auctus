@@ -4,13 +4,13 @@ import * as schema from "./schema";
 
 const globalForDb = globalThis as unknown as { pool?: Pool };
 
-function createPool() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is not set");
-  }
-  return new Pool({ connectionString, max: 5 });
-}
-
-export const pool = (globalForDb.pool ??= createPool());
+/**
+ * The pool does not connect until the first query, so importing this module
+ * (for example during `next build`) works without a database. A missing
+ * DATABASE_URL shows up as a clear error when a query runs.
+ */
+export const pool = (globalForDb.pool ??= new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 5,
+}));
 export const db = drizzle(pool, { schema });

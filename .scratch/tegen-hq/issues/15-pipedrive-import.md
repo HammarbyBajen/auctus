@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 09
 
-**Status:** built, waiting to run on production
+**Status:** done (imported to production 2026-10-09: 555 leads, 6 merged as duplicates)
 
 - [x] Leads are read from the Pipedrive CSV export (people, leads or deals, and notes and activities if exported), or read-only from Notion or Pipedrive, and nothing is ever written back
 - [x] The CSV file is treated as personal data: kept out of git and deleted after the import

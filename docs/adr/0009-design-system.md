@@ -1,6 +1,6 @@
 # 0009: Design system: shadcn/ui in Tegen's brand
 
-Status: accepted, 2026-10-09
+Status: superseded by 0010 (2026-10-09)
 
 ## Decision
 The UI uses shadcn/ui (Radix flavour, Nova preset) as a base, restyled to Tegen's brand portal, and is reviewed against the Vercel web interface guidelines.

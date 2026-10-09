@@ -1,8 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState, useEffect, useRef } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/app/native-select";
@@ -20,7 +19,7 @@ const fieldOf: Partial<Record<MessageKey, "name" | "phone" | "email">> = {
 function FieldError({ id, message }: { id: string; message?: string }) {
   if (!message) return null;
   return (
-    <p id={id} className="text-sm font-medium text-danger-text">
+    <p id={id} className="text-sm font-medium text-destructive">
       {message}
     </p>
   );
@@ -43,13 +42,10 @@ export function LeadForm() {
   const errorFor = (field: "name" | "phone" | "email") => (errorField === field && state.error ? t(state.error) : undefined);
 
   return (
-    <form action={action} className="flex flex-col gap-5" aria-describedby="lead-intro">
-      <p id="lead-intro" className="text-muted-foreground">
-        {t("leadForm.intro")}
-      </p>
+    <form action={action} className="flex flex-col gap-5">
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="name" className="text-base">
+        <Label htmlFor="name">
           {t("leadForm.name")}
         </Label>
         <Input
@@ -66,7 +62,7 @@ export function LeadForm() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="phone" className="text-base">
+        <Label htmlFor="phone">
           {t("leadForm.phone")}
         </Label>
         <Input
@@ -80,14 +76,14 @@ export function LeadForm() {
           aria-invalid={errorField === "phone" || undefined}
           aria-describedby={errorField === "phone" ? "phone-error phone-hint" : "phone-hint"}
         />
-        <p id="phone-hint" className="text-sm text-muted-foreground">
+        <p id="phone-hint" className="text-xs text-muted-foreground">
           {t("leadForm.phoneHint")}
         </p>
         <FieldError id="phone-error" message={errorFor("phone")} />
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="email" className="text-base">
+        <Label htmlFor="email">
           {t("leadForm.email")}
         </Label>
         <Input
@@ -107,7 +103,7 @@ export function LeadForm() {
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label htmlFor="source" className="text-base">
+        <Label htmlFor="source">
           {t("leadForm.source")}
         </Label>
         <NativeSelect id="source" name="source" defaultValue={values?.source ?? "manual"}>
@@ -120,9 +116,9 @@ export function LeadForm() {
       </div>
 
       <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
-        <Button asChild variant="ghost">
-          <Link href="/leads">{t("leadForm.cancel")}</Link>
-        </Button>
+        <ButtonLink href="/leads" variant="ghost">
+          {t("leadForm.cancel")}
+        </ButtonLink>
         <Button type="submit" size="lg" disabled={pending}>
           {pending ? t("app.saving") : t("leadForm.submit")}
         </Button>

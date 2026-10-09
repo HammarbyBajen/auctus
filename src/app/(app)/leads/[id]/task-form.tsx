@@ -18,13 +18,13 @@ export function TaskForm({ leadId, today }: { leadId: string; today: string }) {
   return (
     <form ref={ref} action={action} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_auto] sm:items-end">
       <div className="flex flex-col gap-2">
-        <Label htmlFor="task-title" className="text-base">
+        <Label htmlFor="task-title">
           {t("task.titleLabel")}
         </Label>
         <Input id="task-title" name="title" maxLength={200} autoComplete="off" />
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor="task-due" className="text-base">
+        <Label htmlFor="task-due">
           {t("task.dueLabel")}
         </Label>
         <Input id="task-due" name="dueDate" type="date" defaultValue={today} />
@@ -33,7 +33,7 @@ export function TaskForm({ leadId, today }: { leadId: string; today: string }) {
         {pending ? t("app.saving") : t("task.add")}
       </Button>
       {state.error && (
-        <p role="alert" className="text-sm font-medium text-danger-text sm:col-span-3">
+        <p role="alert" className="text-sm font-medium text-destructive sm:col-span-3">
           {t(state.error)}
         </p>
       )}

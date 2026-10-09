@@ -19,3 +19,16 @@ const dayFormatter = new Intl.DateTimeFormat("sv-SE", {
 export function formatDay(day: string): string {
   return dayFormatter.format(new Date(`${day}T12:00:00Z`));
 }
+
+const numberFormatter = new Intl.NumberFormat("sv-SE");
+const percentFormatter = new Intl.NumberFormat("sv-SE", { style: "percent", maximumFractionDigits: 1 });
+
+/** A whole or decimal number the Swedish way ("1 234,5"). */
+export function formatNumber(value: number): string {
+  return numberFormatter.format(value);
+}
+
+/** A share the Swedish way, with a non-breaking space before the sign ("10 %"). */
+export function formatPercent(share: number): string {
+  return percentFormatter.format(share).replace(/\s%/, " %");
+}

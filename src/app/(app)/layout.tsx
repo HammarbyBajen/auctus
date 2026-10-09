@@ -1,71 +1,86 @@
-import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { cookies } from "next/headers";
+import { LogOut, Plus } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { db } from "@/db";
-import { BottomNav, TopNav } from "@/components/app/nav-links";
+import { Button, ButtonLink } from "@/components/ui/button";
+import { Mark } from "@/components/app/mark";
+import { BottomNav, SideNav } from "@/components/app/nav-links";
 import { Notice } from "@/components/app/notice";
-import { Wordmark } from "@/components/app/wordmark";
+import { ThemeToggle } from "@/components/app/theme-toggle";
 import { formatDateTime } from "@/lib/format";
 import { bannerFor, getSyncStatus } from "@/lib/mana/status";
 import { can } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
+import { parseTheme, themeCookie } from "@/lib/theme";
 import { t } from "@/lib/i18n";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
   const banner = bannerFor(await getSyncStatus(db, user.studioId), new Date());
   const showSettings = can(user.role, "settings", "manage");
+  const theme = parseTheme((await cookies()).get(themeCookie)?.value);
+
+  const signOutButton = (
+    <form action={signOut}>
+      <Button type="submit" variant="ghost" size="icon" aria-label={t("nav.signOut")} title={t("nav.signOut")}>
+        <LogOut aria-hidden="true" />
+      </Button>
+    </form>
+  );
 
   return (
-    <div className="flex min-h-dvh flex-col">
+    <div className="min-h-dvh bg-rail lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
       <a
         href="#innehall"
-        className="label-caps sr-only z-50 rounded-md bg-tegen-light-green px-4 py-2 text-primary focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+        className="focus-ring sr-only z-50 rounded-md bg-primary px-4 py-2 text-sm text-primary-foreground focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
       >
         {t("app.skip")}
       </a>
-      <header className="sticky top-0 z-30 bg-primary pt-[env(safe-area-inset-top)] text-primary-foreground">
-        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 md:h-16">
-          <Link
-            href="/"
-            className="rounded-md focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-tegen-light-green"
-          >
-            <Wordmark />
-          </Link>
-          <TopNav showSettings={showSettings} />
-          <div className="flex items-center gap-3">
-            <span className="hidden max-w-40 truncate text-sm text-white/70 lg:inline">{user.name}</span>
-            <form action={signOut}>
-              <button
-                type="submit"
-                aria-label={t("nav.signOut")}
-                className="label-caps inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-white/80 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-tegen-light-green"
-              >
-                <LogOut aria-hidden="true" className="size-5" />
-                <span className="hidden sm:inline">{t("nav.signOut")}</span>
-              </button>
-            </form>
+
+      <aside className="sticky top-0 hidden h-dvh flex-col gap-6 bg-sidebar px-3 py-4 lg:flex">
+        <div className="px-2">
+          <Mark />
+        </div>
+        <ButtonLink href="/leads/ny" className="justify-start">
+          <Plus aria-hidden="true" />
+          {t("leads.new")}
+        </ButtonLink>
+        <SideNav showSettings={showSettings} />
+        <div className="mt-auto flex items-center justify-between gap-2 px-2">
+          <span className="min-w-0 truncate text-xs text-muted-foreground">{user.name}</span>
+          <div className="flex items-center">
+            <ThemeToggle initial={theme} />
+            {signOutButton}
           </div>
         </div>
-      </header>
+      </aside>
 
-      <main id="innehall" tabIndex={-1} className="mx-auto w-full max-w-6xl flex-1 px-4 pt-5 pb-28 focus:outline-none md:pt-8 md:pb-12">
-        {banner && (
-          <Notice
-            tone={banner.tone === "red" ? "danger" : banner.tone === "amber" ? "warning" : "info"}
-            className="mb-5"
-          >
-            {banner.kind === "failed" && t("mana.banner.failed", { error: banner.error })}
-            {banner.kind === "never" && t("mana.banner.never")}
-            {banner.kind === "stale" && t("mana.banner.stale", { when: formatDateTime(banner.since) })}
-            {banner.kind === "running" &&
-              (banner.total === null
-                ? t("mana.banner.runningNoTotal", { done: String(banner.done) })
-                : t("mana.banner.running", { done: String(banner.done), total: String(banner.total) }))}
-          </Notice>
-        )}
-        {children}
-      </main>
+      <div className="flex min-h-dvh min-w-0 flex-col bg-background lg:my-2 lg:mr-2 lg:min-h-[calc(100dvh-1rem)] lg:rounded-2xl lg:elevation-1">
+        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 bg-sidebar px-4 pt-[env(safe-area-inset-top)] elevation-2 lg:hidden">
+          <Mark />
+          <div className="flex items-center">
+            <ThemeToggle initial={theme} />
+            {signOutButton}
+          </div>
+        </header>
+
+        <main id="innehall" tabIndex={-1} className="flex-1 pb-24 lg:pb-0">
+          {banner && (
+            <div className="px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+              <Notice tone={banner.tone === "red" ? "danger" : banner.tone === "amber" ? "warning" : "info"}>
+                {banner.kind === "failed" && t("mana.banner.failed", { error: banner.error })}
+                {banner.kind === "never" && t("mana.banner.never")}
+                {banner.kind === "stale" && t("mana.banner.stale", { when: formatDateTime(banner.since) })}
+                {banner.kind === "running" &&
+                  (banner.total === null
+                    ? t("mana.banner.runningNoTotal", { done: String(banner.done) })
+                    : t("mana.banner.running", { done: String(banner.done), total: String(banner.total) }))}
+              </Notice>
+            </div>
+          )}
+          {children}
+        </main>
+      </div>
 
       <BottomNav showSettings={showSettings} />
     </div>

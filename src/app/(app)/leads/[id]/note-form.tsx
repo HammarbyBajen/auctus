@@ -17,7 +17,7 @@ export function NoteForm({ leadId }: { leadId: string }) {
 
   return (
     <form ref={ref} action={action} className="flex flex-col gap-2">
-      <Label htmlFor="note-body" className="text-base">
+      <Label htmlFor="note-body">
         {t("lead.noteLabel")}
       </Label>
       <Textarea
@@ -28,7 +28,7 @@ export function NoteForm({ leadId }: { leadId: string }) {
         aria-describedby={state.error ? "note-error" : undefined}
       />
       {state.error && (
-        <p id="note-error" role="alert" className="text-sm font-medium text-danger-text">
+        <p id="note-error" role="alert" className="text-sm font-medium text-destructive">
           {t(state.error)}
         </p>
       )}

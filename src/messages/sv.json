@@ -186,5 +186,19 @@
   "lead.moving": "Flyttar…",
   "lead.logging": "Sparar…",
   "lead.coldOpen": "Markera som kall lead…",
-  "task.confirmDelete": "Bekräfta: ta bort"
+  "task.confirmDelete": "Bekräfta: ta bort",
+  "theme.label": "[TEXT]",
+  "theme.system": "[TEXT]",
+  "theme.light": "[TEXT]",
+  "theme.dark": "[TEXT]",
+  "leads.needsAction": "[TEXT]",
+  "leads.all": "[TEXT]",
+  "leads.selectTitle": "[TEXT]",
+  "leads.selectDesc": "[TEXT]",
+  "source.unknown": "Direkt / okänd",
+  "chip.overdue": "Försenad",
+  "chip.soon": "Snart",
+  "chip.won": "Medlem",
+  "leads.nextUp": "[TEXT]",
+  "leads.open": "[TEXT]"
 }

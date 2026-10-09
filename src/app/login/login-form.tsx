@@ -41,7 +41,7 @@ export function LoginForm() {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate={false}>
       <div className="flex flex-col gap-2">
-        <Label htmlFor="email" className="text-base">
+        <Label htmlFor="email">
           {t("login.email")}
         </Label>
         <Input
@@ -56,11 +56,10 @@ export function LoginForm() {
           placeholder={t("login.emailPlaceholder")}
           required
           aria-invalid={error === "credentials" || undefined}
-          className="h-12 text-base"
         />
       </div>
       <div className="flex flex-col gap-2">
-        <Label htmlFor="password" className="text-base">
+        <Label htmlFor="password">
           {t("login.password")}
         </Label>
         <Input
@@ -70,11 +69,10 @@ export function LoginForm() {
           autoComplete="current-password"
           required
           aria-invalid={error === "credentials" || undefined}
-          className="h-12 text-base"
         />
       </div>
       {error && <Notice tone="danger">{error === "tooMany" ? t("login.tooMany") : t("login.error")}</Notice>}
-      <Button type="submit" size="lg" disabled={pending}>
+      <Button type="submit" size="lg" disabled={pending} className="w-full">
         {pending ? t("login.signingIn") : t("login.submit")}
       </Button>
     </form>

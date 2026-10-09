@@ -1,35 +1,42 @@
 import type { Metadata, Viewport } from "next";
-import { Abel, Roboto, Roboto_Condensed } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 import { cn } from "@/lib/utils";
+import { parseTheme, themeCookie, themeScript } from "@/lib/theme";
 import { t } from "@/lib/i18n";
 
-// Tegen's brand type: Roboto for text, Roboto Condensed Black Italic for headings, Abel for labels.
-const roboto = Roboto({ subsets: ["latin"], weight: ["400", "500", "700"], variable: "--font-roboto", display: "swap" });
-const robotoCondensed = Roboto_Condensed({
-  subsets: ["latin"],
-  weight: ["900"],
-  style: ["italic"],
-  variable: "--font-roboto-condensed",
-  display: "swap",
-});
-const abel = Abel({ subsets: ["latin"], weight: "400", variable: "--font-abel", display: "swap" });
+const geistSans = Geist({ subsets: ["latin"], variable: "--font-geist-sans", display: "swap" });
+const geistMono = Geist_Mono({ subsets: ["latin"], variable: "--font-geist-mono", display: "swap" });
 
 export const metadata: Metadata = {
   title: t("app.name"),
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1e231e",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#f5f5f5" },
+    { media: "(prefers-color-scheme: dark)", color: "#191919" },
+  ],
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const theme = parseTheme((await cookies()).get(themeCookie)?.value);
   return (
-    <html lang="sv" className={cn(roboto.variable, robotoCondensed.variable, abel.variable)}>
-      <body className="min-h-dvh bg-background font-sans text-foreground antialiased">{children}</body>
+    // The theme class is decided before paint by the inline script, so the server
+    // and the browser can legitimately disagree about it on the first render.
+    <html
+      lang="sv"
+      className={cn(geistSans.variable, geistMono.variable, theme === "dark" && "dark")}
+      suppressHydrationWarning
+    >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
+      </head>
+      <body className="min-h-dvh">{children}</body>
     </html>
   );
 }

@@ -1,59 +1,92 @@
-import * as React from "react"
-import { cva, type VariantProps } from "class-variance-authority"
-import { cn } from "@/lib/utils"
-import { Slot } from "radix-ui"
+"use client";
+
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
+import { cva, type VariantProps } from "class-variance-authority";
+import { motion, useReducedMotion } from "motion/react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { press, springs } from "@/lib/motion";
 
 /**
- * Buttons in Tegen's style: Abel uppercase labels, at least 44 px tall so they are
- * easy to hit on a phone, a clear focus ring, and only colour and transform animate.
+ * Buttons on the neutral shell (docs/DESIGN.md). Hover and active are
+ * lightness shifts, never a hue. 44 px tall on phones, a little denser on
+ * larger screens. Every button presses in with the snappy spring.
  */
 const buttonVariants = cva(
-  "label-caps inline-flex shrink-0 items-center justify-center gap-2 rounded-md border border-transparent text-base whitespace-nowrap transition-[background-color,color,border-color,box-shadow,transform] duration-150 outline-none select-none focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background active:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
+  "focus-ring inline-flex shrink-0 items-center justify-center gap-2 rounded-md text-sm font-medium whitespace-nowrap select-none transition-[background-color,color,border-color] disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground hover:bg-[#2f382f]",
-        outline: "border-input bg-card text-foreground hover:border-foreground/40 hover:bg-accent",
+        default: "bg-primary text-primary-foreground hover:bg-[color-mix(in_oklch,var(--primary),var(--background)_16%)]",
         secondary: "bg-secondary text-secondary-foreground hover:bg-accent",
+        outline: "border border-input bg-card text-foreground hover:bg-accent",
         ghost: "text-foreground hover:bg-accent",
-        destructive: "bg-danger-surface text-danger-text hover:bg-[#fbd9d5]",
-        link: "h-auto px-0 text-foreground underline underline-offset-4 hover:text-tegen-mid-green",
+        destructive: "chip-tint text-destructive hover:bg-[color-mix(in_oklch,var(--destructive),transparent_76%)]",
+        link: "h-auto px-0 text-foreground underline underline-offset-4 hover:text-muted-foreground",
       },
       size: {
-        default: "min-h-11 px-4 py-2",
-        sm: "min-h-9 px-3 text-sm",
-        lg: "min-h-12 px-6 text-lg",
-        icon: "size-11",
+        default: "min-h-11 px-4 sm:min-h-9",
+        sm: "min-h-11 px-3 sm:min-h-8",
+        lg: "min-h-11 px-5 text-base",
+        icon: "size-11 sm:size-9",
       },
     },
-    defaultVariants: {
-      variant: "default",
-      size: "default",
-    },
-  }
-)
+    defaultVariants: { variant: "default", size: "default" },
+  },
+);
 
-function Button({
-  className,
-  variant = "default",
-  size = "default",
-  asChild = false,
-  ...props
-}: React.ComponentProps<"button"> &
-  VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
-  }) {
-  const Comp = asChild ? Slot.Root : "button"
+type ButtonProps = ButtonPrimitive.Props & VariantProps<typeof buttonVariants>;
 
+function Button({ className, variant, size, ...props }: ButtonProps) {
+  const reduce = useReducedMotion();
   return (
-    <Comp
+    <ButtonPrimitive
       data-slot="button"
-      data-variant={variant}
-      data-size={size}
       className={cn(buttonVariants({ variant, size, className }))}
+      render={<motion.button whileTap={reduce ? undefined : press} transition={springs.snappy} />}
       {...props}
     />
-  )
+  );
 }
 
-export { Button, buttonVariants }
+const MotionLink = motion.create(Link);
+
+/** A link that looks like a button (navigation stays a real link). */
+function ButtonLink({
+  className,
+  variant,
+  size,
+  ...props
+}: React.ComponentProps<typeof Link> & VariantProps<typeof buttonVariants>) {
+  const reduce = useReducedMotion();
+  return (
+    <MotionLink
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      whileTap={reduce ? undefined : press}
+      transition={springs.snappy}
+      {...(props as React.ComponentProps<typeof MotionLink>)}
+    />
+  );
+}
+
+/** An external or tel/mailto link that looks like a button. */
+function ButtonAnchor({
+  className,
+  variant,
+  size,
+  ...props
+}: React.ComponentProps<"a"> & VariantProps<typeof buttonVariants>) {
+  const reduce = useReducedMotion();
+  return (
+    <motion.a
+      data-slot="button"
+      className={cn(buttonVariants({ variant, size, className }))}
+      whileTap={reduce ? undefined : press}
+      transition={springs.snappy}
+      {...(props as React.ComponentProps<typeof motion.a>)}
+    />
+  );
+}
+
+export { Button, ButtonLink, ButtonAnchor, buttonVariants };

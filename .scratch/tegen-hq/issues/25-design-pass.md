@@ -11,3 +11,6 @@
 - [x] The guideline review is done and its findings are fixed or written down as decisions (ADR 0009)
 - [x] Text sizes, contrast and tap targets suit people who are not very digital
 - [ ] Fredrik or Timmy has tried the main flow (new lead, call, move stage, task) and their feedback is handled
+
+## Update 2026-10-09: now follows docs/DESIGN.md (LAB37 baseline), see ADR 0010
+The Tegen-branded pass was replaced by LAB37's neutral shell. Done: Base UI components, tokens, two themes, springs, split-pane leads, Tier 1 login, still skeletons, a design-invariants test, measured focus rings and contrast at 390 px and desktop. Open: the GAPs in ADR 0010 ([TEXT] copy, wordmark, MRR hero, input border token), and a try-out with Fredrik or Timmy.

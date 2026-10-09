@@ -6,8 +6,8 @@
 
 **Status:** ready-for-agent
 
-- [ ] Shared components (button, card, form field, banner) replace the repeated styling in the pages
-- [ ] Tegen's colours and logo are used, and the result works in light mode on a phone and a laptop
-- [ ] The guideline review is done and its findings are fixed or written down as decisions
-- [ ] Text sizes, contrast and tap targets suit people who are not very digital
+- [x] Shared components (button, card, form field, banner) replace the repeated styling in the pages
+- [x] Tegen's colours and type are used, and the result works on a phone and a laptop (the official logo file is still to be added)
+- [x] The guideline review is done and its findings are fixed or written down as decisions (ADR 0009)
+- [x] Text sizes, contrast and tap targets suit people who are not very digital
 - [ ] Fredrik or Timmy has tried the main flow (new lead, call, move stage, task) and their feedback is handled

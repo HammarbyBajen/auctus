@@ -1,7 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Notice } from "@/components/app/notice";
 import { authClient } from "@/lib/auth-client";
 import { t } from "@/lib/i18n";
 
@@ -13,6 +17,7 @@ export function LoginForm() {
   const router = useRouter();
   const [error, setError] = useState<"credentials" | "tooMany" | null>(null);
   const [pending, setPending] = useState(false);
+  const emailRef = useRef<HTMLInputElement>(null);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -23,9 +28,10 @@ export function LoginForm() {
       email: String(form.get("email") ?? "").trim(),
       password: String(form.get("password") ?? ""),
     });
-    setPending(false);
     if (result) {
+      setPending(false);
       setError(result.status === 429 ? "tooMany" : "credentials");
+      emailRef.current?.focus();
       return;
     }
     router.push("/");
@@ -33,39 +39,44 @@ export function LoginForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-4">
-      <label className="flex flex-col gap-1 text-lg">
-        {t("login.email")}
-        <input
+    <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate={false}>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="email" className="text-base">
+          {t("login.email")}
+        </Label>
+        <Input
+          ref={emailRef}
+          id="email"
           name="email"
           type="email"
+          inputMode="email"
           autoComplete="email"
+          spellCheck={false}
+          autoCapitalize="none"
+          placeholder={t("login.emailPlaceholder")}
           required
-          className="rounded-lg border border-stone-300 px-3 py-3 text-lg"
+          aria-invalid={error === "credentials" || undefined}
+          className="h-12 text-base"
         />
-      </label>
-      <label className="flex flex-col gap-1 text-lg">
-        {t("login.password")}
-        <input
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="password" className="text-base">
+          {t("login.password")}
+        </Label>
+        <Input
+          id="password"
           name="password"
           type="password"
           autoComplete="current-password"
           required
-          className="rounded-lg border border-stone-300 px-3 py-3 text-lg"
+          aria-invalid={error === "credentials" || undefined}
+          className="h-12 text-base"
         />
-      </label>
-      {error && (
-        <p role="alert" className="text-red-700">
-          {error === "tooMany" ? t("login.tooMany") : t("login.error")}
-        </p>
-      )}
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded-lg bg-stone-900 px-4 py-3 text-lg font-medium text-white disabled:opacity-60"
-      >
-        {t("login.submit")}
-      </button>
+      </div>
+      {error && <Notice tone="danger">{error === "tooMany" ? t("login.tooMany") : t("login.error")}</Notice>}
+      <Button type="submit" size="lg" disabled={pending}>
+        {pending ? t("login.signingIn") : t("login.submit")}
+      </Button>
     </form>
   );
 }

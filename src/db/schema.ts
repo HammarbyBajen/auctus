@@ -1,6 +1,7 @@
 import {
   bigint,
   boolean,
+  date,
   foreignKey,
   index,
   integer,
@@ -186,6 +187,8 @@ export const lead = pgTable(
       .references(() => person.id),
     source: text("source").notNull().default("manual"),
     stage: text("stage").notNull().default("new_lead"),
+    /** Who is working this lead. Optional: an unassigned lead belongs to nobody in particular. */
+    assignedToId: text("assigned_to_id").references(() => user.id, { onDelete: "set null" }),
     /** Why the lead went cold. Set only while the lead is in a cold stage. */
     coldReason: text("cold_reason"),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
@@ -245,4 +248,30 @@ export const leadEvent = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [index("lead_event_lead_idx").on(table.leadId, table.createdAt)],
+);
+
+/** A follow-up on a lead ("ring på torsdag") with a due date. */
+export const task = pgTable(
+  "task",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id),
+    leadId: uuid("lead_id")
+      .notNull()
+      .references(() => lead.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    /** A calendar day in Tegen's time zone, written YYYY-MM-DD. */
+    dueDate: date("due_date", { mode: "string" }).notNull(),
+    /** Set when the task is done, empty while it is still open. */
+    doneAt: timestamp("done_at"),
+    doneById: text("done_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("task_lead_idx").on(table.leadId),
+    index("task_studio_open_idx").on(table.studioId, table.doneAt, table.dueDate),
+  ],
 );

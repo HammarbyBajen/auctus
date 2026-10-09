@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { formatDateTime } from "@/lib/format";
+import { formatDateTime, formatDay } from "@/lib/format";
 import { getLead, type HistoryItem } from "@/lib/leads/service";
 import { contactOutcomes } from "@/lib/pipeline/defaults";
 import { listColdReasons, listStages } from "@/lib/pipeline/service";
+import { dueState, isGreyedOut, todayInStockholm } from "@/lib/tasks/dates";
+import { listStudioUsers, listTasksForLead } from "@/lib/tasks/service";
 import { requirePermission } from "@/lib/session";
 import { t, type MessageKey } from "@/lib/i18n";
-import { logContactAction, moveStage } from "../actions";
+import { assignAction, finishTask, logContactAction, moveStage, removeTask } from "../actions";
 import { NoteForm } from "./note-form";
+import { TaskForm } from "./task-form";
 
 const link = "inline-block rounded-lg border border-stone-300 bg-white px-4 py-3 text-lg font-medium";
 const button = "rounded-lg border border-stone-300 bg-white px-4 py-3 text-lg";
@@ -26,11 +29,15 @@ export default async function LeadPage({
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const found = await getLead(db, user.studioId, id);
   if (!found) notFound();
-  const { lead, person, stage, history } = found;
-  const [stages, reasons] = await Promise.all([
+  const { lead, person, stage, assigneeName, history } = found;
+  const today = todayInStockholm();
+  const [stages, reasons, taskLists, people] = await Promise.all([
     listStages(db, user.studioId),
     listColdReasons(db, user.studioId),
+    listTasksForLead(db, user.studioId, lead.id),
+    listStudioUsers(db, user.studioId),
   ]);
+  const assign = assignAction.bind(null, lead.id);
   const stageName = (key: string | null) => stages.find((s) => s.key === key)?.name ?? key ?? "";
   const reasonName = (key: string | null) => reasons.find((r) => r.key === key)?.name ?? key ?? "";
   const coldStages = stages.filter((s) => s.kind === "cold");
@@ -46,6 +53,11 @@ export default async function LeadPage({
       {dubblett === "1" && (
         <p role="status" className="rounded-lg bg-amber-100 px-4 py-3">
           {t("leadForm.duplicate")}
+        </p>
+      )}
+      {isGreyedOut(lead.assignedToId, user.id) && (
+        <p role="status" className="rounded-lg bg-stone-200 px-4 py-3">
+          {t("assign.notice", { name: assigneeName ?? "" })}
         </p>
       )}
       {fel === "anledning" && (
@@ -127,6 +139,89 @@ export default async function LeadPage({
               </form>
             </details>
           ))}
+      </section>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="text-xl font-semibold">{t("assign.title")}</h2>
+        <form action={assign} className="flex flex-wrap items-center gap-3">
+          <select
+            name="assignee"
+            defaultValue={lead.assignedToId ?? ""}
+            className="rounded-lg border border-stone-300 bg-white px-3 py-3 text-lg"
+          >
+            <option value="">{t("assign.none")}</option>
+            {people.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+          <button className={button}>{t("assign.save")}</button>
+        </form>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <h2 className="text-xl font-semibold">{t("task.title")}</h2>
+        <TaskForm leadId={lead.id} today={today} />
+        {taskLists.open.length === 0 ? (
+          <p className="text-stone-600">{t("task.noOpen")}</p>
+        ) : (
+          <ul className="flex flex-col gap-3">
+            {taskLists.open.map((task) => {
+              const state = dueState(task.dueDate, today);
+              return (
+                <li
+                  key={task.id}
+                  className={`flex flex-col gap-2 rounded-lg border px-4 py-3 ${
+                    state === "overdue" ? "border-red-300 bg-red-50" : "border-stone-200 bg-white"
+                  }`}
+                >
+                  <p className="text-lg">{task.title}</p>
+                  <p
+                    className={
+                      state === "overdue"
+                        ? "font-semibold text-red-700"
+                        : state === "today"
+                          ? "font-semibold text-amber-700"
+                          : "text-stone-600"
+                    }
+                  >
+                    {state === "overdue" && `${t("task.overdue")} · `}
+                    {state === "today" ? t("task.today") : formatDay(task.dueDate)}
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <form action={finishTask.bind(null, lead.id, task.id, true)}>
+                      <button className={button}>{t("task.done")}</button>
+                    </form>
+                    <form action={removeTask.bind(null, lead.id, task.id)}>
+                      <button className="rounded-lg px-4 py-3 text-lg text-stone-600 underline">
+                        {t("task.delete")}
+                      </button>
+                    </form>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {taskLists.done.length > 0 && (
+          <details>
+            <summary className="cursor-pointer text-lg text-stone-700">{t("task.doneTitle")}</summary>
+            <ul className="mt-3 flex flex-col gap-2">
+              {taskLists.done.map((task) => (
+                <li key={task.id} className="flex items-center justify-between gap-3 text-stone-600">
+                  <span>
+                    <span className="line-through">{task.title}</span>
+                    {task.doneAt && <span className="block text-sm">{t("task.doneBy", { when: formatDateTime(task.doneAt) })}</span>}
+                  </span>
+                  <form action={finishTask.bind(null, lead.id, task.id, false)}>
+                    <button className="underline">{t("task.undo")}</button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </section>
 
       <section className="flex flex-col gap-4">

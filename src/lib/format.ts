@@ -8,3 +8,14 @@ const formatter = new Intl.DateTimeFormat("sv-SE", {
 export function formatDateTime(date: Date): string {
   return formatter.format(date);
 }
+
+const dayFormatter = new Intl.DateTimeFormat("sv-SE", {
+  day: "numeric",
+  month: "short",
+  timeZone: "UTC",
+});
+
+/** A plain calendar day (YYYY-MM-DD) in Swedish, for example "15 okt.". */
+export function formatDay(day: string): string {
+  return dayFormatter.format(new Date(`${day}T12:00:00Z`));
+}

@@ -1,10 +1,12 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { db as defaultDb } from "@/db";
 import { coldReason, lead, leadEvent, leadNote, person, pipelineStage, user } from "@/db/schema";
 import { t } from "@/lib/i18n";
 import { initialStage, type LeadSource } from "./constants";
 import { normalizeEmail, normalizePhone } from "./matching";
 import { contactOutcomes, type ContactOutcome } from "@/lib/pipeline/defaults";
+import { todayInStockholm } from "@/lib/tasks/dates";
 
 type Db = typeof defaultDb;
 
@@ -109,16 +111,29 @@ export async function createOrMatchLead(db: Db, studioId: string, input: NewLead
   });
 }
 
-/** All leads of a studio with their person and stage, newest first. */
-export async function listLeads(db: Db, studioId: string) {
+/**
+ * All leads of a studio with their person, stage, assignee and task counts,
+ * newest first. "Overdue" means open tasks whose day is before today (in
+ * Tegen's time zone).
+ */
+export async function listLeads(db: Db, studioId: string, today: string = todayInStockholm()) {
+  const assignee = alias(user, "assignee");
   return db
-    .select({ lead, person, stage: pipelineStage })
+    .select({
+      lead,
+      person,
+      stage: pipelineStage,
+      assigneeName: assignee.name,
+      openTasks: sql<number>`(select count(*)::int from task t where t.lead_id = ${lead.id} and t.done_at is null)`,
+      overdueTasks: sql<number>`(select count(*)::int from task t where t.lead_id = ${lead.id} and t.done_at is null and t.due_date < ${today})`,
+    })
     .from(lead)
     .innerJoin(person, eq(person.id, lead.personId))
     .innerJoin(
       pipelineStage,
       and(eq(pipelineStage.studioId, lead.studioId), eq(pipelineStage.key, lead.stage)),
     )
+    .leftJoin(assignee, eq(assignee.id, lead.assignedToId))
     .where(eq(lead.studioId, studioId))
     .orderBy(desc(lead.createdAt));
 }
@@ -142,14 +157,16 @@ export type HistoryItem =
  * not belong to the studio.
  */
 export async function getLead(db: Db, studioId: string, leadId: string) {
+  const assignee = alias(user, "assignee");
   const [found] = await db
-    .select({ lead, person, stage: pipelineStage })
+    .select({ lead, person, stage: pipelineStage, assigneeName: assignee.name })
     .from(lead)
     .innerJoin(person, eq(person.id, lead.personId))
     .innerJoin(
       pipelineStage,
       and(eq(pipelineStage.studioId, lead.studioId), eq(pipelineStage.key, lead.stage)),
     )
+    .leftJoin(assignee, eq(assignee.id, lead.assignedToId))
     .where(and(eq(lead.studioId, studioId), eq(lead.id, leadId)))
     .limit(1);
   if (!found) return null;
@@ -204,7 +221,13 @@ export async function getLead(db: Db, studioId: string, leadId: string) {
     ),
   ].sort((a, b) => b.at.getTime() - a.at.getTime());
 
-  return { lead: found.lead, person: found.person, stage: found.stage, history };
+  return {
+    lead: found.lead,
+    person: found.person,
+    stage: found.stage,
+    assigneeName: found.assigneeName,
+    history,
+  };
 }
 
 export class LeadError extends Error {

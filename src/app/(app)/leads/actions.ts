@@ -1,11 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { leadSources } from "@/lib/leads/constants";
 import { addNote, createOrMatchLead, LeadError, logContact, moveLeadStage } from "@/lib/leads/service";
+import { assignLead, createTask, deleteTask, setTaskDone, TaskError } from "@/lib/tasks/service";
 import { requirePermission } from "@/lib/session";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -86,4 +87,64 @@ export async function logContactAction(leadId: string, formData: FormData) {
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
   redirect(`/leads/${leadId}`);
+}
+
+export type TaskFormState = { error?: MessageKey };
+
+export async function addTask(
+  leadId: string,
+  _: TaskFormState,
+  formData: FormData,
+): Promise<TaskFormState> {
+  const user = await requirePermission("leads", "write");
+  const title = String(formData.get("title") ?? "").trim();
+  const dueDate = String(formData.get("dueDate") ?? "");
+  if (title === "") return { error: "task.errorTitle" };
+  if (!z.iso.date().safeParse(dueDate).success) return { error: "task.errorDate" };
+  try {
+    await createTask(db, user.studioId, leadId, { title: title.slice(0, 200), dueDate }, user.id);
+  } catch (error) {
+    if (error instanceof TaskError) notFound();
+    throw error;
+  }
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+  return {};
+}
+
+export async function finishTask(leadId: string, taskId: string, done: boolean) {
+  const user = await requirePermission("leads", "write");
+  try {
+    await setTaskDone(db, user.studioId, taskId, done, user.id);
+  } catch (error) {
+    if (error instanceof TaskError) notFound();
+    throw error;
+  }
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function removeTask(leadId: string, taskId: string) {
+  const user = await requirePermission("leads", "write");
+  try {
+    await deleteTask(db, user.studioId, taskId);
+  } catch (error) {
+    if (error instanceof TaskError) notFound();
+    throw error;
+  }
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function assignAction(leadId: string, formData: FormData) {
+  const user = await requirePermission("leads", "write");
+  const chosen = String(formData.get("assignee") ?? "") || null;
+  try {
+    await assignLead(db, user.studioId, leadId, chosen);
+  } catch (error) {
+    if (error instanceof TaskError) notFound();
+    throw error;
+  }
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
 }

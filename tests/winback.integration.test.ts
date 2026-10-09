@@ -189,6 +189,18 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
     await expect(wb.setWinBackReason(db, studioA, row.lead.id, "injury")).rejects.toMatchObject({ code: "not_win_back" });
   });
 
+  it("still makes a lead when someone cancels the gym but keeps an add-on such as a locker", async () => {
+    await member(studioA, "lockerkeeper", [
+      held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } }),
+      held({ membershipId: "locker", name: "Förvaringsbox", price: { amount: 5000, currency: "SEK" } }),
+    ]);
+    expect((await wb.detectWinBacks(db, studioA, now)).created).toBe(0);
+    await db.delete(schema.manaSignal).where(eq(schema.manaSignal.studioId, studioA));
+    await wb.setAddOnMemberships(db, studioA, ["locker"]);
+    expect((await wb.detectWinBacks(db, studioA, now)).created).toBe(1);
+    await wb.setAddOnMemberships(db, studioA, []);
+  });
+
   it("keeps studios apart", async () => {
     await member(studioB, "elsewhere", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })]);
     await wb.detectWinBacks(db, studioA, now);

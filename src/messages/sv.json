@@ -159,5 +159,6 @@
   "mana.winbackIntro": "Skapa leads automatiskt när någon säger upp, fryser eller avslutar sitt medlemskap, eller köper dagpass utan att vara medlem. Varje händelse blir en lead en gång.",
   "mana.winbackOn": "Skapa leads från Mana",
   "mana.winbackSave": "Spara",
-  "mana.winbackSaved": "Sparat. Nya leads skapas efter nästa synk."
+  "mana.winbackSaved": "Sparat. Nya leads skapas efter nästa synk.",
+  "mana.rulesAddOn": "Tillägg (som en förvaringsbox): att ha kvar det räknas inte som att stanna"
 }

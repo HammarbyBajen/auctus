@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { formatDateTime } from "@/lib/format";
-import { getIgnoredMembershipIds, listMembershipKinds } from "@/lib/mana/leads";
+import { getAddOnMembershipIds, getIgnoredMembershipIds, listMembershipKinds } from "@/lib/mana/leads";
 import { getSyncStatus } from "@/lib/mana/status";
 import { requirePermission } from "@/lib/session";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -17,10 +17,11 @@ export default async function ManaPage({
 }) {
   const user = await requirePermission("settings", "manage");
   const { startad, sparat, vinnsparat } = await searchParams;
-  const [status, kinds, ignored, [settings]] = await Promise.all([
+  const [status, kinds, ignored, addOns, [settings]] = await Promise.all([
     getSyncStatus(db, user.studioId),
     listMembershipKinds(db, user.studioId),
     getIgnoredMembershipIds(db, user.studioId),
+    getAddOnMembershipIds(db, user.studioId),
     db
       .select({ winBackEnabled: studioSettings.winBackEnabled })
       .from(studioSettings)
@@ -62,18 +63,31 @@ export default async function ManaPage({
         ) : (
           <form action={saveMembershipRules} className="flex flex-col gap-3">
             {kinds.map((k) => (
-              <label key={k.membershipId} className="flex items-center gap-3 text-lg">
-                <input
-                  type="checkbox"
-                  name="counts"
-                  value={k.membershipId}
-                  defaultChecked={!ignored.includes(k.membershipId)}
-                  className="h-5 w-5"
-                />
-                <span>
-                  {k.name} <span className="text-stone-500">({t("mana.rulesActive", { n: String(k.active) })})</span>
-                </span>
-              </label>
+              <fieldset key={k.membershipId} className="flex flex-col gap-1 rounded-lg border border-stone-200 bg-white px-4 py-3">
+                <legend className="sr-only">{k.name}</legend>
+                <label className="flex items-center gap-3 text-lg">
+                  <input
+                    type="checkbox"
+                    name="counts"
+                    value={k.membershipId}
+                    defaultChecked={!ignored.includes(k.membershipId)}
+                    className="h-5 w-5"
+                  />
+                  <span>
+                    {k.name} <span className="text-stone-500">({t("mana.rulesActive", { n: String(k.active) })})</span>
+                  </span>
+                </label>
+                <label className="flex items-center gap-3 pl-8 text-stone-700">
+                  <input
+                    type="checkbox"
+                    name="addOn"
+                    value={k.membershipId}
+                    defaultChecked={addOns.includes(k.membershipId)}
+                    className="h-4 w-4"
+                  />
+                  {t("mana.rulesAddOn")}
+                </label>
+              </fieldset>
             ))}
             <button className="self-start rounded-lg bg-stone-900 px-4 py-3 text-lg font-medium text-white">
               {t("mana.rulesSave")}

@@ -1,0 +1,1 @@
+ALTER TABLE "studio_settings" ADD COLUMN "add_on_membership_ids" jsonb DEFAULT '[]'::jsonb NOT NULL;

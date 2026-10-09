@@ -203,14 +203,15 @@ async function handleSignal(
 export async function detectWinBacks(db: Db, studioId: string, now: Date = new Date()) {
   const result = { created: 0, skipped: 0 };
   const [settings] = await db
-    .select({ enabled: studioSettings.winBackEnabled })
+    .select({ enabled: studioSettings.winBackEnabled, addOns: studioSettings.addOnMembershipIds })
     .from(studioSettings)
     .where(eq(studioSettings.studioId, studioId))
     .limit(1);
   if (!settings?.enabled) return result;
 
   const today = todayInStockholm(now);
-  const ignored = await getIgnoredMembershipIds(db, studioId);
+  // Add-ons such as a locker do not keep someone "in" when they cancel their gym membership.
+  const ignored = [...(await getIgnoredMembershipIds(db, studioId)), ...settings.addOns];
   const memberships = await db.select().from(manaMembership).where(eq(manaMembership.studioId, studioId));
   const byUser = new Map<string, typeof memberships>();
   for (const m of memberships) byUser.set(m.manaUserId, [...(byUser.get(m.manaUserId) ?? []), m]);
@@ -285,4 +286,11 @@ export async function setWinBackReason(db: Db, studioId: string, leadId: string,
 
 export async function setWinBackEnabled(db: Db, studioId: string, enabled: boolean) {
   await db.update(studioSettings).set({ winBackEnabled: enabled, updatedAt: new Date() }).where(eq(studioSettings.studioId, studioId));
+}
+
+export async function setAddOnMemberships(db: Db, studioId: string, ids: string[]) {
+  await db
+    .update(studioSettings)
+    .set({ addOnMembershipIds: [...new Set(ids)].sort(), updatedAt: new Date() })
+    .where(eq(studioSettings.studioId, studioId));
 }

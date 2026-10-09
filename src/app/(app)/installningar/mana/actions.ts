@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { start } from "workflow/api";
 import { db } from "@/db";
 import { listMembershipKinds, saveIgnoredMemberships } from "@/lib/mana/leads";
-import { setWinBackEnabled } from "@/lib/mana/winback-service";
+import { setAddOnMemberships, setWinBackEnabled } from "@/lib/mana/winback-service";
 import { requirePermission } from "@/lib/session";
 import { manaSyncWorkflow } from "@/workflows/mana-sync";
 
@@ -23,6 +23,8 @@ export async function saveMembershipRules(formData: FormData) {
   const counted = new Set(formData.getAll("counts").map(String));
   const kinds = await listMembershipKinds(db, user.studioId);
   const ignored = kinds.map((k) => k.membershipId).filter((id) => !counted.has(id));
+  const addOns = new Set(formData.getAll("addOn").map(String));
+  await setAddOnMemberships(db, user.studioId, kinds.map((k) => k.membershipId).filter((id) => addOns.has(id)));
   await saveIgnoredMemberships(db, user.studioId, ignored);
   revalidatePath("/installningar/mana");
   revalidatePath("/leads");

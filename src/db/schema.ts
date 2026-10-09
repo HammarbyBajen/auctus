@@ -54,6 +54,12 @@ export const studioSettings = pgTable("studio_settings", {
   thresholds: jsonb("thresholds").$type<Thresholds>().notNull().default(defaultThresholds),
   /** Whether leads are made from Mana signals (cancellations, freezes, ended memberships, day passes). Off until an owner turns it on. */
   winBackEnabled: boolean("win_back_enabled").notNull().default(false),
+  /**
+   * Add-ons (for example a locker) by Mana membership id. They still count as a
+   * membership and in MRR, but keeping one does not count as staying when
+   * someone cancels their gym membership, so a win-back lead is still made.
+   */
+  addOnMembershipIds: jsonb("add_on_membership_ids").$type<string[]>().notNull().default([]),
   /** Mana memberships that are not real memberships (for example a locker), by Mana membership id. */
   ignoredMembershipIds: jsonb("ignored_membership_ids").$type<string[]>().notNull().default([]),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),

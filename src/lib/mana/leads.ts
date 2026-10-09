@@ -229,3 +229,12 @@ export async function saveIgnoredMemberships(db: Db, studioId: string, ignoredId
     .where(eq(studioSettings.studioId, studioId));
   return detectWonForStudio(db, studioId);
 }
+
+export async function getAddOnMembershipIds(db: Db, studioId: string): Promise<string[]> {
+  const [row] = await db
+    .select({ ids: studioSettings.addOnMembershipIds })
+    .from(studioSettings)
+    .where(eq(studioSettings.studioId, studioId))
+    .limit(1);
+  return row?.ids ?? [];
+}

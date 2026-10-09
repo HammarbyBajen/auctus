@@ -21,4 +21,4 @@
 - Ended: ended in the last 30 days, with nothing that carries on.
 - Day pass: a paid day pass, clip card or drop-in class (`class_credits_bundle`, `single_class`) in the last 30 days, by someone with no membership. A new prospect, so no "why did they leave" prompt.
 - Each signal becomes a lead once (recorded in `mana_signal`), even after the lead is closed. A person who is already an open lead gets a note instead. A person moved to a cold stage in the last 90 days is left alone.
-- Known limitation: because Förvaringsbox counts as a membership, someone who cancels their gym membership but keeps a locker is not treated as leaving.
+- Add-ons: memberships marked as an add-on on the Mana page (Förvaringsbox, set in production on 2026-10-09) do not keep someone "in". Someone who cancels their gym membership but keeps a locker still gets a win-back lead. Lockers still count as a membership for Won and MRR.

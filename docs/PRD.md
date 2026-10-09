@@ -1,7 +1,8 @@
-# PRD: Tegen CRM
+# PRD: Tegen HQ
 
 Status: draft v1, 2026-10-07, updated 2026-10-09 with Erik's notes on lead intake and the MRR KPI
 Owner: Max (Lab37)
+Name: the product is called **Tegen HQ** (a CRM for Tegen). "The CRM" in this document means Tegen HQ.
 Sources: grilling session, [research/tegen.md](research/tegen.md), [research/mana-api.md](research/mana-api.md), [research/pipedrive.md](research/pipedrive.md), [questions-for-erik.md](questions-for-erik.md)
 
 ## Problem Statement

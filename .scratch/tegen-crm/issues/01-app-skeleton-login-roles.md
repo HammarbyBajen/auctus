@@ -10,7 +10,8 @@
 - [x] Owner and Staff roles exist, and a Staff user cannot open the settings area
 - [x] UI strings are in Swedish and live in translation files
 - [x] Core tables carry a studio id, and the Mana credentials and thresholds are settings, not code
-- [ ] The app runs in the chosen hosting setup and the test suite runs in CI (pending: Vercel database and environment variables, CI run)
+- [x] The app runs on Vercel with a Neon Postgres database in Frankfurt (sign-in confirmed on the live site, 2026-10-09)
+- [ ] The test suite runs green in GitHub Actions CI (to be confirmed on the Actions tab)
 - [x] Everything runs on Vercel (app, Marketplace Postgres in an EU region, background jobs), and the decision, the provider choice and the Better Auth choice are recorded as ADRs
 - [x] The UI is simple and in plain Swedish for users who are not very digital: few buttons per screen, no technical terms, and it also works on a phone
 - [x] The decision to start on Vercel Hobby (daily cron, 5-minute function limit) is recorded, with a note to revisit Pro

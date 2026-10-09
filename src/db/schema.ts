@@ -11,7 +11,9 @@ import {
   text,
   timestamp,
   uuid,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 /**
  * One row per gym. v1 has a single studio (Tegen). Every core table carries a
@@ -273,5 +275,103 @@ export const task = pgTable(
   (table) => [
     index("task_lead_idx").on(table.leadId),
     index("task_studio_open_idx").on(table.studioId, table.doneAt, table.dueDate),
+  ],
+);
+
+// ---- Mana mirror (read-only copy of what Mana knows about members) ----
+
+/** A person with an account in the studio's Mana (member, staff or owner). Only what the CRM needs is kept. */
+export const manaMember = pgTable(
+  "mana_member",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    manaUserId: text("mana_user_id").notNull(),
+    role: text("role").notNull(),
+    name: text("name"),
+    email: text("email"),
+    emailNormalized: text("email_normalized"),
+    phone: text("phone"),
+    phoneNormalized: text("phone_normalized"),
+    /** The sync run that last saw this person. People Mana no longer returns are removed. */
+    lastRunId: text("last_run_id").notNull(),
+    syncedAt: timestamp("synced_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.studioId, table.manaUserId] }),
+    index("mana_member_email_idx").on(table.studioId, table.emailNormalized),
+    index("mana_member_phone_idx").on(table.studioId, table.phoneNormalized),
+  ],
+);
+
+/** A membership a person holds (or held, or will hold) in Mana. */
+export const manaMembership = pgTable(
+  "mana_membership",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    manaUserId: text("mana_user_id").notNull(),
+    membershipId: text("membership_id").notNull(),
+    name: text("name").notNull(),
+    type: text("type").notNull(),
+    /** active, ended or future */
+    status: text("status").notNull(),
+    startDate: date("start_date", { mode: "string" }).notNull(),
+    commitmentEndDate: date("commitment_end_date", { mode: "string" }),
+    cancelEffectiveDate: date("cancel_effective_date", { mode: "string" }),
+    /** A scheduled change: cancel or freeze, and the day it happens. */
+    pendingChangeKind: text("pending_change_kind"),
+    pendingChangeDate: date("pending_change_date", { mode: "string" }),
+    priceAmount: integer("price_amount"),
+    priceCurrency: text("price_currency"),
+    syncedAt: timestamp("synced_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.studioId, table.id] }),
+    index("mana_membership_user_idx").on(table.studioId, table.manaUserId),
+  ],
+);
+
+export type SyncProgress = {
+  phase: "users" | "memberships";
+  /** Where the next page of people starts, until all pages are read. */
+  nextUrl: string | null;
+  usersSeen: number;
+  usersTotal: number | null;
+  /** The last person whose memberships were read. The next one comes after it. */
+  memberCursor: string | null;
+  membersDone: number;
+  membersTotal: number | null;
+  /** When the last request to Mana was made, so spacing holds across steps. */
+  lastRequestAt: number | null;
+};
+
+/** One run of the Mana sync. Only one can be running per studio at a time. */
+export const syncRun = pgTable(
+  "sync_run",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("mana"),
+    /** running, succeeded or failed */
+    status: text("status").notNull().default("running"),
+    startedAt: timestamp("started_at").notNull().defaultNow(),
+    /** Refreshed after every request, so a run that stops moving can be told apart from a slow one. */
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    finishedAt: timestamp("finished_at"),
+    /** A short, safe message. Never contains the key or personal data. */
+    error: text("error"),
+    progress: jsonb("progress").$type<SyncProgress>().notNull(),
+  },
+  (table) => [
+    index("sync_run_studio_idx").on(table.studioId, table.startedAt),
+    uniqueIndex("sync_run_one_running")
+      .on(table.studioId, table.kind)
+      .where(sql`status = 'running'`),
   ],
 );

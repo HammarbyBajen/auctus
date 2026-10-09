@@ -26,6 +26,12 @@ async function main() {
     (await db.insert(studio).values({ slug: "tegen", name: "CrossFit Tegen" }).returning())[0];
   await db.insert(studioSettings).values({ studioId: tegen.id }).onConflictDoNothing();
   await ensureDefaultPipeline(db, tegen.id);
+  if (process.env.MANA_STUDIO_ID) {
+    await db
+      .update(studioSettings)
+      .set({ manaStudioId: process.env.MANA_STUDIO_ID })
+      .where(eq(studioSettings.studioId, tegen.id));
+  }
 
   const [existingUser] = await db.select().from(user).where(eq(user.email, email));
   if (existingUser) {

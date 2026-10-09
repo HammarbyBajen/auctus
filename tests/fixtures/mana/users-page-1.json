@@ -1,0 +1,38 @@
+{
+  "data": {
+    "items": [
+      {
+        "userId": "user-d",
+        "role": "owner",
+        "profile": {
+          "name": "Studion",
+          "email": "info@example.test",
+          "phone": "+46701000004",
+          "avatarUrl": null,
+          "socialVisibility": "friends"
+        }
+      },
+      {
+        "userId": "user-e",
+        "role": "member",
+        "profile": {
+          "name": "Eva Test",
+          "email": "eva@example.test",
+          "phone": "+46701000005",
+          "avatarUrl": null,
+          "socialVisibility": "friends"
+        }
+      }
+    ]
+  },
+  "links": {
+    "self": "https://www.getmana.app/api/v1/studios/studio-1/users?pageIndex=1&pageSize=100",
+    "next": null,
+    "prev": "https://www.getmana.app/api/v1/studios/studio-1/users?pageIndex=0&pageSize=100"
+  },
+  "meta": {
+    "pageIndex": 1,
+    "pageSize": 100,
+    "totalCount": 5
+  }
+}

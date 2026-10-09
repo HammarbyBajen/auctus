@@ -18,7 +18,7 @@ The home page is built from one pure function (`buildAttention` in `src/lib/home
 ## Time zone
 "Today", "this week" and "this month" follow Tegen's calendar in Europe/Stockholm, including the days the clocks change.
 
-Timestamps in the database are stored without a time zone, written and read by the application. That is consistent as long as the app and the database share a zone: Vercel and Neon are both UTC, and a developer machine keeps its own local time for both. Changing a timestamp column to include the zone is the fix if that assumption ever has to change.
+Timestamps in the database are stored without a time zone. The application writes and reads them as UTC, and the database writes "now" (the default for created-at columns) in its own zone. They only agree when **the database runs in UTC**, which Neon and the CI database do. A local database in another zone (for example Europe/Stockholm) makes new leads look hours in the future. A test (`tests/timezone.integration.test.ts`) fails loudly if the database is not in UTC. For a local database, run `ALTER DATABASE tegen_crm SET timezone TO 'UTC';`. Moving the columns to `timestamptz` is the longer-term fix if that assumption ever has to change.
 
 ## Not yet
 Weekend and day-off rules for the 24-hour clock, and editable thresholds, come with ticket 06. The thresholds already come from the studio's settings, with defaults. Mana win-back leads and at-risk members join the list with tickets 12 and 13.

@@ -43,6 +43,13 @@
       "when": 1791536578154,
       "tag": "0005_typical_madame_masque",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791539288099,
+      "tag": "0006_faithful_wolverine",
+      "breakpoints": true
     }
   ]
 }

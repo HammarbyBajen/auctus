@@ -13,5 +13,6 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!login|api|_next/static|_next/image|favicon.ico).*)"],
+  // The workflow paths belong to Vercel Workflow and must not be intercepted.
+  matcher: ["/((?!login|api|_next/static|_next/image|favicon.ico|\\.well-known/workflow/).*)"],
 };

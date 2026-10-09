@@ -1,0 +1,254 @@
+import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
+import { db as defaultDb } from "@/db";
+import { manaMember, manaMembership, syncRun, type SyncProgress } from "@/db/schema";
+import { normalizeEmail, normalizePhone } from "@/lib/leads/matching";
+import type { UserMembershipsPage, UsersPage } from "./contracts";
+import { describeManaError, ManaError } from "./errors";
+
+type Db = typeof defaultDb;
+
+/** What the sync needs from Mana. The real client satisfies it, and tests use a stand-in. */
+export interface ManaSource {
+  getUsersPage(nextUrl: string | null): Promise<{
+    items: UsersPage["data"]["items"];
+    next: string | null;
+    total: number | null;
+  }>;
+  getUserMemberships(manaUserId: string): Promise<UserMembershipsPage["data"]["items"]>;
+  lastRequestAt: number | null;
+}
+
+export const initialProgress: SyncProgress = {
+  phase: "users",
+  nextUrl: null,
+  usersSeen: 0,
+  usersTotal: null,
+  memberCursor: null,
+  membersDone: 0,
+  membersTotal: null,
+  lastRequestAt: null,
+};
+
+/** A run that has not moved for this long is considered dead. */
+export const defaultLeaseMs = 3 * 60_000;
+
+/**
+ * Starts a new sync run for a studio. Only one run can be going at a time:
+ * if one has moved recently, this says "busy". A run that has stopped moving
+ * is marked failed and replaced.
+ */
+export async function startRun(
+  db: Db,
+  studioId: string,
+  options: { now?: Date; leaseMs?: number } = {},
+): Promise<{ status: "started"; runId: string } | { status: "busy"; runId: string }> {
+  const now = options.now ?? new Date();
+  const leaseMs = options.leaseMs ?? defaultLeaseMs;
+  return db.transaction(async (tx) => {
+    const [running] = await tx
+      .select()
+      .from(syncRun)
+      .where(and(eq(syncRun.studioId, studioId), eq(syncRun.kind, "mana"), eq(syncRun.status, "running")))
+      .limit(1);
+    if (running) {
+      if (running.updatedAt.getTime() >= now.getTime() - leaseMs) {
+        return { status: "busy" as const, runId: running.id };
+      }
+      await tx
+        .update(syncRun)
+        .set({ status: "failed", finishedAt: now, error: "Synken stannade av och avbröts." })
+        .where(eq(syncRun.id, running.id));
+    }
+    const [created] = await tx
+      .insert(syncRun)
+      .values({ studioId, progress: initialProgress, startedAt: now, updatedAt: now })
+      .returning({ id: syncRun.id });
+    return { status: "started" as const, runId: created.id };
+  });
+}
+
+async function saveProgress(db: Db, runId: string, progress: SyncProgress, now: Date) {
+  await db.update(syncRun).set({ progress, updatedAt: now }).where(eq(syncRun.id, runId));
+}
+
+export async function failRun(db: Db, runId: string, error: unknown) {
+  await db
+    .update(syncRun)
+    .set({ status: "failed", finishedAt: new Date(), error: describeManaError(error) })
+    .where(and(eq(syncRun.id, runId), eq(syncRun.status, "running")));
+}
+
+/**
+ * Does as much of a run as fits in `budgetMs`, saving progress after every
+ * request, and says whether the run is finished. Call it again to continue:
+ * it picks up from the saved progress.
+ *
+ * 1. Read every page of people (following the next link) and mirror them.
+ *    People Mana no longer returns are removed once all pages are read.
+ * 2. For each member (not staff or owners), read their memberships and replace
+ *    the mirrored ones.
+ */
+export async function runBatch(
+  db: Db,
+  source: ManaSource,
+  runId: string,
+  options: { budgetMs: number; clock?: () => number },
+): Promise<{ done: boolean }> {
+  const clock = options.clock ?? Date.now;
+  const startedAt = clock();
+  const outOfTime = () => clock() - startedAt >= options.budgetMs;
+
+  const [run] = await db.select().from(syncRun).where(eq(syncRun.id, runId)).limit(1);
+  if (!run) throw new ManaError("api", "Synken hittades inte.");
+  if (run.status !== "running") return { done: true };
+  const studioId = run.studioId;
+  const progress: SyncProgress = { ...initialProgress, ...run.progress };
+  source.lastRequestAt = progress.lastRequestAt;
+
+  const touch = () => {
+    progress.lastRequestAt = source.lastRequestAt;
+    return saveProgress(db, runId, progress, new Date());
+  };
+
+  // Phase 1: people
+  while (progress.phase === "users") {
+    if (outOfTime()) return { done: false };
+    const page = await source.getUsersPage(progress.nextUrl);
+    if (page.items.length > 0) {
+      await db
+        .insert(manaMember)
+        .values(
+          page.items.map((u) => ({
+            studioId,
+            manaUserId: u.userId,
+            role: u.role,
+            name: u.profile.name,
+            email: u.profile.email,
+            emailNormalized: normalizeEmail(u.profile.email),
+            phone: u.profile.phone,
+            phoneNormalized: normalizePhone(u.profile.phone),
+            lastRunId: runId,
+            syncedAt: new Date(),
+          })),
+        )
+        .onConflictDoUpdate({
+          target: [manaMember.studioId, manaMember.manaUserId],
+          set: {
+            role: sql`excluded.role`,
+            name: sql`excluded.name`,
+            email: sql`excluded.email`,
+            emailNormalized: sql`excluded.email_normalized`,
+            phone: sql`excluded.phone`,
+            phoneNormalized: sql`excluded.phone_normalized`,
+            lastRunId: sql`excluded.last_run_id`,
+            syncedAt: sql`excluded.synced_at`,
+          },
+        });
+    }
+    progress.usersSeen += page.items.length;
+    progress.usersTotal = page.total;
+    progress.nextUrl = page.next;
+    if (page.next === null) {
+      // Every page is read: anyone Mana did not return this time is gone.
+      const removed = await db
+        .delete(manaMember)
+        .where(and(eq(manaMember.studioId, studioId), ne(manaMember.lastRunId, runId)))
+        .returning({ id: manaMember.manaUserId });
+      if (removed.length > 0) {
+        await db
+          .delete(manaMembership)
+          .where(
+            and(
+              eq(manaMembership.studioId, studioId),
+              sql`${manaMembership.manaUserId} not in (select mana_user_id from mana_member where studio_id = ${studioId})`,
+            ),
+          );
+      }
+      const [{ n }] = await db
+        .select({ n: count() })
+        .from(manaMember)
+        .where(and(eq(manaMember.studioId, studioId), eq(manaMember.role, "member")));
+      progress.phase = "memberships";
+      progress.membersTotal = n;
+      progress.memberCursor = null;
+      progress.membersDone = 0;
+    }
+    await touch();
+  }
+
+  // Phase 2: each member's memberships
+  for (;;) {
+    if (outOfTime()) return { done: false };
+    const [next] = await db
+      .select({ id: manaMember.manaUserId })
+      .from(manaMember)
+      .where(
+        and(
+          eq(manaMember.studioId, studioId),
+          eq(manaMember.role, "member"),
+          progress.memberCursor ? gt(manaMember.manaUserId, progress.memberCursor) : undefined,
+        ),
+      )
+      .orderBy(asc(manaMember.manaUserId))
+      .limit(1);
+    if (!next) break;
+
+    let items: Awaited<ReturnType<ManaSource["getUserMemberships"]>> = [];
+    try {
+      items = await source.getUserMemberships(next.id);
+    } catch (error) {
+      // A person removed from Mana since the list was read has no memberships to mirror.
+      if (!(error instanceof ManaError && error.code === "api" && error.details.status === 404)) throw error;
+    }
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(manaMembership)
+        .where(and(eq(manaMembership.studioId, studioId), eq(manaMembership.manaUserId, next.id)));
+      if (items.length > 0) {
+        await tx.insert(manaMembership).values(
+          items.map((m) => ({
+            studioId,
+            id: m.id,
+            manaUserId: next.id,
+            membershipId: m.membershipId,
+            name: m.name,
+            type: m.type,
+            status: m.status,
+            startDate: m.startDate.slice(0, 10),
+            commitmentEndDate: m.commitmentEndDate?.slice(0, 10) ?? null,
+            cancelEffectiveDate: m.cancelEffectiveDate?.slice(0, 10) ?? null,
+            pendingChangeKind: m.pendingChange?.kind ?? null,
+            pendingChangeDate: (m.pendingChange?.endDate ?? m.pendingChange?.freezeDate ?? null)?.slice(0, 10) ?? null,
+            priceAmount: m.price.amount,
+            priceCurrency: m.price.currency,
+            syncedAt: new Date(),
+          })),
+        );
+      }
+    });
+    progress.memberCursor = next.id;
+    progress.membersDone += 1;
+    await touch();
+  }
+
+  await db
+    .update(syncRun)
+    .set({ status: "succeeded", finishedAt: new Date(), updatedAt: new Date(), progress })
+    .where(eq(syncRun.id, runId));
+  return { done: true };
+}
+
+/** Runs a sync from start to finish in one go. For tests, scripts and small studios. */
+export async function runToCompletion(db: Db, source: ManaSource, studioId: string, budgetMs = 200_000) {
+  const started = await startRun(db, studioId);
+  if (started.status === "busy") return { status: "busy" as const, runId: started.runId };
+  try {
+    for (;;) {
+      const { done } = await runBatch(db, source, started.runId, { budgetMs });
+      if (done) return { status: "succeeded" as const, runId: started.runId };
+    }
+  } catch (error) {
+    await failRun(db, started.runId, error);
+    throw error;
+  }
+}

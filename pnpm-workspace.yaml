@@ -2,3 +2,5 @@ allowBuilds:
   sharp: false
   unrs-resolver: false
   esbuild: true
+  '@swc/core': false
+  cbor-extract: false

@@ -1,0 +1,49 @@
+{
+  "data": {
+    "items": [
+      {
+        "userId": "user-a",
+        "role": "member",
+        "profile": {
+          "name": "Anna Test",
+          "email": "anna@example.test",
+          "phone": "+46701000001",
+          "avatarUrl": null,
+          "socialVisibility": "friends"
+        }
+      },
+      {
+        "userId": "user-b",
+        "role": "member",
+        "profile": {
+          "name": "Bo Test",
+          "email": "bo@example.test",
+          "phone": null,
+          "avatarUrl": null,
+          "socialVisibility": "friends"
+        }
+      },
+      {
+        "userId": "user-c",
+        "role": "staff",
+        "profile": {
+          "name": "Cia Coach",
+          "email": "cia@example.test",
+          "phone": "0701000003",
+          "avatarUrl": null,
+          "socialVisibility": "friends"
+        }
+      }
+    ]
+  },
+  "links": {
+    "self": "https://www.getmana.app/api/v1/studios/studio-1/users?pageIndex=0&pageSize=100",
+    "next": "https://www.getmana.app/api/v1/studios/studio-1/users?pageIndex=1&pageSize=100",
+    "prev": null
+  },
+  "meta": {
+    "pageIndex": 0,
+    "pageSize": 100,
+    "totalCount": 5
+  }
+}

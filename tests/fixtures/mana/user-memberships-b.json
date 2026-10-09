@@ -1,0 +1,61 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "um-b1",
+        "membershipId": "m-basic",
+        "name": "Basic",
+        "type": "standard",
+        "status": "active",
+        "startDate": "2026-09-07",
+        "pendingChange": null,
+        "commitmentEndDate": null,
+        "cancelEffectiveDate": null,
+        "invoicedUntilDate": "2026-09-07",
+        "invoicedUntil": "2026-09-07",
+        "price": {
+          "amount": 149500,
+          "currency": "SEK"
+        },
+        "interval": "month",
+        "hasGymAccess": true,
+        "maxBookingDaysInAdvance": null,
+        "creditsPerPeriod": null,
+        "creditPeriod": null,
+        "creditAccessMode": "none",
+        "classAccess": [
+          {
+            "classId": "c1",
+            "accessType": "free"
+          }
+        ],
+        "pricePeriods": [
+          {
+            "fromDate": "2026-09-07",
+            "toDate": null,
+            "from": "2026-09-07",
+            "to": null,
+            "price": {
+              "amount": 149500,
+              "currency": "SEK"
+            },
+            "type": "base",
+            "discountPercent": null,
+            "disableMembership": false
+          }
+        ],
+        "upcomingPayments": []
+      }
+    ]
+  },
+  "links": {
+    "self": "https://www.getmana.app/api/v1/studios/studio-1/user-memberships",
+    "next": null,
+    "prev": null
+  },
+  "meta": {
+    "pageIndex": 0,
+    "pageSize": 100,
+    "totalCount": 1
+  }
+}

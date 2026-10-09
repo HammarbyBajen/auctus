@@ -1,0 +1,15 @@
+{
+  "data": {
+    "items": []
+  },
+  "links": {
+    "self": "https://www.getmana.app/api/v1/studios/studio-1/user-memberships",
+    "next": null,
+    "prev": null
+  },
+  "meta": {
+    "pageIndex": 0,
+    "pageSize": 100,
+    "totalCount": 0
+  }
+}

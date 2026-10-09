@@ -1,0 +1,109 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "um-a1",
+        "membershipId": "m-basic",
+        "name": "Basic",
+        "type": "standard",
+        "status": "ended",
+        "startDate": "2026-03-01",
+        "pendingChange": null,
+        "commitmentEndDate": null,
+        "cancelEffectiveDate": "2026-08-31",
+        "invoicedUntilDate": "2026-03-01",
+        "invoicedUntil": "2026-03-01",
+        "price": {
+          "amount": 149500,
+          "currency": "SEK"
+        },
+        "interval": "month",
+        "hasGymAccess": true,
+        "maxBookingDaysInAdvance": null,
+        "creditsPerPeriod": null,
+        "creditPeriod": null,
+        "creditAccessMode": "none",
+        "classAccess": [
+          {
+            "classId": "c1",
+            "accessType": "free"
+          }
+        ],
+        "pricePeriods": [
+          {
+            "fromDate": "2026-03-01",
+            "toDate": null,
+            "from": "2026-03-01",
+            "to": null,
+            "price": {
+              "amount": 149500,
+              "currency": "SEK"
+            },
+            "type": "base",
+            "discountPercent": null,
+            "disableMembership": false
+          }
+        ],
+        "upcomingPayments": []
+      },
+      {
+        "id": "um-a2",
+        "membershipId": "m-perf",
+        "name": "Performance",
+        "type": "standard",
+        "status": "active",
+        "startDate": "2026-09-07",
+        "pendingChange": {
+          "kind": "cancel",
+          "endDate": "2026-11-30"
+        },
+        "commitmentEndDate": "2027-09-06",
+        "cancelEffectiveDate": null,
+        "invoicedUntilDate": "2026-09-07",
+        "invoicedUntil": "2026-09-07",
+        "price": {
+          "amount": 209500,
+          "currency": "SEK"
+        },
+        "interval": "month",
+        "hasGymAccess": true,
+        "maxBookingDaysInAdvance": null,
+        "creditsPerPeriod": null,
+        "creditPeriod": null,
+        "creditAccessMode": "none",
+        "classAccess": [
+          {
+            "classId": "c1",
+            "accessType": "free"
+          }
+        ],
+        "pricePeriods": [
+          {
+            "fromDate": "2026-09-07",
+            "toDate": null,
+            "from": "2026-09-07",
+            "to": null,
+            "price": {
+              "amount": 209500,
+              "currency": "SEK"
+            },
+            "type": "base",
+            "discountPercent": null,
+            "disableMembership": false
+          }
+        ],
+        "upcomingPayments": []
+      }
+    ]
+  },
+  "links": {
+    "self": "https://www.getmana.app/api/v1/studios/studio-1/user-memberships",
+    "next": null,
+    "prev": null
+  },
+  "meta": {
+    "pageIndex": 0,
+    "pageSize": 100,
+    "totalCount": 2
+  }
+}

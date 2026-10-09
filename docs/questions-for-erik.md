@@ -29,7 +29,7 @@ Max will Check Fredrik or Timmy if coaches ever has Tegenmöte and what the deal
 ## MRR and paying members
 
 13. Can I get read access to Bionic HQ's `src/lib/members/paying.ts`, as reference?
-14. Do recurring add-ons with a price, such as Förvaringsbox (a locker, 45 active), count in MRR, and does a locker alone make someone a paying member?
+14. Do recurring add-ons with a price, such as Förvaringsbox (a locker, 45 active), count in MRR, and does a locker alone make someone a paying member? A (Max): yes to both, it is a recurring 50 kr per month and counts as a membership.
 
 ## Anything missed
 

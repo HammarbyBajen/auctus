@@ -16,6 +16,6 @@
 ## Rules decided while building
 
 - Matching: email first (exactly one Mana person), then phone only if exactly one Mana person has that number.
-- A membership counts when it is active or upcoming and not unticked on the Mana page ("Vad räknas som medlemskap?"). Förvaringsbox should be unticked.
+- A membership counts when it is active or upcoming and not unticked on the Mana page ("Vad räknas som medlemskap?"). Förvaringsbox stays ticked: it counts as a membership (decided by Max, 2026-10-09).
 - Automatic Won only when a counting membership started on or after the day the lead came in, so an existing member who gets in touch is shown as "Redan medlem" but not closed. It happens at most once per lead, so an owner who moves it back is not overridden. Unticking a membership later does not undo a Won that already happened.
 - Checked after every sync, and live (in the background, at most every 10 minutes per person) when a lead is opened.

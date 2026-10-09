@@ -4,11 +4,12 @@
 
 **Blocked by:** 10
 
-**Status:** ready-for-agent (check the definitions with Erik first, see the open questions)
+**Status:** ready-for-agent
 
 Definitions (from Erik's notes, decided 2026-10-08 where marked):
 - MRR: the sum of the monthly price of every active recurring membership with a price above 0, at the price that applies today (a discount period lowers it).
 - Paying member: a person with at least one such membership. 0 kr memberships (coach deals, staff) do not count.
+- Förvaringsbox (a 50 kr per month locker) counts in MRR and as a membership, so a locker-only person is a paying member (decided by Max, 2026-10-09). At the time of deciding: 45 active lockers, 2,250 kr per month, 2 locker-only people.
 - Frozen memberships do not count (decided).
 - Visible to Owners, not to Staff (decided: admin, owner and studio manager see it, trainers do not; the CRM has Owner and Staff for now).
 - MRR is what members are signed up to pay, not what was collected (failed charges are not in the Mana API).

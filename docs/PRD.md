@@ -1,6 +1,6 @@
 # PRD: Tegen CRM
 
-Status: draft v1, 2026-10-07
+Status: draft v1, 2026-10-07, updated 2026-10-09 with Erik's notes on lead intake and the MRR KPI
 Owner: Max (Lab37)
 Sources: grilling session, [research/tegen.md](research/tegen.md), [research/mana-api.md](research/mana-api.md), [research/pipedrive.md](research/pipedrive.md), [questions-for-erik.md](questions-for-erik.md)
 
@@ -8,32 +8,35 @@ Sources: grilling session, [research/tegen.md](research/tegen.md), [research/man
 
 CrossFit Tegen's two owners, Fredrik and Timmy, follow up leads in Pipedrive every day. Pipedrive is a general B2B sales tool, and it knows nothing about the gym. Their members, memberships, bookings and payments live in Mana (they moved from Wondr in September 2026), so the owners cannot see in one place whether a lead became a member, who is drifting away, or who cancelled and could be won back.
 
-Leads arrive from three places (manual input, the contact form and the website chat bot). They all go through Lab37's "leadfabrik" API, which forwards them to the right CRM per customer (Pipedrive for Tegen), emails the lead, pings Discord and saves every lead in a Notion sink that acts as the source of truth if anything else fails. The site promises contact within 24 hours, but nothing in the tools makes an overdue lead visible. Tegen pays for a tool shaped for a different business and still fills the gaps by hand.
+Leads arrive through four routes in Lab37's `tegen-web` (`/api/contact`, `/api/qualification`, `/api/chat` and `/api/escalate`): the contact form, the qualification flow and the website chat bot. Each lead goes to five places: an email via Resend, Discord #tegen-leads, Notion (which LAB37's ad reporting counts leads from), Pipedrive (where Timmy works every day) and the Meta Conversions API (which feeds the ads). This is revenue-critical LAB37 code. The site promises contact within 24 hours, but nothing in the tools makes an overdue lead visible. Tegen pays for a tool shaped for a different business and still fills the gaps by hand.
 
 ## Solution
 
 A small web CRM built for Tegen, on top of Mana. In v1 it does three jobs:
 
-1. **Lead pipeline.** Leads come in from leadfabrik, move through Tegen's real sales steps, and the landing page always shows which leads need action first (overdue or close to the 24-hour promise, due tasks, stalled leads).
+1. **Lead pipeline.** Leads arrive as a copy from `tegen-web`, move through Tegen's real sales steps, and the landing page always shows which leads need action first (overdue or close to the 24-hour promise, due tasks, stalled leads).
 2. **Member link to Mana.** The CRM reads members, memberships and attendance from Mana (read-only). When a lead shows up as a Mana member, the lead is marked Won automatically.
 3. **Retention.** From Mana data the CRM creates win-back leads (cancellations, freezes, ended memberships, day-pass buyers who never joined) and flags members who have stopped coming, so the owners can reach out personally.
 
 A fourth, separate job is the **Salary (WFM) module**, kept apart from the lead and retention CRM and referred to by that name: coach salary hours. Fredrik counts every coach's hours from the Mana schedule by hand each month for salary reporting. The CRM does that count for him (names and hours only, no money).
 
-Pipedrive is replaced. The product direction is a growth layer on top of Mana for gyms generally (leads, CRM, marketing, retention), but v1 is Tegen only.
+**The CRM replaces nothing for now.** It becomes the sixth destination for leads, next to the five existing ones, which keep working unchanged, Pipedrive included. Whether and when it takes over from Pipedrive is decided at a review once the CRM has run on real leads ("Review where we land"). Until then it sends no notifications to Fredrik or Timmy, only to the project's own test channel. The product direction is a growth layer on top of Mana for gyms generally (leads, CRM, marketing, retention), but v1 is Tegen only.
+
+On top of that, the landing page carries the gym's main KPI: **MRR from recurring memberships and the number of paying members, with their trend**, so the owners see at a glance whether paying members are growing.
 
 ## User Stories
 
 ### Receiving and finding leads
 1. As an owner, I want every new lead from the contact form and chat bot (and anything entered manually) to appear in the CRM automatically, so that nothing depends on someone copying it.
 2. As an owner, I want a repeat submission from the same person to be added to their existing lead instead of creating a second one, so that my list stays clean.
-3. As an owner, I want leads matched by email first and then phone, so that people who use different forms are recognised.
+3. As an owner, I want leads matched by email first and then by the last 9 digits of the phone number, with the earliest lead winning, so that people who use different forms are recognised and the CRM counts leads the same way as LAB37's reports.
 4. As an owner, I want to see where each lead came from (contact form, chat bot, Mana win-back, manual), so that I know which channels work.
-5. As an owner, I want the ad campaign information (UTM tags, landing page) stored on web leads, so that I can later see which ads produce members.
+5. As an owner, I want the ad campaign information stored on web leads (the attribution: UTM source and medium, campaign, and click ids such as gclid and fbclid, or the referring site, or direct), kept exactly as sent, so that I can later see which ads produce members.
 6. As a staff member, I want to add a lead by hand (phone call, walk-in) and choose its source, so that every lead is in one place.
 7. As an owner, I want to search leads by name, email or phone, so that I can find someone quickly when they call.
 8. As an owner, I want to filter leads by stage, source, assignee and date, so that I can work through a specific group.
 9. As an owner, I want to open a lead and see its full history (notes, tasks, stage changes, form submissions), so that I know what has already been said.
+9b. As an owner, I want test leads (containing `test-lab37`, `ignorer` or `testlead`) marked as tests and kept out of the lists and counts, so that testing never looks like real demand.
 
 ### Working the pipeline
 10. As an owner, I want leads to move through New lead, Contacted, Booked meeting, Booked test training, Consultation done, Price info, then Won or Cold, so that the CRM matches how Tegen actually sells.
@@ -90,10 +93,16 @@ Pipedrive is replaced. The product direction is a growth layer on top of Mana fo
 48. As an owner, I want to define the reasons used for Cold leads, so that reporting uses our words.
 49. As an owner, I want to add custom fields to leads (for example goal, injury, interest), so that we can record what matters to us.
 
-### Import and cutover
-50. As an owner, I want the active Pipedrive leads imported with notes, activities and stage, so that nothing in progress is lost.
-51. As an owner, I want all Pipedrive leads imported, including the old cold ones, so that the history is kept and old contacts can be searched or revived.
-52. As an owner, I want Pipedrive kept read-only for two weeks after the switch, so that I can check something if I need to.
+### Import, review and go-live
+50. As an owner, I want the lead history read from the Tegen Notion lead database or Pipedrive (read-only, never written to) with notes, activities and stage where available, so that nothing in progress is lost.
+51. As an owner, I want all historic leads imported, including the old cold ones, using the same test-lead and duplicate rules as new leads, so that the history is kept and the counts match LAB37's reports.
+52. As an owner, I want the CRM to run alongside Pipedrive on real leads until a review decides where we land, so that nothing breaks for Timmy while we find out whether the CRM is better.
+
+### KPI: MRR and paying members
+66. As an owner, I want MRR from recurring memberships and the number of paying members at the top of the home page, so that I see at a glance whether the gym is growing.
+67. As an owner, I want a trend line for both, back to September 2026 (when Tegen moved to Mana), so that I see the direction and not only today's number.
+68. As an owner, I want new paying members and lost paying members this month next to the trend, so that the change can be explained.
+69. As an owner, I want trainers (Staff) not to see MRR, so that revenue stays with the people who run the business.
 
 ### Reporting
 53. As an owner, I want one report page with leads per source and month, conversion to Won, and average time to first contact, so that I can see whether we are doing better.
@@ -124,11 +133,11 @@ Pipedrive is replaced. The product direction is a growth layer on top of Mana fo
 - **Stack.** TypeScript, Next.js, Postgres. Swedish UI with strings kept in translation files, English code and docs. EU data residency. Sign-in with Better Auth (decided), with no Google sign-in (see Auth and roles).
 - **Hosting.** Everything runs on Vercel: the web app, a Postgres database from the Vercel Marketplace (Neon, Supabase or Prisma Postgres, in an EU region such as Frankfurt, to be confirmed in the setup screen) and the background jobs. No office server is used, and the CRM gets its address from Vercel. The decision is recorded as an ADR.
 - **Background jobs.** Vercel Cron triggers the Mana sync and the win-back and at-risk detection, and a Vercel Workflow splits long jobs into steps so a full pass (about one second per member) survives the function time limit and can retry. The project starts on Vercel's Hobby plan as a hobby project: cron jobs run once a day at an imprecise time, and a function or workflow step may run for at most 5 minutes. That is enough here, because the deadline and attention views are calculated when the page is opened (no cron needed), the Mana sync and detection jobs run daily, and an owner can also press "Sync now" or open a lead to refresh it on demand. Vercel's terms describe Hobby as non-commercial, so moving to Pro should be reconsidered before the CRM is relied on by Tegen's business. Only the background jobs hold the Mana key.
-- **Sources of truth.** Mana is the source of truth for members, memberships, bookings and payments. For incoming leads, the **Notion sink in leadfabrik** is the source of truth (every lead is saved there in case something else fails). The CRM is the working system for the sales process: pipeline stage, notes, tasks, assignment and win-back and at-risk alerts. The CRM never writes to Mana, and in v1 it does not write back to Notion. Because Notion holds every raw lead, the CRM can be rebuilt or reconciled from it if needed.
-- **Lead pipe today.** Everything enters through the leadfabrik API, which forwards to the customer's CRM, emails the lead, pings Discord and saves to Notion. The CRM is added as a destination there, replacing Pipedrive.
+- **Sources of truth.** Mana is the source of truth for members, memberships, bookings and payments. For leads, `tegen-web` sends every lead to five destinations, and Notion is what LAB37's reports count from. The CRM is a sixth destination and the working system for the sales process: pipeline stage, notes, tasks, assignment and win-back and at-risk alerts. The CRM never writes to Mana, Notion or Pipedrive.
+- **Lead pipe today.** `tegen-web` (LAB37 code, revenue-critical) takes leads on `/api/contact`, `/api/qualification`, `/api/chat` and `/api/escalate` and sends each to Resend email, Discord, Notion, Pipedrive and the Meta Conversions API. Erik adds one more step that POSTs each lead to the CRM. The CRM does not change `tegen-web`.
 
 ### Modules
-- **Lead intake.** An authenticated HTTP endpoint that leadfabrik calls. It accepts the lead, stores it with leadfabrik's lead id (so a retry never creates a duplicate), matches by email then phone, and either creates a lead or adds a submission to an existing one. The exact payload is pending from the leadfabrik owner and the endpoint will be adapted to it. Leadfabrik keeps its customer email, Discord ping and Notion sink, so the CRM sends no new-lead notifications in v1.
+- **Lead intake.** An HTTP endpoint that `tegen-web` POSTs every lead to, authenticated with a shared secret. Max gives Erik the URL and the secret. The body follows `contactPayloadSchema` and `qualificationPayloadSchema` from `tegen-web`'s `src/lib/qualification-schema.ts`. The attribution string (built by `formatAttribution` in `tegen-web`'s `src/lib/notion-leads.ts`: UTM as `source / medium`, then `kampanj:`, `gclid:`, `fbclid:` and so on joined with " · ", `ref: <host>` when only the referring site is known, `Direkt / okänd` for direct) is stored exactly as received and parsed into fields, never cleaned up, and click ids are never shortened. Leads containing `test-lab37`, `ignorer` or `testlead` are flagged as tests and left out of lists and counts. Duplicates match on email first, then the last 9 digits of the phone, and the earliest lead wins, the same rules as LAB37's reports. A retry of the same lead never creates a second one. The endpoint must be reachable despite Vercel's Deployment Protection (a bypass for this path, or protection off for production). It sends no notifications to Fredrik or Timmy: only to the project's own test channel until the review. Never test it with a real lead, only throwaway records.
 - **Pipeline.** Stages (ordered, editable), lead state, stage history, Cold reasons, tasks, notes, assignment (optional).
 - **Attention engine.** Computes the landing-page priority list from deadlines, due tasks, stalled leads, unhandled win-backs and at-risk alerts. Thresholds and weekend or day-off rules (which days the deadline clock runs) come from settings. Assigned-to-someone-else leads are shown greyed out for the other owner.
 - **Mana API change watch.** Mana's API is alpha. A daily job fetches the public OpenAPI spec and documentation, compares it with the last copy and alerts Max and the owners when it changes, so the adapter's contract tests are updated before the sync breaks.
@@ -139,13 +148,14 @@ Pipedrive is replaced. The product direction is a growth layer on top of Mana fo
 - **Won detection.** When a lead's email or phone matches a Mana member with an active membership, the lead moves to Won and shows the actual membership.
 - **Auth and roles.** Better Auth (decided) with email and password or email link, stored in the CRM's own EU database. Clerk was rejected because it hosts user data in the US only. Roles in v1 are fixed: Owner (everything, including settings, users, thresholds, stages and fields) and Staff (leads and tasks, no settings). Roles are fixed and not editable, and there are no per-person permission overrides in v1. Only Owners see the Salary (WFM) module. A role editor and per-person permissions are deferred. Better Auth's access control supports adding them later.
 - **Settings.** Stages, Cold reasons, custom fields, thresholds, Mana connection, users.
-- **Import.** A one-off script that reads all 573 Pipedrive leads (API or export) with their notes, activities and stage, maps them to CRM stages and sources, and is safe to run twice. The 526 old cold leads are imported too, as Cold, hidden from the main views by default but searchable. Fredrik and Timmy confirmed this.
+- **Import.** A one-off, rerunnable script that reads historic leads from the Tegen Notion lead database or Pipedrive, read-only (never writing to either), with notes, activities and stage where the source has them. It applies the same test-lead and duplicate rules as the intake, so the counts match LAB37's reports. The 573 Pipedrive leads (526 of them old and cold) are the known volume.
 - **Salary (WFM) module.** A separate module from the CRM. It pulls a chosen month of coach work from three Mana sources on demand: class events, specialist service bookings (personal training and Onramp, which carry a status such as completed, booked, canceled or refunded) and Kids course events. Each has an instructor, a start and an end. The month view has a Refresh action and shows the last-pulled time. It is meant to be run close to the 15th, after the month has ended, because class data in Mana may not be up to date until then and cancelled classes must be reflected. No continuous daily sync is needed. Locking stores a frozen snapshot, so a locked month does not depend on Mana afterwards. A People list links each coach to a Mana instructor and holds free classes per week, active-from date and notes. A class-type rule table marks each type paid or not paid. The monthly calculation takes real minutes per event, applies each person's free classes per week (counted per week and booked to the month each class falls in, Tegenbutik excluded), and returns per person: hours per class type, free hours and hours to pay. Classes with no instructor and class types with no rule are flagged. A month can be locked (frozen snapshot) and exported as names and hours. No money is calculated. September 2026 is migration test data, and October 2026 is the first real month. Owners only.
+- **KPI: MRR and paying members.** MRR is the sum of the monthly price of every active recurring membership with a price above 0, using the price that applies today (a discount period lowers it). Frozen memberships do not count (decided by Erik, 2026-10-08). A paying member is a person with at least one such membership. 0 kr memberships (coach deals, staff) do not count. MRR is what members are signed up to pay, not what was collected: failed card charges do not show up in the Mana API. The source is the Mana membership mirror, which already includes ended memberships (without them the count only ever goes up, a known bug in Bionic HQ). The mirror must also keep each membership's price periods, since they hold discounts and freezes. Mana keeps no history, so one snapshot is stored per day from the day this is built, and the months back to September 2026 are rebuilt from start, end and price-period dates (before September Tegen was on Wondr). Next to the trend: new and lost paying members this month. Visible to Owners only, not to Staff (trainers). Today's numbers are checked against Mana by hand before it is trusted. Bionic HQ's `src/lib/members/paying.ts` is the reference.
 - **Reporting.** One page with leads per source and month, conversion to Won and average time to first contact. UTM and landing page data are stored from day one so source-to-member reports are possible later.
 - **Privacy tools.** Hard delete of a person and linked data, and a review list for 24-month inactive Cold leads.
 
 ### Data model (concepts only)
-- Person (name, email, phone), Lead (person, stage, source, assignee, UTM and landing page, custom fields, Cold reason), Lead submission (raw form data, timestamp, leadfabrik id), Stage, Task, Note, Stage history, Alert (win-back or at-risk, status, dismissal reason), Mana member (mirrored), Mana membership (mirrored), Visit (mirrored check-in or booking), Sync run, User, Settings. All carry `studio_id`.
+- Person (name, email, phone, link to the Mana person), Lead (person, stage, source, assignee, attribution kept as sent plus parsed UTM and click ids, test flag, custom fields, Cold reason), Lead submission (raw payload, timestamp, sender's lead id), Stage, Task, Note, Stage history, Alert (win-back or at-risk, status, dismissal reason), Mana member (mirrored), Mana membership (mirrored, with price periods), Visit (mirrored check-in or booking), KPI snapshot (one per day: MRR and paying members), Sync run, User, Settings. All carry `studio_id`.
 
 ### Mana API constraints that shape the design
 - Auth is a single studio API key with no scopes (full owner access), shown once on creation, already issued to Lab37 (created by a Mana owner). It must only exist in the worker's environment, never in browser code or logs.
@@ -185,22 +195,24 @@ Per the to-spec method, please confirm that these two seams are the ones you exp
 - Importing any Wondr history.
 - A shared knowledge base for the chat agent, the reply file and the Mana guide.
 - Multi-tenant (several gyms in one app).
-- Sending new-lead emails from the CRM (leadfabrik keeps doing this).
+- Sending new-lead notifications to Fredrik or Timmy from the CRM before the review (`tegen-web` keeps doing this through email and Discord).
+- Changing `tegen-web`, Notion or Pipedrive in any way.
 
 ## Open Questions
 
-Tracked in [questions-for-erik.md](questions-for-erik.md) and with the leadfabrik owner.
+Tracked in [questions-for-erik.md](questions-for-erik.md).
 
-1. **Leadfabrik payload and endpoint contract.** Pending from the leadfabrik owner. It blocks lead intake.
-2. Whether Mana has webhooks or exports, and whether a daily request limit exists beyond the known one request per second. Mana has no contact and no sandbox (answered), so the CRM is tested read-only against the live studio and with recorded responses, and the Mana documentation and OpenAPI spec are checked daily for changes.
-3. The exact database provider and region on Vercel, and when to move from Hobby to Pro (needed for more frequent cron schedules and if Tegen relies on it commercially).
-4. Leadfabrik's API can state where each lead came from, so new leads get a real source. Open: whether Pipedrive's old "API" leads can be traced back to their original channel for the import (all 573 leads are imported).
-5. The data processing agreement and the privacy policy wording for attendance-based alerts.
-6. The exact meaning of Mana's ended memberships and day-pass data, to be validated against the live API now that a key exists.
-7. Salary (WFM) module, from the live check (see [research/mana-class-events-check.md](research/mana-class-events-check.md)). Settled: a month fits in one request, Mana's history starts 7 September 2026, the key unlocks no extra class events, and a cancelled class is removed from the schedule (confirmed by Erik), so a refresh near the 15th is correct. PT and Onramp are specialist service bookings, and Kids are course events, so there are three sources. Open: NSI, PT30, PT60, Tegenbutik and Tegenmöte exist as classes but have no scheduled events in September to November, so how coaches' hours for them are recorded is unknown (Max asks Fredrik or Timmy, including whether coaches ever have Tegenmöte and on what terms). Open: which PT and Onramp booking statuses count as hours worked.
+1. **Intake payload.** Access to `tegen-web`'s `contactPayloadSchema`, `qualificationPayloadSchema` and `formatAttribution` (the repository, or copies of the three). It blocks lead intake.
+2. **Test channel.** Which channel is "our own test channel" for notifications until the review (for example a Discord channel only Max sees).
+3. **MRR reference.** Access to Bionic HQ's `src/lib/members/paying.ts`, read as reference.
+4. **MRR edge cases.** Whether recurring add-ons with a price, such as Förvaringsbox, count in MRR and make someone a paying member. How Mana shows a membership that is frozen today (probably a price period with `disableMembership`), to be checked against the API.
+5. Whether Mana has webhooks or exports, and whether a daily request limit exists beyond the known one request per second. Mana has no contact and no sandbox, so the CRM is tested read-only against the live studio and with recorded responses, and the Mana documentation and OpenAPI spec are checked daily for changes.
+6. The data processing agreement and the privacy policy wording for attendance-based alerts.
+7. The exact meaning of Mana's ended memberships and day-pass data, to be validated against the live API.
+8. Salary (WFM) module: how coaches' hours for NSI, PT30, PT60, Tegenbutik and Tegenmöte are recorded (they exist as classes but have no scheduled events), and which PT and Onramp booking statuses count as worked (Max asks Fredrik or Timmy).
 
 ## Further Notes
 
-- **Milestones (suggested).** M1 Foundations (login, roles, stages, manual leads, tasks, landing page). M2 Intake (leadfabrik endpoint, duplicate handling, source and UTM). M3 Mana (sync, membership display, Won detection). M4 Import and cutover. M0 (any time): daily Mana API change watch. M5 Retention (win-back leads, at-risk Rule 1). M6 Reporting and polish. M7 Salary (WFM) module (can be built any time after ticket 10, since it only needs the Mana connection; no deadline, and Erik decides whether to aim for the 15th). Rule 2 and automation follow later.
+- **Milestones (suggested).** M1 Foundations (login, roles, stages, manual leads, tasks, landing page). M2 Intake (endpoint for `tegen-web`, duplicate and test-lead rules, attribution). M3 Mana (sync, membership display, Won detection). M4 Import, then "Review where we land" with Erik (only after that do notifications and accounts go to Fredrik and Timmy, and is Pipedrive's future decided). M0 (any time): daily Mana API change watch. M5 Retention (win-back leads, at-risk Rule 1). M6 Reporting and polish. M2b KPI: MRR and paying members on the home page. M7 Salary (WFM) module (can be built any time after ticket 10, since it only needs the Mana connection; no deadline, and Erik decides whether to aim for the 15th). Rule 2 and automation follow later.
 - **Why not off-the-shelf.** Gym CRMs exist, but the point is a thin layer fitted to Tegen's process and to Mana, which Lab37 can extend into a product.
 - **Recommended skills for the build phase** (not installed): `anthropics/skills@frontend-design`, `vercel-labs/agent-skills@web-design-guidelines`, `mattpocock/skills@domain-modeling`, `wshobson/agents@architecture-decision-records`.

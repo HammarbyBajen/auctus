@@ -20,9 +20,17 @@ Context: we are planning a lead and retention CRM for CrossFit Tegen, replacing 
 8. Tegenbutik, Tegenmöte, NSI and PT classes exist in Mana but have no scheduled events in September to November. How are shop and meeting hours recorded today, and does Fredrik plan to schedule them in Mana? Ask Fredrik also which PT and Onramp booking statuses count as hours worked (completed only?).
 Max will Check Fredrik or Timmy if coaches ever has Tegenmöte and what the deals. 
 
+## Lead intake (from "How leads reach Tegen HQ")
+
+10. Can I get read access to `tegen-web`, or copies of `contactPayloadSchema` and `qualificationPayloadSchema` (`src/lib/qualification-schema.ts`) and `formatAttribution` (`src/lib/notion-leads.ts`)? Lead intake is built against them.
+11. Which channel should be "our own test channel" for notifications until the review (for example a Discord channel only Max sees)?
+12. For history: should the import read from the Tegen Notion lead database or from Pipedrive, and can I get read-only access to that one?
+
+## MRR and paying members
+
+13. Can I get read access to Bionic HQ's `src/lib/members/paying.ts`, as reference?
+14. Do recurring add-ons with a price, such as Förvaringsbox (a locker, 45 active), count in MRR, and does a locker alone make someone a paying member?
+
 ## Anything missed
 
-9. Is there anything we have missed? Things Fredrik and Timmy complain about in Pipedrive, weekly reports they need, or leads that fall through the cracks today.
-
-
-
+15. Is there anything we have missed? Things Fredrik and Timmy complain about in Pipedrive, weekly reports they need, or leads that fall through the cracks today.

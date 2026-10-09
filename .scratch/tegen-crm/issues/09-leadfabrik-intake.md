@@ -1,14 +1,18 @@
-# 09: Lead intake from leadfabrik
+# 09: Lead intake from tegen-web
 
-**What to build:** Leadfabrik posts new leads (contact form and chat bot) to an authenticated endpoint in the CRM, with the source stated by leadfabrik and any UTM data. The same lead sent twice is stored once, and a repeat submission from a known person is added to their existing lead. Built against an assumed payload until Erik's sample arrives.
+**What to build:** An endpoint that `tegen-web` POSTs every real lead to, as a sixth destination next to email, Discord, Notion, Pipedrive and Meta (which all keep working unchanged). Max gives Erik the URL and a shared secret, and Erik adds the POST in `tegen-web`. The CRM does not change `tegen-web`. Leads land in the pipeline with their source and attribution, test leads are flagged, and duplicates follow LAB37's rules so the counts match LAB37's reports.
 
-**Blocked by:** 02
+**Blocked by:** 02, and access to `tegen-web`'s payload schemas (`contactPayloadSchema`, `qualificationPayloadSchema` in `src/lib/qualification-schema.ts`) and `formatAttribution` (`src/lib/notion-leads.ts`).
 
-**Status:** ready-for-agent
+**Status:** ready-for-agent once the schemas are available
 
-- [ ] The endpoint rejects requests without a valid key
-- [ ] A lead arrives with source, name, email, optional phone and UTM or landing page when available
-- [ ] Retries with the same leadfabrik lead id do not create duplicates
-- [ ] A new submission from a known email (then phone) adds a note and counts as activity on the existing lead
-- [ ] The raw submission is stored with its timestamp
-- [ ] A contract test uses a sample payload and is updated when the real one is received
+- [ ] The endpoint accepts the contact and qualification payloads exactly as `tegen-web` sends them (contract tests against the real schemas), from all four routes (`/api/contact`, `/api/qualification`, `/api/chat`, `/api/escalate`)
+- [ ] Requests without the shared secret are refused, and the secret is compared in constant time
+- [ ] The endpoint is reachable from `tegen-web` despite Vercel's Deployment Protection (a bypass for this path or protection off for production), and nothing else is opened up
+- [ ] The raw payload is stored with its timestamp, and a retry of the same lead never creates a second one
+- [ ] The attribution string is stored exactly as received and parsed into fields: UTM source and medium, campaign (`kampanj:`), click ids (`gclid:`, `fbclid:` and others), `ref: <host>` and `Direkt / okänd`. It is never cleaned up and click ids are never shortened
+- [ ] Leads containing `test-lab37`, `ignorer` or `testlead` are flagged as tests and left out of lists, the home page and counts
+- [ ] Duplicates match on email first, then the last 9 digits of the phone number, and the earliest lead wins (the same rules as LAB37's reports). Manual entry uses the same rule
+- [ ] No notification reaches Fredrik or Timmy: anything the CRM sends goes to the project's own test channel until the review (ticket 18)
+- [ ] Tested with throwaway records only, never with a real lead
+- [ ] Max sends Erik the URL and the secret, Erik switches on the copy, and the five existing destinations are confirmed to still work

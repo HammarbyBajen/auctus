@@ -20,7 +20,6 @@
 
 Verified locally with a real run against Tegen's Mana (460 people, 424 members, 14 minutes, read-only): the sync, the steps, the throttle, the banner and "Synka nu". Contract tests run against synthetic fixtures, and `MANA_LIVE=1 pnpm test tests/mana.live.test.ts` checks the real API on demand.
 
-Still to check once deployed, because it cannot be tried locally:
-- `MANA_API_KEY` and `CRON_SECRET` are set as Vercel environment variables, and "Enable access to System Environment Variables" is switched on.
-- The first "Synka nu" on the live site completes (a step must stay under Hobby's 5-minute limit).
-- Vercel Cron starts the daily run despite Deployment Protection.
+Verified on Vercel (2026-10-09): environment variables set, "Synka nu" on the live site succeeded in 943 seconds (well past the 5-minute step limit, so the workflow steps work), with 460 people and 284 memberships (270 active), the same as the local run.
+
+Still to check: Vercel Cron starts the daily run at 03:00 UTC despite Deployment Protection (first chance: the night after 2026-10-09).

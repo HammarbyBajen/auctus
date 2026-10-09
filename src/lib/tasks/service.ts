@@ -10,6 +10,11 @@ export class TaskError extends Error {
   }
 }
 
+/** Working on a task counts as activity on the lead, so it is not mistaken for a stalled one. */
+async function touchLead(db: Db, leadId: string) {
+  await db.update(lead).set({ updatedAt: new Date() }).where(eq(lead.id, leadId));
+}
+
 async function requireLead(db: Db, studioId: string, leadId: string) {
   const [found] = await db
     .select({ id: lead.id })
@@ -31,6 +36,7 @@ export async function createTask(
     .insert(task)
     .values({ studioId, leadId, title: input.title.trim(), dueDate: input.dueDate, createdById })
     .returning();
+  await touchLead(db, leadId);
   return created;
 }
 
@@ -48,6 +54,7 @@ export async function setTaskDone(
     .where(and(eq(task.studioId, studioId), eq(task.id, taskId)))
     .returning();
   if (!updated) throw new TaskError("task_not_found");
+  await touchLead(db, updated.leadId);
   return updated;
 }
 

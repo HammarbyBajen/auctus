@@ -6,9 +6,9 @@
 
 **Status:** ready-for-agent
 
-- [ ] New uncontacted leads show amber with under 4 hours left and red when overdue
-- [ ] Tasks due today or overdue appear on the page
-- [ ] Leads with no activity for 7 days in one stage appear on the page
-- [ ] A mine/all toggle filters by assignee
-- [ ] A row of counts shows new this week, booked tests and won this month
-- [ ] Ordering and thresholds are covered by tests
+- [x] New uncontacted leads show amber with under 4 hours left and red when overdue
+- [x] Tasks due today or overdue appear on the page
+- [x] Leads with no activity for 7 days in one stage appear on the page
+- [x] A mine/all toggle filters by assignee
+- [x] A row of counts shows new this week, booked tests and won this month
+- [x] Ordering and thresholds are covered by tests

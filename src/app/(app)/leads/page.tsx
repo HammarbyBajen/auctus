@@ -39,8 +39,8 @@ function Card({ card }: { card: LeadCard }) {
   );
 }
 
-function Cards({ group, className }: { group: StageGroup; className?: string }) {
-  const shown = group.cards.slice(0, perColumn);
+function Cards({ group, className, limit = perColumn }: { group: StageGroup; className?: string; limit?: number }) {
+  const shown = group.cards.slice(0, limit);
   const hidden = group.cards.length - shown.length;
   return (
     <>
@@ -94,7 +94,8 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
       }
     >
       {showCold ? (
-        <Cards group={cold} className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" />
+        // The cold view is the only way to reach old leads, so it shows all of them.
+        <Cards group={cold} limit={Infinity} className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" />
       ) : (
         <>
           {/* Phone: one stage at a time */}

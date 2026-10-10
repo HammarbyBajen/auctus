@@ -4,7 +4,7 @@
 
 **Blocked by:** 10
 
-**Status:** in progress: the home page shows paying members (12-month trend, filter per membership, change from last month) and monthly revenue for Owners (2026-10-10). Erik has been asked about the definitions. Left: daily snapshots, price periods, new and lost members this month, and the check against Mana.
+**Status:** in progress: the home page shows paying members (12-month trend, filter per membership, change from last month) and monthly revenue for Owners (2026-10-10). Erik has been asked about the definitions. Left: daily snapshots, price periods, and new and lost members this month. Checked against Mana on 2026-10-11.
 
 Definitions (from Erik's notes, decided 2026-10-08 where marked):
 - MRR: the sum of the monthly price of every active recurring membership with a price above 0, at the price that applies today (a discount period lowers it).
@@ -19,5 +19,5 @@ Definitions (from Erik's notes, decided 2026-10-08 where marked):
 - [ ] One snapshot per day is stored from the day this ships, and the months back to September 2026 are rebuilt from start, end and price-period dates
 - [ ] The home page shows MRR and paying members with a trend line, and new and lost paying members this month
 - [x] Staff do not see it, Owners do
-- [ ] Today's numbers are checked against Mana by hand before the tile is trusted, and the result is written down
+- [x] Today's numbers are checked against Mana by hand before the tile is trusted, and the result is written down (2026-10-11: September matches Mana's membership report exactly once staff memberships are synced: Basic 200 new, 2 ended, 198 at the end; Förvaringsbox 55; Fri träning 35; Basic (12mån) 15; Performance (löpande) 10. Home page that day: 233 paying members on 30 Sep, 231 today, revenue 377 395 kr.)
 - [ ] Bionic HQ's `src/lib/members/paying.ts` has been read as reference (needs access)

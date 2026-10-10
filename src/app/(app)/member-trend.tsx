@@ -22,6 +22,33 @@ function niceMax(value: number): number {
   return [1, 2, 3, 4, 5, 6, 8, 10].map((f) => f * step).find((v) => v >= value) ?? 10 * step;
 }
 
+/**
+ * A smooth path through the points that never bends past them (monotone cubic,
+ * Fritsch-Carlson): flat stretches stay flat and the curve never dips below 0
+ * or overshoots a month, so the shape cannot misstate the counts.
+ */
+function smoothPath(pts: [number, number][]): string {
+  if (pts.length < 2) return pts.length ? `M${pts[0][0]},${pts[0][1]}` : "";
+  const n = pts.length;
+  const slope = pts.slice(1).map(([x1, y1], i) => (y1 - pts[i][1]) / (x1 - pts[i][0]));
+  const tangent = pts.map((_, i) => {
+    if (i === 0) return slope[0];
+    if (i === n - 1) return slope[n - 2];
+    const a = slope[i - 1];
+    const b = slope[i];
+    // Months are evenly spaced, so the tangent is the harmonic mean of the two slopes.
+    return a * b <= 0 ? 0 : (2 * a * b) / (a + b);
+  });
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < n - 1; i++) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const h = (x1 - x0) / 3;
+    d += ` C${x0 + h},${y0 + tangent[i] * h} ${x1 - h},${y1 - tangent[i + 1] * h} ${x1},${y1}`;
+  }
+  return d;
+}
+
 const height = 120;
 const pad = { top: 8, right: 8, bottom: 20, left: 36 };
 
@@ -45,7 +72,7 @@ function Chart({ points }: { points: MonthPoint[] }) {
   const step = innerW / Math.max(1, points.length - 1);
   const x = (i: number) => pad.left + i * step;
   const y = (v: number) => pad.top + innerH - (v / top) * innerH;
-  const line = points.map((p, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(p.count)}`).join(" ");
+  const line = smoothPath(points.map((p, i) => [x(i), y(p.count)]));
   const area = `${line} L${x(points.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
   const last = points.length - 1;
   const shown = active ?? null;

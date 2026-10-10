@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 04
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] New uncontacted leads show amber with under 4 hours left and red when overdue
 - [x] Tasks due today or overdue appear on the page

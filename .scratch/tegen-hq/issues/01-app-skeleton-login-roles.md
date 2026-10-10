@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately)
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A user can sign in and sign out, and an unknown email cannot sign in
 - [x] Owner and Staff roles exist, and a Staff user cannot open the settings area

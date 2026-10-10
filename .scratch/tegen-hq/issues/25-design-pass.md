@@ -4,7 +4,7 @@
 
 **Blocked by:** 11, 12, 13 (the main screens should exist first). Should land before 18 (cutover).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Shared components (button, card, form field, banner) replace the repeated styling in the pages
 - [x] Tegen's colours and type are used, and the result works on a phone and a laptop (the official logo file is still to be added)

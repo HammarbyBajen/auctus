@@ -1,10 +1,10 @@
 # 26: MRR and paying members on the home page
 
-**What to build:** The gym's main KPI at the top of the home page: MRR from recurring memberships and the number of paying members, each with a trend line back to September 2026, plus new and lost paying members this month. Owners see it, Staff (trainers) do not.
+**What to build:** The gym's main KPI at the top of the home page: MRR from recurring memberships and the number of paying members, with a rolling 12-month trend (months before Mana, 23 Sep 2026, show 0), plus new and lost paying members this month. Owners see it, Staff (trainers) do not.
 
 **Blocked by:** 10
 
-**Status:** waiting: Erik's notes say to check the definitions with him before building. Confirm MRR, paying member and the Förvaringsbox decision with Erik first.
+**Status:** in progress: the home page shows paying members (12-month trend, filter per membership, change from last month) and monthly revenue for Owners (2026-10-10). Erik has been asked about the definitions. Left: daily snapshots, price periods, new and lost members this month, and the check against Mana.
 
 Definitions (from Erik's notes, decided 2026-10-08 where marked):
 - MRR: the sum of the monthly price of every active recurring membership with a price above 0, at the price that applies today (a discount period lowers it).
@@ -15,9 +15,9 @@ Definitions (from Erik's notes, decided 2026-10-08 where marked):
 - MRR is what members are signed up to pay, not what was collected (failed charges are not in the Mana API).
 
 - [ ] The Mana mirror keeps each membership's price periods (discounts and freezes), and the sync keeps fetching ended memberships too (without them the count only goes up, the Bionic HQ bug)
-- [ ] MRR and paying members are calculated by one pure, tested function following the definitions above
+- [x] MRR and paying members are calculated by one pure, tested function following the definitions above
 - [ ] One snapshot per day is stored from the day this ships, and the months back to September 2026 are rebuilt from start, end and price-period dates
 - [ ] The home page shows MRR and paying members with a trend line, and new and lost paying members this month
-- [ ] Staff do not see it, Owners do
+- [x] Staff do not see it, Owners do
 - [ ] Today's numbers are checked against Mana by hand before the tile is trusted, and the result is written down
 - [ ] Bionic HQ's `src/lib/members/paying.ts` has been read as reference (needs access)

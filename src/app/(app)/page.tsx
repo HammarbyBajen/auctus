@@ -12,9 +12,13 @@ import { Surface } from "@/components/app/surface";
 import { formatDay, formatNumber } from "@/lib/format";
 import { formatSpan, type AttentionItem, type Reason } from "@/lib/home/attention";
 import { getHomeData } from "@/lib/home/service";
+import { getKpi } from "@/lib/kpi/service";
+import { can } from "@/lib/permissions";
+import { todayInStockholm } from "@/lib/tasks/dates";
 import { rowChip } from "@/lib/leads/row";
 import { listStages } from "@/lib/pipeline/service";
 import { isGreyedOut } from "@/lib/tasks/dates";
+import { MemberTrend } from "./member-trend";
 import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -53,16 +57,21 @@ const reasonIcon = (r: Reason) =>
         : TimerReset;
 
 /**
- * Home. GAP (docs/DESIGN.md 3.1): the owners' hero is MRR and paying members
- * with the trend (ticket 26, waiting for Erik to confirm the definitions), and
- * staff need a hero of their own (D2). Until then the hero for everyone is the
- * list of leads that need action, and no empty MRR slot is shown.
+ * Home. Owners are greeted by the gym's key numbers (ticket 26): paying members
+ * with a twelve-month trend, and monthly revenue. GAP (docs/DESIGN.md 3.1):
+ * staff need a hero of their own (D2); until then theirs is the list of leads
+ * that need action.
  */
 export default async function HomePage({ searchParams }: { searchParams: Promise<{ fel?: string; visa?: string }> }) {
   const user = await requireUser();
   const { fel, visa } = await searchParams;
   const scope = visa === "mina" ? "mine" : "all";
-  const [{ items, counts }, stages] = await Promise.all([getHomeData(db, user.studioId, user.id, scope), listStages(db, user.studioId)]);
+  const showKpi = can(user.role, "kpi", "read");
+  const [{ items, counts }, stages, kpi] = await Promise.all([
+    getHomeData(db, user.studioId, user.id, scope),
+    listStages(db, user.studioId),
+    showKpi ? getKpi(db, user.studioId, todayInStockholm()) : null,
+  ]);
   const stageOf = (key: string) => stages.find((s) => s.key === key);
 
   return (
@@ -88,6 +97,22 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     >
       {fel === "behorighet" && <Notice tone="warning">{t("home.noAccess")}</Notice>}
       <Stagger className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_16rem]">
+        {kpi?.hasData && (
+          <>
+            <StaggerItem className="min-w-0">
+              <MemberTrend trend={kpi.trend} />
+            </StaggerItem>
+            <StaggerItem>
+              <Surface className="flex h-full flex-col gap-2 p-4 sm:p-5" aria-labelledby="kpi-revenue">
+                <MicroLabel as="h3">
+                  <span id="kpi-revenue">{t("kpi.revenue")}</span>
+                </MicroLabel>
+                <p className="text-2xl font-semibold tracking-tight">{t("kpi.revenueValue", { amount: formatNumber(Math.round(kpi.revenue)) })}</p>
+                <p className="text-xs text-muted-foreground">{t("kpi.revenueHint")}</p>
+              </Surface>
+            </StaggerItem>
+          </>
+        )}
         <StaggerItem className="flex min-w-0 flex-col gap-3">
           <MicroLabel as="h3">{t("home.attention")}</MicroLabel>
           {items.length === 0 ? (

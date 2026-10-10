@@ -10,6 +10,8 @@ export const statement = {
   users: ["manage"],
   leads: ["read", "write"],
   salary: ["read"],
+  /** Paying members and monthly revenue on the home page. */
+  kpi: ["read"],
 } as const;
 
 export const ac = createAccessControl(statement);
@@ -19,6 +21,7 @@ export const owner = ac.newRole({
   users: ["manage"],
   leads: ["read", "write"],
   salary: ["read"],
+  kpi: ["read"],
 });
 
 export const staff = ac.newRole({

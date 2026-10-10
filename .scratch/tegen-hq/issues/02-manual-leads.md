@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A lead can be created with name, email, optional phone and a source (manual, contact form, chat bot, Mana win-back)
 - [x] The list shows all leads, newest first

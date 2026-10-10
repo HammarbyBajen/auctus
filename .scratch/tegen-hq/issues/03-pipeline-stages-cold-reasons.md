@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A lead can be moved to any stage with one action
 - [x] Stage history shows each move with who and when

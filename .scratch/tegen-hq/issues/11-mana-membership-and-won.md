@@ -4,7 +4,7 @@
 
 **Blocked by:** 10, 03
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A matching member is linked to the lead by email, then phone
 - [x] The lead shows the member's actual membership

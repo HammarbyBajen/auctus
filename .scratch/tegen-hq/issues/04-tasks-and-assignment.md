@@ -4,7 +4,7 @@
 
 **Blocked by:** 02
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] A task has a title, due date and done state, and belongs to a lead
 - [x] Assigning is optional and defaults to unassigned

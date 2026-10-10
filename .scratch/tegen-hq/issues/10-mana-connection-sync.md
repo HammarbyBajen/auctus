@@ -4,7 +4,7 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Members and their memberships are mirrored into the CRM database
 - [x] The sync runs once a day by cron, and an owner can start it with a Sync now button

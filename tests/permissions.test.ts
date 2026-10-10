@@ -6,6 +6,7 @@ describe("fixed roles", () => {
     expect(can("owner", "settings", "manage")).toBe(true);
     expect(can("owner", "users", "manage")).toBe(true);
     expect(can("owner", "salary", "read")).toBe(true);
+    expect(can("owner", "kpi", "read")).toBe(true);
   });
 
   it("lets staff work with leads but not open settings, users or salary", () => {
@@ -13,6 +14,7 @@ describe("fixed roles", () => {
     expect(can("staff", "settings", "manage")).toBe(false);
     expect(can("staff", "users", "manage")).toBe(false);
     expect(can("staff", "salary", "read")).toBe(false);
+    expect(can("staff", "kpi", "read")).toBe(false);
   });
 
   it("denies everything for a missing or unknown role", () => {

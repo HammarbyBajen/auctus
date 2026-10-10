@@ -4,7 +4,7 @@
 
 **Blocked by:** 10, 03
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Detection runs once a day (Hobby cron)
 - [x] Each trigger creates a lead with its own source (cancelled, freeze, ended, day pass)

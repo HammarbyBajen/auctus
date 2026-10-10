@@ -167,8 +167,9 @@ export async function failRun(db: Db, runId: string, error: unknown) {
  *
  * 1. Read every page of people (following the next link) and mirror them.
  *    People Mana no longer returns are removed once all pages are read.
- * 2. For each member (not staff or owners), read their memberships and replace
- *    the mirrored ones.
+ * 2. For every person (members, staff and owners alike, since staff hold
+ *    lockers and coach memberships that Mana's own reports count), read their
+ *    memberships and replace the mirrored ones.
  */
 export async function runBatch(
   db: Db,
@@ -219,7 +220,7 @@ export async function runBatch(
       const [{ n }] = await db
         .select({ n: count() })
         .from(manaMember)
-        .where(and(eq(manaMember.studioId, studioId), eq(manaMember.role, "member")));
+        .where(eq(manaMember.studioId, studioId));
       progress.phase = "memberships";
       progress.membersTotal = n;
       progress.memberCursor = null;
@@ -237,7 +238,6 @@ export async function runBatch(
       .where(
         and(
           eq(manaMember.studioId, studioId),
-          eq(manaMember.role, "member"),
           progress.memberCursor ? gt(manaMember.manaUserId, progress.memberCursor) : undefined,
         ),
       )

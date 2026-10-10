@@ -190,7 +190,7 @@ export async function refreshPersonFromMana(
     .orderBy(desc(syncRun.startedAt))
     .limit(1);
   await upsertMembers(db, studioId, found, lastRun?.id ?? "live", { keepRunId: true });
-  for (const u of found.filter((x) => x.role === "member")) {
+  for (const u of found) {
     await replaceMemberships(db, studioId, u.userId, await source.getUserMemberships(u.userId));
   }
 

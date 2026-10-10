@@ -70,7 +70,7 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     await pool.end();
   });
 
-  it("mirrors every person across all pages, and the memberships of members only", async () => {
+  it("mirrors every person across all pages, and everyone's memberships, staff and owners included", async () => {
     await fresh();
     const mana = new FakeMana();
     const result = await sync.runToCompletion(db, mana, studioA);
@@ -85,8 +85,8 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     expect(anna).toMatchObject({ role: "member", emailNormalized: "anna@example.test", phoneNormalized: "0701000001" });
     expect(members.find((m) => m.manaUserId === "user-b")?.phone).toBeNull();
 
-    // Staff and the owner have no membership requests made for them.
-    expect(mana.membershipCalls.sort()).toEqual(["user-a", "user-b", "user-e"]);
+    // Staff and owners hold lockers and coach memberships that Mana's reports count, so they are read too.
+    expect(mana.membershipCalls.sort()).toEqual(["user-a", "user-b", "user-c", "user-d", "user-e"]);
 
     const memberships = await db.select().from(schema.manaMembership).where(eq(schema.manaMembership.studioId, studioA));
     expect(memberships.map((m) => m.id).sort()).toEqual(["um-a1", "um-a2", "um-b1"]);
@@ -104,7 +104,7 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     const [run] = await db.select().from(schema.syncRun).where(eq(schema.syncRun.studioId, studioA));
     expect(run.status).toBe("succeeded");
     expect(run.finishedAt).toBeInstanceOf(Date);
-    expect(run.progress).toMatchObject({ usersSeen: 5, usersTotal: 5, membersDone: 3, membersTotal: 3 });
+    expect(run.progress).toMatchObject({ usersSeen: 5, usersTotal: 5, membersDone: 5, membersTotal: 5 });
   });
 
   it("stops when out of time, then continues from where it stopped without repeating work", async () => {
@@ -133,7 +133,7 @@ describe.skipIf(!hasDb)("Mana sync", () => {
 
     // Each page and each member was asked for exactly once across all the batches.
     expect(mana.usersCalls).toHaveLength(2);
-    expect([...mana.membershipCalls].sort()).toEqual(["user-a", "user-b", "user-e"]);
+    expect([...mana.membershipCalls].sort()).toEqual(["user-a", "user-b", "user-c", "user-d", "user-e"]);
     const [final] = await db.select().from(schema.syncRun).where(eq(schema.syncRun.id, started.runId));
     expect(final.status).toBe("succeeded");
     expect((await db.select().from(schema.manaMembership).where(eq(schema.manaMembership.studioId, studioA))).length).toBe(3);

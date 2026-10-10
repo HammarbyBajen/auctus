@@ -33,8 +33,8 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
       ...overrides,
     } as Held;
   }
-  async function member(studioId: string, id: string, items: Held[], email = `${id}@example.test`) {
-    await sync.upsertMembers(db, studioId, [{ userId: id, role: "member", profile: { name: `Namn ${id}`, email, phone: null } }] as never, "seed");
+  async function member(studioId: string, id: string, items: Held[], email = `${id}@example.test`, role = "member") {
+    await sync.upsertMembers(db, studioId, [{ userId: id, role, profile: { name: `Namn ${id}`, email, phone: null } }] as never, "seed");
     await sync.replaceMemberships(db, studioId, id, items);
   }
   const leadsOf = (studioId: string) =>
@@ -137,6 +137,16 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
     await wb.detectWinBacks(db, studioA, now);
     const rows = await leadsOf(studioA);
     expect(rows.map((r) => [r.person.manaUserId, r.lead.source])).toEqual([["tourist", "mana_day_pass"]]);
+  });
+
+  it("never makes a lead for staff or owners, whatever their memberships or purchases show", async () => {
+    await member(studioA, "coach", [held({ name: "Fri träning", price: { amount: 0, currency: "SEK" }, pendingChange: { kind: "cancel", endDate: "2026-11-30" } })], "coach@example.test", "staff");
+    await member(studioA, "boss", [], "boss@example.test", "owner");
+    await db.insert(schema.manaPurchase).values([
+      { studioId: studioA, id: `${tag}-p-boss`, manaUserId: "boss", kind: "single_class", description: "Class: CrossFit", paidAt: new Date("2026-10-06T10:00:00Z") },
+    ]);
+    expect((await wb.detectWinBacks(db, studioA, now)).created).toBe(0);
+    expect(await leadsOf(studioA)).toHaveLength(0);
   });
 
   it("adds a note to a person's open lead instead of making a second lead", async () => {

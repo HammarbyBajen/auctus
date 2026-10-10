@@ -212,7 +212,18 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
   const today = todayInStockholm(now);
   // Add-ons such as a locker do not keep someone "in" when they cancel their gym membership.
   const ignored = [...(await getIgnoredMembershipIds(db, studioId)), ...settings.addOns];
-  const memberships = await db.select().from(manaMembership).where(eq(manaMembership.studioId, studioId));
+  // Only members can be won back: staff and owners hold coach memberships and lockers too, and buy classes.
+  const members = new Set(
+    (
+      await db
+        .select({ id: manaMember.manaUserId })
+        .from(manaMember)
+        .where(and(eq(manaMember.studioId, studioId), eq(manaMember.role, "member")))
+    ).map((m) => m.id),
+  );
+  const memberships = (await db.select().from(manaMembership).where(eq(manaMembership.studioId, studioId))).filter((m) =>
+    members.has(m.manaUserId),
+  );
   const byUser = new Map<string, typeof memberships>();
   for (const m of memberships) byUser.set(m.manaUserId, [...(byUser.get(m.manaUserId) ?? []), m]);
 
@@ -236,6 +247,7 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
   const latestByUser = new Map<string, (typeof recentPurchases)[number]>();
   for (const p of recentPurchases) if (!latestByUser.has(p.manaUserId)) latestByUser.set(p.manaUserId, p);
   for (const [manaUserId, purchase] of latestByUser) {
+    if (!members.has(manaUserId)) continue;
     const day = todayInStockholm(purchase.paidAt);
     if (isDayPassProspect(byUser.get(manaUserId) ?? [], ignored, day, today)) {
       signals.push({

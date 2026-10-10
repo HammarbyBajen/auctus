@@ -8,6 +8,8 @@ const m = (over: Partial<KpiMembership>): KpiMembership => ({
   startDate: "2026-09-23",
   pendingChangeKind: null,
   pendingChangeDate: null,
+  commitmentEndDate: null,
+  cancelEffectiveDate: null,
   priceAmount: 169500,
   ...over,
 });
@@ -33,6 +35,16 @@ describe("countsOn", () => {
     const frozen = m({ pendingChangeKind: "freeze", pendingChangeDate: "2026-11-01" });
     expect(countsOn(frozen, "2026-10-31")).toBe(true);
     expect(countsOn(frozen, "2026-11-01")).toBe(false);
+  });
+
+  it("ends a membership that simply ran out on its commitment end, else the day notice was given", () => {
+    const ranOut = m({ name: "Basic (12mån)", status: "ended", commitmentEndDate: "2027-03-31" });
+    expect(countsOn(ranOut, "2026-12-01")).toBe(true);
+    expect(countsOn(ranOut, "2027-03-31")).toBe(true);
+    expect(countsOn(ranOut, "2027-04-01")).toBe(false);
+    const noticed = m({ status: "ended", cancelEffectiveDate: "2026-10-15" });
+    expect(countsOn(noticed, "2026-10-15")).toBe(true);
+    expect(countsOn(noticed, "2026-10-16")).toBe(false);
   });
 
   it("never counts an ended membership with no known end", () => {

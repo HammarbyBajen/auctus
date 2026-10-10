@@ -1,0 +1,32 @@
+{
+  "data": {
+    "items": [
+      {
+        "id": "um-c1",
+        "membershipId": "m-free",
+        "name": "Fri träning",
+        "type": "standard",
+        "status": "active",
+        "startDate": "2026-09-23",
+        "pendingChange": null,
+        "commitmentEndDate": null,
+        "cancelEffectiveDate": null,
+        "price": { "amount": 0, "currency": "SEK" }
+      },
+      {
+        "id": "um-c2",
+        "membershipId": "m-box",
+        "name": "Förvaringsbox",
+        "type": "standard",
+        "status": "active",
+        "startDate": "2026-09-23",
+        "pendingChange": null,
+        "commitmentEndDate": null,
+        "cancelEffectiveDate": null,
+        "price": { "amount": 5000, "currency": "SEK" }
+      }
+    ]
+  },
+  "links": { "self": "https://www.getmana.app/api/v1/studios/studio-1/user-memberships", "next": null, "prev": null },
+  "meta": { "pageIndex": 0, "pageSize": 100, "totalCount": 2 }
+}

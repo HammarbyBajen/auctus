@@ -65,6 +65,17 @@ export async function upsertMembers(
     });
 }
 
+/**
+ * The day a scheduled change takes effect: a cancellation's last day, or the
+ * day a freeze starts. A freeze can also carry the day it ends, which must not
+ * be mistaken for its start.
+ */
+export function pendingChangeDay(change: ManaHeldMembership["pendingChange"]): string | null {
+  if (!change) return null;
+  const day = change.kind === "freeze" ? (change.freezeDate ?? change.endDate) : (change.endDate ?? change.freezeDate);
+  return day?.slice(0, 10) ?? null;
+}
+
 /** Replaces everything mirrored for one person's memberships with what Mana says now. */
 export async function replaceMemberships(
   db: Db,
@@ -90,7 +101,7 @@ export async function replaceMemberships(
           commitmentEndDate: m.commitmentEndDate?.slice(0, 10) ?? null,
           cancelEffectiveDate: m.cancelEffectiveDate?.slice(0, 10) ?? null,
           pendingChangeKind: m.pendingChange?.kind ?? null,
-          pendingChangeDate: (m.pendingChange?.endDate ?? m.pendingChange?.freezeDate ?? null)?.slice(0, 10) ?? null,
+          pendingChangeDate: pendingChangeDay(m.pendingChange),
           priceAmount: m.price.amount,
           priceCurrency: m.price.currency,
           syncedAt: new Date(),
@@ -255,6 +266,8 @@ export async function runBatch(
     await replaceMemberships(db, studioId, next.id, items);
     progress.memberCursor = next.id;
     progress.membersDone += 1;
+    // A run resumed across a deploy may walk more people than its saved total.
+    progress.membersTotal = Math.max(progress.membersTotal ?? 0, progress.membersDone);
     await touch();
   }
 

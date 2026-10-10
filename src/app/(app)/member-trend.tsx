@@ -57,6 +57,8 @@ function Chart({ points }: { points: MonthPoint[] }) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(480);
   const [active, setActive] = useState<number | null>(null);
+  // Only keyboard use is announced; a mouse sweeping the chart would make a screen reader read every month.
+  const [spoken, setSpoken] = useState(false);
 
   useEffect(() => {
     const el = box.current;
@@ -90,11 +92,21 @@ function Chart({ points }: { points: MonthPoint[] }) {
       role="group"
       aria-label={t("kpi.chartLabel")}
       className="focus-ring relative w-full min-w-0 overflow-hidden rounded-sm"
-      onPointerMove={(e) => pick(e.clientX)}
+      onPointerMove={(e) => {
+        setSpoken(false);
+        pick(e.clientX);
+      }}
       onPointerLeave={() => setActive(null)}
-      onFocus={() => setActive((a) => a ?? last)}
-      onBlur={() => setActive(null)}
+      onFocus={() => {
+        setSpoken(true);
+        setActive((a) => a ?? last);
+      }}
+      onBlur={() => {
+        setSpoken(false);
+        setActive(null);
+      }}
       onKeyDown={(e) => {
+        setSpoken(true);
         if (e.key === "ArrowLeft") setActive((a) => Math.max(0, (a ?? last) - 1));
         else if (e.key === "ArrowRight") setActive((a) => Math.min(last, (a ?? last) + 1));
         else return;
@@ -124,7 +136,7 @@ function Chart({ points }: { points: MonthPoint[] }) {
       </svg>
       {shown !== null && (
         <div
-          role="status"
+          aria-hidden="true"
           className="pointer-events-none absolute top-0 flex flex-col rounded-md bg-popover px-2.5 py-1.5 whitespace-nowrap text-popover-foreground elevation-3"
           // Beside the crosshair, never over the point it describes: right of it, or left near the right edge.
           style={x(shown) < width / 2 ? { left: x(shown) + 10 } : { left: x(shown) - 10, transform: "translateX(-100%)" }}
@@ -133,6 +145,9 @@ function Chart({ points }: { points: MonthPoint[] }) {
           <span className="text-2xs text-muted-foreground first-letter:uppercase">{monthLong.format(asDate(points[shown].month))}</span>
         </div>
       )}
+      <p className="sr-only" aria-live="polite">
+        {spoken && shown !== null ? `${monthLong.format(asDate(points[shown].month))}: ${formatNumber(points[shown].count)}` : ""}
+      </p>
       <table className="sr-only">
         <caption>{t("kpi.chartLabel")}</caption>
         <thead>

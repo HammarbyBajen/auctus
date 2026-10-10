@@ -3,17 +3,18 @@
 import { useEffect, useRef } from "react";
 
 /**
- * A horizontal scroller that brings its `aria-current` item into view, so the
- * chosen stage tab is never hidden past the edge on a phone.
+ * A horizontal scroller that brings its `aria-current` item into view when the
+ * current item changes (`current`), so the chosen stage tab is never hidden
+ * past the edge on a phone, and a user's own scrolling is left alone otherwise.
  */
-export function ScrollCurrent({ className, children, ...props }: React.ComponentProps<"nav">) {
+export function ScrollCurrent({ current, className, children, ...props }: React.ComponentProps<"nav"> & { current?: string }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
     const el = ref.current;
-    const current = el?.querySelector<HTMLElement>("[aria-current]");
-    if (!el || !current) return;
-    el.scrollLeft = current.offsetLeft - (el.clientWidth - current.offsetWidth) / 2;
-  });
+    const item = el?.querySelector<HTMLElement>("[aria-current]");
+    if (!el || !item) return;
+    el.scrollLeft = item.offsetLeft - (el.clientWidth - item.offsetWidth) / 2;
+  }, [current]);
   return (
     <nav ref={ref} className={className} {...props}>
       {children}

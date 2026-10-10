@@ -12,6 +12,17 @@ export type MirroredMembership = {
 };
 
 /**
+ * The Mana role of a customer. Staff and owners hold memberships too (coach
+ * memberships, lockers) and count in Mana's reports and in revenue, but they
+ * are never leads: not won automatically, not won back.
+ */
+export const customerRole = "member";
+
+export function isCustomer(role: string | null | undefined): boolean {
+  return role === customerRole;
+}
+
+/**
  * Memberships that make someone a member: active or starting soon, and not
  * something the owners have said is not a real membership (like a locker).
  */

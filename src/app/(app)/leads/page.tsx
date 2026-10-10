@@ -99,7 +99,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
         <>
           {/* Phone: one stage at a time */}
           <div className="flex flex-col gap-4 md:hidden">
-            <ScrollCurrent aria-label={t("leads.title")} className="relative -mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
+            <ScrollCurrent current={chosen?.key} aria-label={t("leads.title")} className="relative -mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
               <ul className="flex w-max gap-1 rounded-md bg-well p-1">
                 {open.map((g) => (
                   <li key={g.key}>

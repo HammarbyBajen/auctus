@@ -17,6 +17,8 @@ export type KpiMembership = {
   startDate: string; // YYYY-MM-DD
   pendingChangeKind: string | null; // cancel or freeze
   pendingChangeDate: string | null; // YYYY-MM-DD
+  commitmentEndDate: string | null; // YYYY-MM-DD
+  cancelEffectiveDate: string | null; // YYYY-MM-DD, the day notice was given
   priceAmount: number | null; // öre per month
 };
 
@@ -35,13 +37,24 @@ export type MemberTrend = {
   series: Record<string, MonthPoint[]>;
 };
 
+/**
+ * A membership's last day: a cancellation's date, or for an ended membership
+ * without one (it simply ran out) its commitment end, else the day notice was
+ * given. undefined while it runs on; null when it ended on an unknown day,
+ * which cannot be placed in time and so never counts.
+ */
+function lastDay(m: KpiMembership): string | null | undefined {
+  if (m.pendingChangeKind === "cancel" && m.pendingChangeDate) return m.pendingChangeDate;
+  if (m.status !== "ended") return undefined;
+  return m.commitmentEndDate ?? m.cancelEffectiveDate ?? null;
+}
+
 export function countsOn(m: KpiMembership, day: string): boolean {
   if ((m.priceAmount ?? 0) <= 0) return false;
   if (m.startDate > day) return false;
-  if (m.pendingChangeKind === "cancel" && m.pendingChangeDate && m.pendingChangeDate < day) return false;
   if (m.pendingChangeKind === "freeze" && m.pendingChangeDate && m.pendingChangeDate <= day) return false;
-  // An ended membership without a known end date cannot be placed in time, so it never counts.
-  if (m.status === "ended" && !(m.pendingChangeKind === "cancel" && m.pendingChangeDate)) return false;
+  const last = lastDay(m);
+  if (last !== undefined) return last !== null && day <= last;
   return true;
 }
 

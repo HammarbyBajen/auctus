@@ -18,6 +18,7 @@ import { initialStage, isWinBackSource, type ManaSignalSource } from "@/lib/lead
 import { t } from "@/lib/i18n";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { getIgnoredMembershipIds } from "./leads";
+import { customerRole } from "./membership";
 import { dayPassKinds, isDayPassProspect, membershipSignals, type SignalKind } from "./winback";
 
 type Db = typeof defaultDb;
@@ -212,18 +213,16 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
   const today = todayInStockholm(now);
   // Add-ons such as a locker do not keep someone "in" when they cancel their gym membership.
   const ignored = [...(await getIgnoredMembershipIds(db, studioId)), ...settings.addOns];
-  // Only members can be won back: staff and owners hold coach memberships and lockers too, and buy classes.
-  const members = new Set(
-    (
-      await db
-        .select({ id: manaMember.manaUserId })
-        .from(manaMember)
-        .where(and(eq(manaMember.studioId, studioId), eq(manaMember.role, "member")))
-    ).map((m) => m.id),
-  );
-  const memberships = (await db.select().from(manaMembership).where(eq(manaMembership.studioId, studioId))).filter((m) =>
-    members.has(m.manaUserId),
-  );
+  // Only customers can be won back: staff and owners hold coach memberships and lockers too, and buy classes.
+  const ofCustomers = (manaUserId: typeof manaMembership.manaUserId | typeof manaPurchase.manaUserId) =>
+    and(eq(manaMember.studioId, studioId), eq(manaMember.manaUserId, manaUserId), eq(manaMember.role, customerRole));
+  const memberships = (
+    await db
+      .select({ m: manaMembership })
+      .from(manaMembership)
+      .innerJoin(manaMember, ofCustomers(manaMembership.manaUserId))
+      .where(eq(manaMembership.studioId, studioId))
+  ).map((r) => r.m);
   const byUser = new Map<string, typeof memberships>();
   for (const m of memberships) byUser.set(m.manaUserId, [...(byUser.get(m.manaUserId) ?? []), m]);
 
@@ -239,15 +238,17 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
     }
   }
 
-  const recentPurchases = await db
-    .select()
-    .from(manaPurchase)
-    .where(and(eq(manaPurchase.studioId, studioId), gte(manaPurchase.paidAt, new Date(now.getTime() - 30 * DAY))))
-    .orderBy(desc(manaPurchase.paidAt));
+  const recentPurchases = (
+    await db
+      .select({ p: manaPurchase })
+      .from(manaPurchase)
+      .innerJoin(manaMember, ofCustomers(manaPurchase.manaUserId))
+      .where(and(eq(manaPurchase.studioId, studioId), gte(manaPurchase.paidAt, new Date(now.getTime() - 30 * DAY))))
+      .orderBy(desc(manaPurchase.paidAt))
+  ).map((r) => r.p);
   const latestByUser = new Map<string, (typeof recentPurchases)[number]>();
   for (const p of recentPurchases) if (!latestByUser.has(p.manaUserId)) latestByUser.set(p.manaUserId, p);
   for (const [manaUserId, purchase] of latestByUser) {
-    if (!members.has(manaUserId)) continue;
     const day = todayInStockholm(purchase.paidAt);
     if (isDayPassProspect(byUser.get(manaUserId) ?? [], ignored, day, today)) {
       signals.push({

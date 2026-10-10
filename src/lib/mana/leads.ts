@@ -13,7 +13,7 @@ import {
 import { moveLeadStage } from "@/lib/leads/service";
 import { normalizeEmail, normalizePhone } from "@/lib/leads/matching";
 import { todayInStockholm } from "@/lib/tasks/dates";
-import { autoWinMembership, countingMemberships, pickManaMatch } from "./membership";
+import { autoWinMembership, countingMemberships, isCustomer, pickManaMatch } from "./membership";
 import { replaceMemberships, upsertMembers, type ManaSource } from "./sync";
 
 type Db = typeof defaultDb;
@@ -75,7 +75,8 @@ export async function getManaInfo(db: Db, studioId: string, manaUserId: string |
     .where(and(eq(manaMembership.studioId, studioId), eq(manaMembership.manaUserId, manaUserId)))
     .orderBy(asc(manaMembership.startDate));
   const ignored = await getIgnoredMembershipIds(db, studioId);
-  return { member, memberships, ignored, counting: countingMemberships(memberships, ignored) };
+  // Staff and owners' memberships are shown, but never make them a member (see `isCustomer`).
+  return { member, memberships, ignored, counting: isCustomer(member.role) ? countingMemberships(memberships, ignored) : [] };
 }
 
 /**

@@ -15,6 +15,8 @@ export async function getKpi(db: Db, studioId: string, today: string) {
       startDate: manaMembership.startDate,
       pendingChangeKind: manaMembership.pendingChangeKind,
       pendingChangeDate: manaMembership.pendingChangeDate,
+      commitmentEndDate: manaMembership.commitmentEndDate,
+      cancelEffectiveDate: manaMembership.cancelEffectiveDate,
       priceAmount: manaMembership.priceAmount,
     })
     .from(manaMembership)

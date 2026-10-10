@@ -18,6 +18,7 @@ class FakeMana implements ManaSource {
   memberships: Record<string, unknown> = {
     "user-a": fixture("user-memberships-a"),
     "user-b": fixture("user-memberships-b"),
+    "user-c": fixture("user-memberships-c"),
     "user-e": fixture("user-memberships-e"),
   };
 
@@ -89,7 +90,9 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     expect(mana.membershipCalls.sort()).toEqual(["user-a", "user-b", "user-c", "user-d", "user-e"]);
 
     const memberships = await db.select().from(schema.manaMembership).where(eq(schema.manaMembership.studioId, studioA));
-    expect(memberships.map((m) => m.id).sort()).toEqual(["um-a1", "um-a2", "um-b1"]);
+    // A staff member's coach membership and locker are stored like anyone's.
+    expect(memberships.map((m) => m.id).sort()).toEqual(["um-a1", "um-a2", "um-b1", "um-c1", "um-c2"]);
+    expect(memberships.find((m) => m.id === "um-c2")).toMatchObject({ manaUserId: "user-c", name: "Förvaringsbox", priceAmount: 5000 });
     expect(memberships.find((m) => m.id === "um-a2")).toMatchObject({
       status: "active",
       name: "Performance",
@@ -136,7 +139,7 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     expect([...mana.membershipCalls].sort()).toEqual(["user-a", "user-b", "user-c", "user-d", "user-e"]);
     const [final] = await db.select().from(schema.syncRun).where(eq(schema.syncRun.id, started.runId));
     expect(final.status).toBe("succeeded");
-    expect((await db.select().from(schema.manaMembership).where(eq(schema.manaMembership.studioId, studioA))).length).toBe(3);
+    expect((await db.select().from(schema.manaMembership).where(eq(schema.manaMembership.studioId, studioA))).length).toBe(5);
   });
 
   it("removes people Mana no longer returns, and replaces a person's memberships", async () => {
@@ -154,7 +157,7 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     const members = await db.select().from(schema.manaMember).where(eq(schema.manaMember.studioId, studioA));
     expect(members.map((m) => m.manaUserId).sort()).toEqual(["user-a", "user-b", "user-c", "user-d"]);
     const memberships = await db.select().from(schema.manaMembership).where(eq(schema.manaMembership.studioId, studioA));
-    expect(memberships.map((m) => m.id).sort()).toEqual(["um-a2", "um-b1"]);
+    expect(memberships.map((m) => m.id).sort()).toEqual(["um-a2", "um-b1", "um-c1", "um-c2"]);
   });
 
   it("does not start a second run while one is moving, and replaces one that has stopped", async () => {
@@ -250,5 +253,15 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     const next = new FakeMana();
     await sync.runBatch(db, next, started.runId, { budgetMs: 0 });
     expect(next.lastRequestAt).toBe(123_456);
+  });
+});
+
+describe("pendingChangeDay", () => {
+  it("keeps a cancellation's last day and a freeze's first day, even when the freeze also says when it ends", async () => {
+    const { pendingChangeDay } = await import("@/lib/mana/sync");
+    expect(pendingChangeDay(null)).toBeNull();
+    expect(pendingChangeDay({ kind: "cancel", endDate: "2026-11-30T00:00:00Z" })).toBe("2026-11-30");
+    expect(pendingChangeDay({ kind: "freeze", freezeDate: "2026-11-01", endDate: "2026-11-30" })).toBe("2026-11-01");
+    expect(pendingChangeDay({ kind: "freeze", endDate: "2026-11-30" })).toBe("2026-11-30");
   });
 });

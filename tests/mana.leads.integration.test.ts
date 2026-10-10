@@ -105,6 +105,16 @@ describe.skipIf(!hasDb)("Mana membership on leads and automatic Won", () => {
     expect(move?.authorName).toBeNull();
   });
 
+  it("never wins a lead whose Mana account is staff or an owner, whatever memberships it holds", async () => {
+    await seedMana(studioA, [personRow("m-coach", "coach@example.test", null, "staff")], {
+      "m-coach": [held({ id: "um-coach", name: "Fri träning", startDate: "2026-10-10", status: "active", price: { amount: 0, currency: "SEK" } })],
+    });
+    const { lead, person } = await newLead(studioA, { email: "coach@example.test" }, new Date("2026-10-09T08:00:00Z"));
+    await manaLeads.matchPerson(db, studioA, person.id);
+    expect(await manaLeads.detectWonForLead(db, studioA, lead.id)).toBe(false);
+    expect(await stageOf(lead.id)).toBe("new_lead");
+  });
+
   it("moves to Won only once, even if an owner moves it back", async () => {
     await seedMana(studioA, [personRow("m-once", "once@example.test", null)], {
       "m-once": [held({ id: "um-once", startDate: "2026-10-10" })],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countsOn, memberTrend, monthlyRevenue, monthOverMonth, payingMembersOn, rollingMonths, snapshotOn, type KpiMembership } from "@/lib/kpi/members";
+import { countsOn, memberTrend, monthlyRevenue, monthOverMonth, movementThisMonth, payingMembersOn, rollingMonths, snapshotOn, type KpiMembership } from "@/lib/kpi/members";
 
 const m = (over: Partial<KpiMembership>): KpiMembership => ({
   manaUserId: "u1",
@@ -135,5 +135,31 @@ describe("snapshots", () => {
     expect(trend.series[""].at(-1)).toEqual({ month: "2026-10", asOf: "2026-10-10", count: 2 });
     // A month without a snapshot is rebuilt from the memberships.
     expect(trend.series[""].at(-3)).toMatchObject({ month: "2026-08", count: 0 });
+  });
+});
+
+describe("new and lost this month", () => {
+  const memberships = [
+    m({ manaUserId: "stays" }),
+    m({ manaUserId: "joined", startDate: "2026-10-03" }),
+    m({ manaUserId: "left", status: "ended", pendingChangeKind: "cancel", pendingChangeDate: "2026-10-05" }),
+    m({ manaUserId: "froze", pendingChangeKind: "freeze", pendingChangeDate: "2026-10-08" }),
+    m({ manaUserId: "switched", status: "ended", pendingChangeKind: "cancel", pendingChangeDate: "2026-09-30" }),
+    m({ manaUserId: "switched", name: "Performance (löpande)", startDate: "2026-10-01", priceAmount: 209500 }),
+  ];
+
+  it("compares today with the end of last month; a started freeze counts as stopped; switching plans is neither", () => {
+    expect(movementThisMonth(memberships, "2026-10-10")).toEqual({ joined: 1, left: 2 });
+  });
+
+  it("with a membership, counts who started or stopped holding that one", () => {
+    expect(movementThisMonth(memberships, "2026-10-10", "Basic")).toEqual({ joined: 1, left: 3 });
+    expect(movementThisMonth(memberships, "2026-10-10", "Performance (löpande)")).toEqual({ joined: 1, left: 0 });
+  });
+
+  it("is part of the trend, for everyone and per membership", () => {
+    const trend = memberTrend(memberships, "2026-10-10");
+    expect(trend.movement[""]).toEqual({ joined: 1, left: 2 });
+    expect(trend.movement.Basic).toEqual({ joined: 1, left: 3 });
   });
 });

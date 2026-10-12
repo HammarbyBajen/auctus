@@ -180,6 +180,8 @@ export function MemberTrend({ trend }: { trend: Trend }) {
   const current = points.at(-1)?.count ?? 0;
   const change = monthOverMonth(points);
   const previousMonth = points.at(-2)?.month;
+  const thisMonth = points.at(-1)?.month;
+  const movement = trend.movement[name] ?? trend.movement[""];
 
   return (
     <Surface className="flex min-w-0 flex-col gap-4 p-4 sm:p-5" aria-labelledby="kpi-members">
@@ -216,6 +218,15 @@ export function MemberTrend({ trend }: { trend: Trend }) {
                 {`${change > 0 ? "+" : ""}${formatPercent(change)}`}
               </Chip>
               {t("kpi.vsMonth", { month: monthName.format(asDate(previousMonth)) })}
+            </p>
+          )}
+          {movement && thisMonth && (
+            <p className="text-xs text-muted-foreground">
+              {t("kpi.movement", {
+                month: monthName.format(asDate(thisMonth)),
+                joined: formatNumber(movement.joined),
+                left: formatNumber(movement.left),
+              })}
             </p>
           )}
         </div>

@@ -113,6 +113,7 @@
   "kpi.membersAll": "Alla",
   "kpi.filterLabel": "Visa medlemskap",
   "kpi.vsMonth": "mot {month}",
+  "kpi.movement": "I {month}: {joined} nya, {left} slutade",
   "kpi.chartLabel": "Aktiva medlemmar per månad, senaste 12 månaderna",
   "kpi.tableMonth": "Månad",
   "kpi.tableCount": "Medlemmar",

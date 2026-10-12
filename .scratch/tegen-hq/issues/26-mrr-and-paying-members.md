@@ -4,7 +4,7 @@
 
 **Blocked by:** 10
 
-**Status:** in progress: the home page shows paying members (12-month trend, filter per membership, change from last month) and monthly revenue for Owners (2026-10-10). Erik has been asked about the definitions. Left: price periods, and new and lost members this month. Daily snapshots since 2026-10-12 (kpi_snapshot, saved after each sync). Checked against Mana on 2026-10-11.
+**Status:** in progress: the home page shows paying members (12-month trend, filter per membership, change from last month) and monthly revenue for Owners (2026-10-10). Erik has been asked about the definitions. Left: price periods. New and lost members this month shown since 2026-10-12. Daily snapshots since 2026-10-12 (kpi_snapshot, saved after each sync). Checked against Mana on 2026-10-11.
 
 Definitions (from Erik's notes, decided 2026-10-08 where marked):
 - MRR: the sum of the monthly price of every active recurring membership with a price above 0, at the price that applies today (a discount period lowers it).

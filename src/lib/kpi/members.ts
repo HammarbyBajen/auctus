@@ -30,11 +30,16 @@ export type MonthPoint = {
   count: number;
 };
 
+/** People who started and stopped paying this month: today against the end of last month. */
+export type Movement = { joined: number; left: number };
+
 export type MemberTrend = {
   /** Membership names that can be filtered on, most held first. */
   names: string[];
   /** Twelve months, oldest first, for everyone ("") and for each name. */
   series: Record<string, MonthPoint[]>;
+  /** This month's joiners and leavers, for everyone ("") and for each name. */
+  movement: Record<string, Movement>;
 };
 
 /**
@@ -58,13 +63,35 @@ export function countsOn(m: KpiMembership, day: string): boolean {
   return true;
 }
 
-/** People holding at least one counting membership on a day, optionally only of one name. */
-export function payingMembersOn(memberships: KpiMembership[], day: string, name?: string): number {
+function payingPeopleOn(memberships: KpiMembership[], day: string, name?: string): Set<string> {
   const people = new Set<string>();
   for (const m of memberships) {
     if ((name === undefined || m.name === name) && countsOn(m, day)) people.add(m.manaUserId);
   }
-  return people.size;
+  return people;
+}
+
+/** People holding at least one counting membership on a day, optionally only of one name. */
+export function payingMembersOn(memberships: KpiMembership[], day: string, name?: string): number {
+  return payingPeopleOn(memberships, day, name).size;
+}
+
+/**
+ * Who started and who stopped paying this month: people paying today who were
+ * not at the end of last month, and the other way round. Same rules as the
+ * count (a freeze that has started counts as stopped). With a name, it is who
+ * started or stopped holding that membership.
+ */
+export function movementThisMonth(memberships: KpiMembership[], today: string, name?: string): Movement {
+  const [year, month] = today.split("-").map(Number);
+  const previous = new Date(Date.UTC(year, month - 1, 0)).toISOString().slice(0, 10);
+  const before = payingPeopleOn(memberships, previous, name);
+  const now = payingPeopleOn(memberships, today, name);
+  let joined = 0;
+  let left = 0;
+  for (const id of now) if (!before.has(id)) joined++;
+  for (const id of before) if (!now.has(id)) left++;
+  return { joined, left };
 }
 
 /** The key numbers as they stand on a day, as saved after each sync. Revenue is in öre. */
@@ -129,8 +156,12 @@ export function memberTrend(memberships: KpiMembership[], today: string, snapsho
       return { month, asOf: asOf(month), count: payingMembersOn(memberships, asOf(month), name) };
     });
   const series: Record<string, MonthPoint[]> = { "": seriesFor() };
-  for (const name of names) series[name] = seriesFor(name);
-  return { names, series };
+  const movement: Record<string, Movement> = { "": movementThisMonth(memberships, today) };
+  for (const name of names) {
+    series[name] = seriesFor(name);
+    movement[name] = movementThisMonth(memberships, today, name);
+  }
+  return { names, series, movement };
 }
 
 /** Change from last month to this one as a share (0.05 = 5 %), or null when last month had none. */

@@ -195,3 +195,23 @@ export class ManaClient {
     return items;
   }
 }
+
+/**
+ * Reads Mana's public OpenAPI spec (for the API change watch, ticket 24). A
+ * single GET to a fixed public address, with no key: the spec needs none, so
+ * the key is never sent. Not part of ManaClient, since it is not about a studio.
+ */
+export async function fetchManaSpec(url: string, fetchFn: typeof fetch = fetch): Promise<unknown> {
+  let response: Response;
+  try {
+    response = await fetchFn(url, { method: "GET", headers: { Accept: "application/json" }, signal: AbortSignal.timeout(30_000) });
+  } catch {
+    throw new ManaError("network", "Kunde inte nå Manas API-beskrivning.");
+  }
+  if (!response.ok) throw new ManaError("api", `Manas API-beskrivning svarade med fel ${response.status}.`, { status: response.status });
+  try {
+    return await response.json();
+  } catch {
+    throw new ManaError("contract", "Manas API-beskrivning var inte JSON.");
+  }
+}

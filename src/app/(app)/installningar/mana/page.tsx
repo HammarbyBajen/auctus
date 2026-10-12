@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import { ArrowLeft, CheckCircle2, CircleAlert, Loader } from "lucide-react";
+import { ArrowLeft, CheckCircle2, CircleAlert, Loader, Minus, Plus } from "lucide-react";
+import { Chip } from "@/components/app/chip";
 import { db } from "@/db";
 import { studioSettings } from "@/db/schema";
 import { ButtonLink } from "@/components/ui/button";
@@ -12,11 +13,13 @@ import { Panel } from "@/components/app/surface";
 import { SubmitButton } from "@/components/app/submit-button";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { getAddOnMembershipIds, getIgnoredMembershipIds, listMembershipKinds } from "@/lib/mana/leads";
+import { syncEndpoints } from "@/lib/mana/api-watch";
+import { getApiWatchStatus } from "@/lib/mana/api-watch-service";
 import { getSyncStatus } from "@/lib/mana/status";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
-import { saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
+import { acknowledgeApi, saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -27,12 +30,13 @@ export default async function ManaPage({
 }) {
   const user = await requirePermission("settings", "manage");
   const { startad, sparat, vinnsparat } = await searchParams;
-  const [status, kinds, ignored, addOns, [settings]] = await Promise.all([
+  const [status, kinds, ignored, addOns, [settings], api] = await Promise.all([
     getSyncStatus(db, user.studioId),
     listMembershipKinds(db, user.studioId),
     getIgnoredMembershipIds(db, user.studioId),
     getAddOnMembershipIds(db, user.studioId),
     db.select({ winBackEnabled: studioSettings.winBackEnabled }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
+    getApiWatchStatus(db),
   ]);
 
   return (
@@ -118,6 +122,25 @@ export default async function ManaPage({
         )}
       </Panel>
 
+      <Panel title={t("mana.api.title")} id="api">
+        <p className="text-sm text-muted-foreground">{t("mana.api.intro")}</p>
+        {!api.lastCheck && <p className="text-sm text-muted-foreground">{t("mana.api.never")}</p>}
+        {api.lastCheck && !api.lastCheck.ok && (
+          <Notice tone="warning">{t("mana.api.failed", { when: formatDateTime(api.lastCheck.at), error: api.lastCheck.error ?? "" })}</Notice>
+        )}
+        {api.lastCheck?.ok && api.pending.length === 0 && (
+          <p className="text-sm">{t("mana.api.ok", { when: formatDateTime(api.lastCheck.at) })}</p>
+        )}
+        {api.pending.map((check) => (
+          <ApiChanges key={check.id} at={check.at} added={check.changes.added} removed={check.changes.removed} />
+        ))}
+        {api.pending.length > 0 && (
+          <form action={acknowledgeApi}>
+            <SubmitButton variant="outline">{t("mana.api.acknowledge")}</SubmitButton>
+          </form>
+        )}
+      </Panel>
+
       <Panel title={t("mana.recent")} id="runs">
         <ul className="flex flex-col divide-y divide-border">
           {status.recentRuns.map((run) => {
@@ -142,5 +165,50 @@ export default async function ManaPage({
         </ul>
       </Panel>
     </Page>
+  );
+}
+
+/** At most this many changed lines are listed per check; the rest are counted. */
+const shownLines = 200;
+
+/** One check's changes, grouped by endpoint, the ones the sync reads marked. */
+function ApiChanges({ at, added, removed }: { at: Date; added: string[]; removed: string[] }) {
+  const lines = [...removed.map((l) => ({ l, added: false })), ...added.map((l) => ({ l, added: true }))];
+  const groups = new Map<string, { text: string; added: boolean }[]>();
+  for (const { l, added: isAdded } of lines.slice(0, shownLines)) {
+    const [endpoint, ...rest] = l.split(" · ");
+    const list = groups.get(endpoint) ?? [];
+    list.push({ text: rest.join(" · ") || t("mana.api.endpoint"), added: isAdded });
+    groups.set(endpoint, list);
+  }
+  return (
+    <section className="flex flex-col gap-3">
+      <MicroLabel as="h3">{t("mana.api.changedOn", { when: formatDateTime(at) })}</MicroLabel>
+      <ul className="flex flex-col gap-3">
+        {[...groups].map(([endpoint, items]) => (
+          <li key={endpoint} className="flex flex-col gap-1 rounded-md bg-well px-3 py-2">
+            <p className="flex flex-wrap items-center gap-2 font-mono text-xs font-medium break-all">
+              {endpoint}
+              {syncEndpoints.includes(endpoint) && <Chip tone="warning">{t("mana.api.affectsSync")}</Chip>}
+            </p>
+            <ul className="flex flex-col gap-0.5">
+              {items.map((item, i) => {
+                const Icon = item.added ? Plus : Minus;
+                return (
+                  <li key={i} className="flex items-start gap-2 font-mono text-xs break-all text-muted-foreground">
+                    <Icon aria-hidden="true" className="mt-0.5 size-3 shrink-0" />
+                    <span className="sr-only">{item.added ? t("mana.api.added") : t("mana.api.removed")}</span>
+                    {item.text}
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
+      </ul>
+      {lines.length > shownLines && (
+        <p className="text-xs text-muted-foreground">{t("mana.api.more", { n: formatNumber(lines.length - shownLines) })}</p>
+      )}
+    </section>
   );
 }

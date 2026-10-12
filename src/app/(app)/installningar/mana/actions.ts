@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { start } from "workflow/api";
 import { db } from "@/db";
+import { acknowledgeApiChanges } from "@/lib/mana/api-watch-service";
 import { listMembershipKinds, saveIgnoredMemberships } from "@/lib/mana/leads";
 import { setAddOnMemberships, setWinBackEnabled } from "@/lib/mana/winback-service";
 import { requirePermission } from "@/lib/session";
@@ -37,4 +38,12 @@ export async function saveWinBackSetting(formData: FormData) {
   await setWinBackEnabled(db, user.studioId, formData.get("enabled") === "on");
   revalidatePath("/installningar/mana");
   redirect("/installningar/mana?vinnsparat=1");
+}
+
+/** Marks Mana's API changes as checked, which clears the notice. */
+export async function acknowledgeApi() {
+  const user = await requirePermission("settings", "manage");
+  await acknowledgeApiChanges(db, user.id);
+  revalidatePath("/", "layout");
+  redirect("/installningar/mana#api");
 }

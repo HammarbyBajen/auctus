@@ -390,6 +390,35 @@ export type SyncProgress = {
 };
 
 /** One run of the Mana sync. Only one can be running per studio at a time. */
+/** A copy of Mana's public OpenAPI spec, kept each time its content changes (ticket 24). */
+export const manaApiSpec = pgTable("mana_api_spec", {
+  /** sha256 of the spec written with sorted keys. */
+  hash: text("hash").primaryKey(),
+  spec: jsonb("spec").notNull(),
+  fetchedAt: timestamp("fetched_at").notNull().defaultNow(),
+});
+
+/**
+ * One daily check of Mana's API spec: whether it could be read, and what
+ * changed since the last copy. A change waits for an owner to mark it checked.
+ */
+export const manaApiCheck = pgTable(
+  "mana_api_check",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    checkedAt: timestamp("checked_at").notNull().defaultNow(),
+    ok: boolean("ok").notNull(),
+    hash: text("hash"),
+    /** Why the spec could not be read, when it could not. */
+    error: text("error"),
+    /** What was added and removed, when something that matters changed. */
+    changes: jsonb("changes").$type<{ added: string[]; removed: string[]; touchesSync: boolean }>(),
+    acknowledgedAt: timestamp("acknowledged_at"),
+    acknowledgedById: text("acknowledged_by_id").references(() => user.id, { onDelete: "set null" }),
+  },
+  (table) => [index("mana_api_check_checked_idx").on(table.checkedAt)],
+);
+
 /**
  * The home page's key numbers as they were on a day, saved after each Mana
  * sync (ticket 26). The trend reads past months from here, so a freeze or a

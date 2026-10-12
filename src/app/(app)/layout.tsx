@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { LogOut, Plus } from "lucide-react";
 import { signOut } from "@/app/actions";
 import { db } from "@/db";
@@ -8,6 +9,7 @@ import { BottomNav, SideNav } from "@/components/app/nav-links";
 import { Notice } from "@/components/app/notice";
 import { ThemeToggle } from "@/components/app/theme-toggle";
 import { formatDateTime } from "@/lib/format";
+import { getApiWatchStatus } from "@/lib/mana/api-watch-service";
 import { bannerFor, getSyncStatus } from "@/lib/mana/status";
 import { can } from "@/lib/permissions";
 import { requireUser } from "@/lib/session";
@@ -18,6 +20,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireUser();
   const banner = bannerFor(await getSyncStatus(db, user.studioId), new Date());
   const showSettings = can(user.role, "settings", "manage");
+  // Owners hear about changes to Mana's API (ticket 24) until one marks them checked.
+  const api = showSettings ? await getApiWatchStatus(db) : null;
+  const apiNotice =
+    api && api.pending.length > 0
+      ? { tone: api.pending.some((p) => p.changes.touchesSync) ? ("danger" as const) : ("warning" as const), text: api.pending.some((p) => p.changes.touchesSync) ? t("mana.api.noticeSync") : t("mana.api.notice") }
+      : api?.lastCheck && !api.lastCheck.ok
+        ? { tone: "warning" as const, text: t("mana.api.noticeFailed", { error: api.lastCheck.error ?? "" }) }
+        : null;
   const theme = parseTheme((await cookies()).get(themeCookie)?.value);
 
   const signOutButton = (
@@ -75,6 +85,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                   (banner.total === null
                     ? t("mana.banner.runningNoTotal", { done: String(banner.done) })
                     : t("mana.banner.running", { done: String(banner.done), total: String(banner.total) }))}
+              </Notice>
+            </div>
+          )}
+          {apiNotice && (
+            <div className="px-4 pt-4 sm:px-6 lg:px-8 lg:pt-6">
+              <Notice tone={apiNotice.tone}>
+                {apiNotice.text}{" "}
+                <Link href="/installningar/mana#api" className="focus-ring rounded-xs font-medium underline underline-offset-4">
+                  {t("mana.api.view")}
+                </Link>
               </Notice>
             </div>
           )}

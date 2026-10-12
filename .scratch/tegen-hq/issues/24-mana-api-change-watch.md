@@ -4,10 +4,12 @@
 
 **Blocked by:** 01
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-12)
 
-- [ ] A daily scheduled job fetches the OpenAPI spec and stores a copy and a hash
-- [ ] A change in the spec produces an alert showing which endpoints or fields changed
-- [ ] No alert is sent when nothing changed
-- [ ] A failure to fetch is reported, not silently ignored
-- [ ] The job uses no API key (the spec is public)
+- [x] A daily scheduled job fetches the OpenAPI spec and stores a copy and a hash
+- [x] A change in the spec produces an alert showing which endpoints or fields changed
+- [x] No alert is sent when nothing changed
+- [x] A failure to fetch is reported, not silently ignored
+- [x] The job uses no API key (the spec is public)
+
+Notes: the alert is an in-app notice for owners (danger when an endpoint the sync reads changed) with the details under Inställningar → Mana, until someone marks it checked; email or Discord can follow once Erik picks a channel. Wording-only changes save a new copy without an alert. Cron at 04:00 UTC, after the sync.

@@ -13,18 +13,19 @@ import { Stagger, StaggerItem } from "@/components/app/stagger";
 import { Panel } from "@/components/app/surface";
 import { SubmitButton } from "@/components/app/submit-button";
 import { formatDateTime, formatDay } from "@/lib/format";
+import { daysAgo, groupActivity } from "@/lib/leads/activity";
 import { isWinBackSource } from "@/lib/leads/constants";
 import { getLead, type HistoryItem } from "@/lib/leads/service";
 import { getManaInfo } from "@/lib/mana/leads";
-import { contactOutcomes } from "@/lib/pipeline/defaults";
 import { listColdReasons, listStages, listWinBackReasons } from "@/lib/pipeline/service";
 import { dueState, isGreyedOut, todayInStockholm } from "@/lib/tasks/dates";
 import { listStudioUsers, listTasksForLead } from "@/lib/tasks/service";
 import { requirePermission } from "@/lib/session";
+import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
-import { assignAction, finishTask, logContactAction, moveStage, removeTask, saveWinBackReason } from "../actions";
+import { assignAction, finishTask, moveStage, removeTask, saveWinBackReason } from "../actions";
 import { ManaRefresher } from "./mana-refresher";
-import { NoteForm } from "./note-form";
+import { ActivityForm } from "./activity-form";
 import { TaskForm } from "./task-form";
 
 export default async function LeadPage({
@@ -55,13 +56,20 @@ export default async function LeadPage({
   const reasonName = (key: string | null) => reasons.find((r) => r.key === key)?.name ?? key ?? "";
   const coldStages = stages.filter((s) => s.kind === "cold");
   const move = moveStage.bind(null, lead.id);
-  const log = logContactAction.bind(null, lead.id);
   const phoneHref = person.phone ? `tel:${person.phone.replace(/[^\d+]/g, "")}` : null;
   const alreadyMember = Boolean(mana && mana.counting.length > 0 && stage.kind !== "won" && !winBack);
   const source = t(`source.${lead.source}` as MessageKey) || t("source.unknown");
 
+  const activity = groupActivity(history);
+  const lastContact = history.find((h) => h.kind === "contact_logged");
+  const nextTask = [...taskLists.open].sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  const ago = (at: Date) => {
+    const days = daysAgo(at, today);
+    return days === 0 ? t("when.today") : days === 1 ? t("when.yesterday") : t("when.daysAgo", { n: String(days) });
+  };
+
   return (
-    <Stagger className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <Stagger className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <ManaRefresher leadId={lead.id} />
       <StaggerItem className="lg:hidden">
         <ButtonLink href="/leads" variant="ghost" size="sm" className="-ml-2">
@@ -70,7 +78,7 @@ export default async function LeadPage({
         </ButtonLink>
       </StaggerItem>
 
-      {/* Hero: who the person is, where they are, and the way to reach them. */}
+      {/* Hero: who the person is, where they stand, and the way to reach them. */}
       <StaggerItem className="flex flex-col gap-4">
         <div className="flex flex-col gap-2">
           <h1 className="text-xl font-semibold tracking-tight break-words">{person.name}</h1>
@@ -91,6 +99,16 @@ export default async function LeadPage({
               </>
             )}
           </div>
+          {/* Where the lead stands, at a glance: when it came in, the last contact, what is next. */}
+          <ul aria-label={t("lead.status")} className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            <li>{t("lead.cameIn", { when: ago(lead.createdAt) })}</li>
+            <li>{lastContact ? t("lead.lastContact", { when: ago(lastContact.at) }) : t("lead.notContacted")}</li>
+            {nextTask && (
+              <li className={cn(dueState(nextTask.dueDate, today) === "overdue" && "font-medium text-destructive")}>
+                {t("lead.nextTask", { title: nextTask.title, date: formatDay(nextTask.dueDate) })}
+              </li>
+            )}
+          </ul>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {phoneHref && (
@@ -119,254 +137,246 @@ export default async function LeadPage({
         </StaggerItem>
       )}
 
-      {winBack && (
-        <StaggerItem>
-          <Panel title={t("winback.title")} id="winback">
-            <form action={saveWinBackReason.bind(null, lead.id)} className="flex flex-col gap-4">
-              {lead.winBackReason ? (
-                <p className="text-sm">
-                  {t("winback.current", { reason: winBackReasons.find((r) => r.key === lead.winBackReason)?.name ?? lead.winBackReason })}
-                </p>
+      <div className="@container">
+        <div className="grid items-start gap-6 @min-[52rem]:grid-cols-[minmax(0,1fr)_20rem]">
+          {/* What has happened comes first: write it down, then read back the history. */}
+          <StaggerItem className="min-w-0">
+            <Panel title={t("lead.notes")} id="history">
+              <ActivityForm leadId={lead.id} />
+              {activity.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("lead.noNotes")}</p>
               ) : (
-                <Notice tone="warning">{t("winback.prompt")}</Notice>
+                <ol className="flex flex-col gap-4">
+                  {activity.map((item) => (
+                    <li key={`${item.kind}-${item.id}`} className="flex gap-3">
+                      <HistoryIcon item={item} />
+                      <div className="min-w-0 flex-1">
+                        <HistoryLine item={item} stageName={stageName} reasonName={reasonName} />
+                        {"note" in item && <p className="mt-1 text-sm break-words whitespace-pre-wrap">{item.note}</p>}
+                        <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                          {item.authorName ? `${item.authorName} · ` : ""}
+                          {formatDateTime(item.at)}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
               )}
-              {fel === "vinnanledning" && <Notice tone="danger">{t("winback.error")}</Notice>}
-              <RadioGroup name="reason" defaultValue={lead.winBackReason ?? undefined} required className="gap-0">
-                {winBackReasons.map((r) => (
-                  <Label key={r.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-normal hover:bg-accent">
-                    <RadioGroupItem value={r.key} />
-                    {r.name}
-                  </Label>
-                ))}
-              </RadioGroup>
-              <SubmitButton className="self-start">{t("winback.save")}</SubmitButton>
-            </form>
-          </Panel>
-        </StaggerItem>
-      )}
+            </Panel>
+          </StaggerItem>
 
-      <StaggerItem>
-        <Panel title={t("lead.contactTitle")} id="contact">
-          <form action={log} className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {contactOutcomes.map((outcome) => (
-              <SubmitButton key={outcome} keepLabel variant="outline" name="outcome" value={outcome}>
-                {t(`outcome.${outcome}` as MessageKey)}
-              </SubmitButton>
-            ))}
-          </form>
-        </Panel>
-      </StaggerItem>
-
-      <StaggerItem>
-        <Panel title={t("lead.moveTo")} id="move">
-          <div className="flex flex-wrap gap-2">
-            {stages
-              .filter((s) => s.kind !== "cold" && s.key !== lead.stage)
-              .map((s) => (
-                <form key={s.key} action={move}>
-                  <input type="hidden" name="stage" value={s.key} />
-                  <SubmitButton variant={s.kind === "won" ? "default" : "outline"} pendingLabel={t("lead.moving")}>
-                    {s.name}
-                  </SubmitButton>
-                </form>
-              ))}
-          </div>
-          {coldStages
-            .filter((s) => s.key !== lead.stage)
-            .map((s) => (
-              <details key={s.key} className="rounded-md bg-well">
-                <summary className="focus-ring flex min-h-11 cursor-pointer list-none items-center rounded-md px-3 text-sm font-medium hover:bg-accent">
-                  {s.name}
-                </summary>
-                <form action={move} className="flex flex-col gap-3 p-3">
-                  <input type="hidden" name="stage" value={s.key} />
-                  <fieldset className="flex flex-col gap-1">
-                    <legend className="mb-2 text-sm font-medium">{t("lead.coldReasonLabel")}</legend>
-                    <RadioGroup name="coldReason" required className="gap-0">
-                      {reasons.map((r) => (
+          {/* Everything you change about the lead. */}
+          <div className="flex min-w-0 flex-col gap-6">
+            {winBack && (
+              <StaggerItem>
+                <Panel title={t("winback.title")} id="winback">
+                  <form action={saveWinBackReason.bind(null, lead.id)} className="flex flex-col gap-4">
+                    {lead.winBackReason ? (
+                      <p className="text-sm">
+                        {t("winback.current", { reason: winBackReasons.find((r) => r.key === lead.winBackReason)?.name ?? lead.winBackReason })}
+                      </p>
+                    ) : (
+                      <Notice tone="warning">{t("winback.prompt")}</Notice>
+                    )}
+                    {fel === "vinnanledning" && <Notice tone="danger">{t("winback.error")}</Notice>}
+                    <RadioGroup name="reason" defaultValue={lead.winBackReason ?? undefined} required className="gap-0">
+                      {winBackReasons.map((r) => (
                         <Label key={r.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-normal hover:bg-accent">
                           <RadioGroupItem value={r.key} />
                           {r.name}
                         </Label>
                       ))}
                     </RadioGroup>
-                  </fieldset>
-                  <SubmitButton className="self-start">{t("lead.coldSubmit")}</SubmitButton>
-                </form>
-              </details>
-            ))}
-        </Panel>
-      </StaggerItem>
-
-      <StaggerItem>
-        <Panel title={t("task.title")} id="tasks">
-          <TaskForm leadId={lead.id} today={today} />
-          {taskLists.open.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("task.noOpen")}</p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {taskLists.open.map((task) => {
-                const state = dueState(task.dueDate, today);
-                return (
-                  <li key={task.id} className="flex flex-col gap-2 rounded-md bg-well px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <p className="text-sm break-words">{task.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {state === "overdue" ? (
-                          <Chip tone="destructive" icon={AlertCircle}>
-                            {t("task.overdue")} · {formatDay(task.dueDate)}
-                          </Chip>
-                        ) : state === "today" ? (
-                          <Chip tone="warning" icon={Clock}>
-                            {t("task.today")}
-                          </Chip>
-                        ) : (
-                          <span className="tabular-nums">{formatDay(task.dueDate)}</span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <form action={finishTask.bind(null, lead.id, task.id, true)}>
-                        <SubmitButton size="sm" variant="secondary">
-                          {t("task.done")}
-                        </SubmitButton>
-                      </form>
-                      <form action={removeTask.bind(null, lead.id, task.id)}>
-                        <ConfirmButton size="sm" variant="ghost" confirmLabel={t("task.confirmDelete")}>
-                          {t("task.delete")}
-                        </ConfirmButton>
-                      </form>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          {taskLists.done.length > 0 && (
-            <details>
-              <summary className="focus-ring min-h-11 cursor-pointer rounded-md py-2 text-sm text-muted-foreground hover:text-foreground">
-                {t("task.doneTitle")}
-              </summary>
-              <ul className="mt-2 flex flex-col gap-1">
-                {taskLists.done.map((task) => (
-                  <li key={task.id} className="flex items-center justify-between gap-3 px-3 text-sm text-muted-foreground">
-                    <span className="min-w-0">
-                      <span className="break-words line-through">{task.title}</span>
-                      {task.doneAt && <span className="block text-xs">{t("task.doneBy", { when: formatDateTime(task.doneAt) })}</span>}
-                    </span>
-                    <form action={finishTask.bind(null, lead.id, task.id, false)}>
-                      <SubmitButton size="sm" variant="ghost">
-                        {t("task.undo")}
+                    <SubmitButton className="self-start">{t("winback.save")}</SubmitButton>
+                  </form>
+                </Panel>
+              </StaggerItem>
+            )}
+            <StaggerItem>
+            <Panel title={t("lead.moveTo")} id="move">
+              <div className="flex flex-wrap gap-2">
+                {stages
+                  .filter((s) => s.kind !== "cold" && s.key !== lead.stage)
+                  .map((s) => (
+                    <form key={s.key} action={move}>
+                      <input type="hidden" name="stage" value={s.key} />
+                      <SubmitButton variant={s.kind === "won" ? "default" : "outline"} pendingLabel={t("lead.moving")}>
+                        {s.name}
                       </SubmitButton>
                     </form>
-                  </li>
+                  ))}
+              </div>
+              {coldStages
+                .filter((s) => s.key !== lead.stage)
+                .map((s) => (
+                  <details key={s.key} className="rounded-md bg-well">
+                    <summary className="focus-ring flex min-h-11 cursor-pointer list-none items-center rounded-md px-3 text-sm font-medium hover:bg-accent">
+                      {s.name}
+                    </summary>
+                    <form action={move} className="flex flex-col gap-3 p-3">
+                      <input type="hidden" name="stage" value={s.key} />
+                      <fieldset className="flex flex-col gap-1">
+                        <legend className="mb-2 text-sm font-medium">{t("lead.coldReasonLabel")}</legend>
+                        <RadioGroup name="coldReason" required className="gap-0">
+                          {reasons.map((r) => (
+                            <Label key={r.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-normal hover:bg-accent">
+                              <RadioGroupItem value={r.key} />
+                              {r.name}
+                            </Label>
+                          ))}
+                        </RadioGroup>
+                      </fieldset>
+                      <SubmitButton className="self-start">{t("lead.coldSubmit")}</SubmitButton>
+                    </form>
+                  </details>
                 ))}
-              </ul>
-            </details>
-          )}
-        </Panel>
-      </StaggerItem>
-
-      <StaggerItem>
-        <Panel title={t("lead.mana")} id="mana">
-          {!mana ? (
-            <p className="text-sm text-muted-foreground">{t("lead.manaNone")}</p>
-          ) : mana.memberships.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("lead.manaNoMembership")}</p>
-          ) : (
-            <ul className="flex flex-col gap-1">
-              {mana.memberships.map((m) => (
-                <li key={m.id} className="flex flex-col gap-1 rounded-md bg-well px-3 py-2">
-                  <p className="text-sm font-medium">
-                    {m.name}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">{t(`mstatus.${m.status}` as MessageKey)}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground tabular-nums">
-                    {m.status === "future"
-                      ? t("lead.manaStarts", { date: formatDay(m.startDate) })
-                      : m.status === "ended"
-                        ? m.pendingChangeDate
-                          ? t("lead.manaEnded", { date: formatDay(m.pendingChangeDate) })
-                          : t("mstatus.ended")
-                        : t("lead.manaSince", { date: formatDay(m.startDate) })}
-                    {m.status !== "ended" && m.pendingChangeKind === "cancel" && m.pendingChangeDate
-                      ? ` · ${t("lead.manaCancel", { date: formatDay(m.pendingChangeDate) })}`
-                      : ""}
-                    {m.pendingChangeKind === "freeze" && m.pendingChangeDate
-                      ? ` · ${t("lead.manaFreeze", { date: formatDay(m.pendingChangeDate) })}`
-                      : ""}
-                  </p>
-                  {!mana.ignored.includes(m.membershipId) ? null : <p className="text-xs text-muted-foreground">{t("lead.manaNotCounted")}</p>}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </StaggerItem>
-
-      <StaggerItem>
-        <Panel title={t("assign.title")} id="assign">
-          <form action={assignAction.bind(null, lead.id)} className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <Label htmlFor="assignee" className="sr-only">
-              {t("assign.title")}
-            </Label>
-            <NativeSelect id="assignee" name="assignee" defaultValue={lead.assignedToId ?? ""} className="sm:max-w-xs">
-              <option value="">{t("assign.none")}</option>
-              {people.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </NativeSelect>
-            <SubmitButton variant="outline">{t("assign.save")}</SubmitButton>
-          </form>
-        </Panel>
-      </StaggerItem>
-
-      <StaggerItem>
-        <Panel title={t("lead.notes")} id="history">
-          <NoteForm leadId={lead.id} />
-          {history.length === 0 ? (
-            <p className="text-sm text-muted-foreground">{t("lead.noNotes")}</p>
-          ) : (
-            <ol className="flex flex-col gap-4">
-              {history.map((item) => (
-                <li key={`${item.kind}-${item.id}`} className="flex gap-3">
-                  <HistoryIcon item={item} />
-                  <div className="min-w-0 flex-1">
-                    <HistoryLine item={item} stageName={stageName} reasonName={reasonName} />
-                    <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-                      {item.authorName ? `${item.authorName} · ` : ""}
-                      {formatDateTime(item.at)}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ol>
-          )}
-        </Panel>
-      </StaggerItem>
-
-      <StaggerItem>
-        <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 px-1 text-sm">
-          <MicroLabel as="dt" className="self-center">
-            {t("lead.source")}
-          </MicroLabel>
-          <dd>{source}</dd>
-          <MicroLabel as="dt" className="self-center">
-            {t("lead.created")}
-          </MicroLabel>
-          <dd className="tabular-nums">{formatDateTime(lead.createdAt)}</dd>
-          {lead.coldReason && (
-            <>
+            </Panel>
+            </StaggerItem>
+            <StaggerItem>
+            <Panel title={t("task.title")} id="tasks">
+              <TaskForm leadId={lead.id} today={today} />
+              {taskLists.open.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("task.noOpen")}</p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {taskLists.open.map((task) => {
+                    const state = dueState(task.dueDate, today);
+                    return (
+                      <li key={task.id} className="flex flex-col gap-2 rounded-md bg-well px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <p className="text-sm break-words">{task.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {state === "overdue" ? (
+                              <Chip tone="destructive" icon={AlertCircle}>
+                                {t("task.overdue")} · {formatDay(task.dueDate)}
+                              </Chip>
+                            ) : state === "today" ? (
+                              <Chip tone="warning" icon={Clock}>
+                                {t("task.today")}
+                              </Chip>
+                            ) : (
+                              <span className="tabular-nums">{formatDay(task.dueDate)}</span>
+                            )}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          <form action={finishTask.bind(null, lead.id, task.id, true)}>
+                            <SubmitButton size="sm" variant="secondary">
+                              {t("task.done")}
+                            </SubmitButton>
+                          </form>
+                          <form action={removeTask.bind(null, lead.id, task.id)}>
+                            <ConfirmButton size="sm" variant="ghost" confirmLabel={t("task.confirmDelete")}>
+                              {t("task.delete")}
+                            </ConfirmButton>
+                          </form>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {taskLists.done.length > 0 && (
+                <details>
+                  <summary className="focus-ring min-h-11 cursor-pointer rounded-md py-2 text-sm text-muted-foreground hover:text-foreground">
+                    {t("task.doneTitle")}
+                  </summary>
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {taskLists.done.map((task) => (
+                      <li key={task.id} className="flex items-center justify-between gap-3 px-3 text-sm text-muted-foreground">
+                        <span className="min-w-0">
+                          <span className="break-words line-through">{task.title}</span>
+                          {task.doneAt && <span className="block text-xs">{t("task.doneBy", { when: formatDateTime(task.doneAt) })}</span>}
+                        </span>
+                        <form action={finishTask.bind(null, lead.id, task.id, false)}>
+                          <SubmitButton size="sm" variant="ghost">
+                            {t("task.undo")}
+                          </SubmitButton>
+                        </form>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </Panel>
+            </StaggerItem>
+            <StaggerItem>
+            <Panel title={t("lead.mana")} id="mana">
+              {!mana ? (
+                <p className="text-sm text-muted-foreground">{t("lead.manaNone")}</p>
+              ) : mana.memberships.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("lead.manaNoMembership")}</p>
+              ) : (
+                <ul className="flex flex-col gap-1">
+                  {mana.memberships.map((m) => (
+                    <li key={m.id} className="flex flex-col gap-1 rounded-md bg-well px-3 py-2">
+                      <p className="text-sm font-medium">
+                        {m.name}
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">{t(`mstatus.${m.status}` as MessageKey)}</span>
+                      </p>
+                      <p className="text-xs text-muted-foreground tabular-nums">
+                        {m.status === "future"
+                          ? t("lead.manaStarts", { date: formatDay(m.startDate) })
+                          : m.status === "ended"
+                            ? m.pendingChangeDate
+                              ? t("lead.manaEnded", { date: formatDay(m.pendingChangeDate) })
+                              : t("mstatus.ended")
+                            : t("lead.manaSince", { date: formatDay(m.startDate) })}
+                        {m.status !== "ended" && m.pendingChangeKind === "cancel" && m.pendingChangeDate
+                          ? ` · ${t("lead.manaCancel", { date: formatDay(m.pendingChangeDate) })}`
+                          : ""}
+                        {m.pendingChangeKind === "freeze" && m.pendingChangeDate
+                          ? ` · ${t("lead.manaFreeze", { date: formatDay(m.pendingChangeDate) })}`
+                          : ""}
+                      </p>
+                      {!mana.ignored.includes(m.membershipId) ? null : <p className="text-xs text-muted-foreground">{t("lead.manaNotCounted")}</p>}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+            </StaggerItem>
+            <StaggerItem>
+            <Panel title={t("assign.title")} id="assign">
+              <form action={assignAction.bind(null, lead.id)} className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <Label htmlFor="assignee" className="sr-only">
+                  {t("assign.title")}
+                </Label>
+                <NativeSelect id="assignee" name="assignee" defaultValue={lead.assignedToId ?? ""} className="sm:max-w-xs">
+                  <option value="">{t("assign.none")}</option>
+                  {people.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+                <SubmitButton variant="outline">{t("assign.save")}</SubmitButton>
+              </form>
+            </Panel>
+            </StaggerItem>
+            <StaggerItem>
+            <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 px-1 text-sm">
               <MicroLabel as="dt" className="self-center">
-                {t("lead.stage")}
+                {t("lead.source")}
               </MicroLabel>
-              <dd>{t("lead.coldWhy", { reason: reasonName(lead.coldReason) })}</dd>
-            </>
-          )}
-        </dl>
-      </StaggerItem>
+              <dd>{source}</dd>
+              <MicroLabel as="dt" className="self-center">
+                {t("lead.created")}
+              </MicroLabel>
+              <dd className="tabular-nums">{formatDateTime(lead.createdAt)}</dd>
+              {lead.coldReason && (
+                <>
+                  <MicroLabel as="dt" className="self-center">
+                    {t("lead.stage")}
+                  </MicroLabel>
+                  <dd>{t("lead.coldWhy", { reason: reasonName(lead.coldReason) })}</dd>
+                </>
+              )}
+            </dl>
+            </StaggerItem>
+          </div>
+        </div>
+      </div>
     </Stagger>
   );
 }

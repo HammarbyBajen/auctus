@@ -47,21 +47,6 @@ export async function createLead(_: LeadFormState, formData: FormData): Promise<
   redirect(`/leads/${lead.id}${duplicate ? "?dubblett=1" : ""}`);
 }
 
-export type NoteFormState = { error?: MessageKey };
-
-export async function addLeadNote(
-  leadId: string,
-  _: NoteFormState,
-  formData: FormData,
-): Promise<NoteFormState> {
-  const user = await requirePermission("leads", "write");
-  const body = String(formData.get("body") ?? "").trim();
-  if (body === "") return { error: "lead.noteError" };
-  await addNote(db, user.studioId, leadId, body, user.id);
-  revalidatePath(`/leads/${leadId}`);
-  return {};
-}
-
 export async function moveStage(leadId: string, formData: FormData) {
   const user = await requirePermission("leads", "write");
   const toStage = String(formData.get("stage") ?? "");
@@ -79,17 +64,31 @@ export async function moveStage(leadId: string, formData: FormData) {
   redirect(`/leads/${leadId}`);
 }
 
-export async function logContactAction(leadId: string, formData: FormData) {
+export type ActivityFormState = { error?: MessageKey; saved?: number };
+
+/**
+ * One form for what happened: a contact button (Ringde, Inget svar, ...) logs
+ * that and saves the note with it when one is written; "Spara anteckning"
+ * saves the note alone, which then cannot be empty.
+ */
+export async function recordActivity(leadId: string, _: ActivityFormState, formData: FormData): Promise<ActivityFormState> {
   const user = await requirePermission("leads", "write");
-  try {
-    await logContact(db, user.studioId, leadId, String(formData.get("outcome") ?? ""), user.id);
-  } catch (error) {
-    if (error instanceof LeadError) redirect(`/leads/${leadId}?fel=steg`);
-    throw error;
+  const intent = String(formData.get("intent") ?? "");
+  const body = String(formData.get("body") ?? "").trim();
+  if (intent === "note") {
+    if (body === "") return { error: "lead.noteError" };
+  } else {
+    try {
+      await logContact(db, user.studioId, leadId, intent, user.id);
+    } catch (error) {
+      if (error instanceof LeadError) return { error: "lead.activityError" };
+      throw error;
+    }
   }
+  if (body !== "") await addNote(db, user.studioId, leadId, body, user.id);
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
-  redirect(`/leads/${leadId}`);
+  return { saved: Date.now() };
 }
 
 export type TaskFormState = { error?: MessageKey };

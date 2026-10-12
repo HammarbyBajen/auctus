@@ -4,8 +4,9 @@ import { runApiWatch } from "@/lib/mana/api-watch-service";
 export const dynamic = "force-dynamic";
 
 /**
- * Called once a day by Vercel Cron, after the sync: checks Mana's public API
- * spec for changes (ticket 24). Vercel sends the CRON_SECRET as a bearer
+ * Called once a day by Vercel Cron, before the sync (02:00 UTC, the sync at
+ * 03:00; Hobby crons may start any time within their hour, so a whole hour
+ * apart keeps the order): checks Mana's public API spec for changes (ticket 24). Vercel sends the CRON_SECRET as a bearer
  * token, and anything else is turned away.
  */
 export async function GET(request: Request) {

@@ -12,4 +12,4 @@
 - [x] A failure to fetch is reported, not silently ignored
 - [x] The job uses no API key (the spec is public)
 
-Notes: the alert is an in-app notice for owners (danger when an endpoint the sync reads changed) with the details under Inställningar → Mana, until someone marks it checked; email or Discord can follow once Erik picks a channel. Wording-only changes save a new copy without an alert. Cron at 04:00 UTC, after the sync.
+Notes: the alert is an in-app notice for owners (danger when an endpoint the sync reads changed) with the details under Inställningar → Mana, until someone marks it checked; email or Discord can follow once Erik picks a channel. Wording-only changes save a new copy without an alert. Cron at 02:00 UTC, an hour before the sync (decided by Max, 2026-10-12).

@@ -131,16 +131,20 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
             <div className="hidden @min-[50rem]:block">
               <ol
                 style={{ "--stages": open.length } as React.CSSProperties}
-                className="grid grid-cols-[repeat(var(--stages),minmax(0,12rem))] gap-2 lg:gap-3"
+                // Two shared rows (headers, then cards) that every stage joins as a subgrid,
+                // so a header that wraps to two lines moves every stage's first card down with it.
+                className="grid grid-cols-[repeat(var(--stages),minmax(0,12rem))] grid-rows-[auto_1fr] gap-x-2 lg:gap-x-3"
               >
                 {open.map((group) => (
-                  <li key={group.key} className="min-w-0">
-                    <section aria-labelledby={`stage-${group.key}`} className="flex h-full flex-col gap-2 rounded-lg border border-well-border bg-well p-2">
+                  <li key={group.key} className="row-span-2 grid min-w-0 grid-rows-subgrid">
+                    <section aria-labelledby={`stage-${group.key}`} className="row-span-2 grid grid-rows-subgrid gap-y-2 rounded-lg border border-well-border bg-well p-2">
                       <h2 id={`stage-${group.key}`} className="flex items-start justify-between gap-2 px-1 pt-1">
                         <MicroLabel className="min-w-0 hyphens-auto [hyphenate-limit-chars:10_4_4]">{group.name}</MicroLabel>
                         <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(group.cards.length)}</span>
                       </h2>
-                      <Cards group={group} />
+                      <div className="flex flex-col gap-2">
+                        <Cards group={group} />
+                      </div>
                     </section>
                   </li>
                 ))}

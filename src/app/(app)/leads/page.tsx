@@ -98,53 +98,54 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
         <Cards group={cold} limit={Infinity} className="grid sm:grid-cols-[repeat(auto-fill,12rem)]" />
       ) : (
         <>
-          {/* Phone: one stage at a time */}
-          <div className="flex flex-col gap-4 md:hidden">
-            <ScrollCurrent current={chosen?.key} aria-label={t("leads.title")} className="relative -mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
-              <ul className="flex w-max gap-1 rounded-md bg-well p-1">
-                {open.map((g) => (
-                  <li key={g.key}>
-                    <Link
-                      href={`/leads?steg=${g.key}`}
-                      aria-current={chosen?.key === g.key ? "page" : undefined}
-                      className={cn(
-                        "focus-ring inline-flex min-h-11 items-center gap-2 rounded-sm px-3 text-sm whitespace-nowrap transition-[background-color]",
-                        chosen?.key === g.key ? "bg-card font-medium elevation-1" : "text-muted-foreground hover:bg-accent",
-                      )}
-                    >
-                      {g.name}
-                      <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(g.cards.length)}</span>
-                    </Link>
+          <div className="@container">
+            {/* Narrow (a phone, a tablet, or a big zoom): one stage at a time */}
+            <div className="flex flex-col gap-4 @min-[50rem]:hidden">
+              <ScrollCurrent current={chosen?.key} aria-label={t("leads.title")} className="relative -mx-4 overflow-x-auto px-4 [scrollbar-width:none]">
+                <ul className="flex w-max gap-1 rounded-md bg-well p-1">
+                  {open.map((g) => (
+                    <li key={g.key}>
+                      <Link
+                        href={`/leads?steg=${g.key}`}
+                        aria-current={chosen?.key === g.key ? "page" : undefined}
+                        className={cn(
+                          "focus-ring inline-flex min-h-11 items-center gap-2 rounded-sm px-3 text-sm whitespace-nowrap transition-[background-color]",
+                          chosen?.key === g.key ? "bg-card font-medium elevation-1" : "text-muted-foreground hover:bg-accent",
+                        )}
+                      >
+                        {g.name}
+                        <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(g.cards.length)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </ScrollCurrent>
+              {chosen && <Cards group={chosen} className="max-w-md" />}
+            </div>
+
+            {/*
+              Wide enough for every stage side by side (a container query on the content
+              width, so the sidebar and zoom are accounted for): the board, one row, each
+              stage at most 12rem wide so cards never stretch, and never scrolling sideways.
+            */}
+            <div className="hidden @min-[50rem]:block">
+              <ol
+                style={{ "--stages": open.length } as React.CSSProperties}
+                className="grid grid-cols-[repeat(var(--stages),minmax(0,12rem))] gap-2 lg:gap-3"
+              >
+                {open.map((group) => (
+                  <li key={group.key} className="min-w-0">
+                    <section aria-labelledby={`stage-${group.key}`} className="flex h-full flex-col gap-2 rounded-lg border border-well-border bg-well p-2">
+                      <h2 id={`stage-${group.key}`} className="flex items-start justify-between gap-2 px-1 pt-1">
+                        <MicroLabel className="min-w-0 hyphens-auto [hyphenate-limit-chars:10_4_4]">{group.name}</MicroLabel>
+                        <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(group.cards.length)}</span>
+                      </h2>
+                      <Cards group={group} />
+                    </section>
                   </li>
                 ))}
-              </ul>
-            </ScrollCurrent>
-            {chosen && <Cards group={chosen} />}
-          </div>
-
-          {/*
-            Tablet and desktop: the board. Stages are at most 12rem wide, so cards keep
-            their size instead of stretching. Four sit in a row (4 + 3) until the board
-            itself is wide enough for all seven at 12rem: a container query in rem, so
-            zooming reflows the board exactly as a smaller or larger screen would.
-          */}
-          <div className="@container hidden md:block">
-            <ol
-              style={{ "--stages": open.length } as React.CSSProperties}
-              className="grid grid-cols-[repeat(4,minmax(0,12rem))] gap-3 @min-[88.5rem]:grid-cols-[repeat(var(--stages),12rem)]"
-            >
-              {open.map((group) => (
-                <li key={group.key} className="min-w-0">
-                  <section aria-labelledby={`stage-${group.key}`} className="flex h-full flex-col gap-2 rounded-lg border border-well-border bg-well p-2">
-                    <h2 id={`stage-${group.key}`} className="flex items-start justify-between gap-2 px-1 pt-1">
-                      <MicroLabel className="min-w-0">{group.name}</MicroLabel>
-                      <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(group.cards.length)}</span>
-                    </h2>
-                    <Cards group={group} />
-                  </section>
-                </li>
-              ))}
-            </ol>
+              </ol>
+            </div>
           </div>
         </>
       )}

@@ -95,7 +95,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
     >
       {showCold ? (
         // The cold view is the only way to reach old leads, so it shows all of them.
-        <Cards group={cold} limit={Infinity} className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" />
+        <Cards group={cold} limit={Infinity} className="grid sm:grid-cols-[repeat(auto-fill,12rem)]" />
       ) : (
         <>
           {/* Phone: one stage at a time */}
@@ -122,23 +122,30 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
             {chosen && <Cards group={chosen} />}
           </div>
 
-          {/* Tablet and desktop: the board, four stages a row until there is room for all */}
-          <ol
-            style={{ "--stages": open.length } as React.CSSProperties}
-            className="hidden gap-3 md:grid md:max-[1599px]:grid-cols-4 min-[1600px]:grid-cols-[repeat(var(--stages),minmax(0,1fr))]"
-          >
-            {open.map((group) => (
-              <li key={group.key} className="min-w-0">
-                <section aria-labelledby={`stage-${group.key}`} className="flex h-full flex-col gap-2 rounded-lg border border-well-border bg-well p-2">
-                  <h2 id={`stage-${group.key}`} className="flex items-start justify-between gap-2 px-1 pt-1">
-                    <MicroLabel className="min-w-0">{group.name}</MicroLabel>
-                    <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(group.cards.length)}</span>
-                  </h2>
-                  <Cards group={group} />
-                </section>
-              </li>
-            ))}
-          </ol>
+          {/*
+            Tablet and desktop: the board. Stages are at most 12rem wide, so cards keep
+            their size instead of stretching. Four sit in a row (4 + 3) until the board
+            itself is wide enough for all seven at 12rem: a container query in rem, so
+            zooming reflows the board exactly as a smaller or larger screen would.
+          */}
+          <div className="@container hidden md:block">
+            <ol
+              style={{ "--stages": open.length } as React.CSSProperties}
+              className="grid grid-cols-[repeat(4,minmax(0,12rem))] gap-3 @min-[88.5rem]:grid-cols-[repeat(var(--stages),12rem)]"
+            >
+              {open.map((group) => (
+                <li key={group.key} className="min-w-0">
+                  <section aria-labelledby={`stage-${group.key}`} className="flex h-full flex-col gap-2 rounded-lg border border-well-border bg-well p-2">
+                    <h2 id={`stage-${group.key}`} className="flex items-start justify-between gap-2 px-1 pt-1">
+                      <MicroLabel className="min-w-0">{group.name}</MicroLabel>
+                      <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(group.cards.length)}</span>
+                    </h2>
+                    <Cards group={group} />
+                  </section>
+                </li>
+              ))}
+            </ol>
+          </div>
         </>
       )}
     </Page>

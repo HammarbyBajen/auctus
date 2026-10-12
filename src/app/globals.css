@@ -7,6 +7,8 @@
  * (LAB37 Internal Design Baseline v3.9, section 6). Change them there first.
  */
 @custom-variant dark (&:where(.dark, .dark *));
+/* Once the page script has run (html.js), for things only needed without JavaScript. */
+@custom-variant js (&:where(.js, .js *));
 
 :root {
   /* Light. Canvas is the extreme; the rail steps DOWN toward grey (5). */

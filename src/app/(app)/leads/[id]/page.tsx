@@ -24,6 +24,7 @@ import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
 import { assignAction, finishTask, moveStage, removeTask, saveWinBackReason } from "../actions";
+import { AssigneeSelect } from "./assignee-select";
 import { ManaRefresher } from "./mana-refresher";
 import { ActivityForm } from "./activity-form";
 import { TaskForm } from "./task-form";
@@ -55,6 +56,11 @@ export default async function LeadPage({
   const stageName = (key: string | null) => stages.find((s) => s.key === key)?.name ?? key ?? "";
   const reasonName = (key: string | null) => reasons.find((r) => r.key === key)?.name ?? key ?? "";
   const coldStages = stages.filter((s) => s.kind === "cold");
+  const imported = lead.externalRef?.startsWith("pipedrive:") ?? false;
+  // The next step: the stage after this one in pipeline order (Medlem after the last open one); none once won or cold.
+  const nextStage =
+    stage.kind === "open" ? stages.filter((s) => s.kind !== "cold").find((s) => s.position > stage.position) : undefined;
+  const otherStages = stages.filter((s) => s.kind !== "cold" && s.key !== lead.stage && s.key !== nextStage?.key);
   const move = moveStage.bind(null, lead.id);
   const phoneHref = person.phone ? `tel:${person.phone.replace(/[^\d+]/g, "")}` : null;
   const alreadyMember = Boolean(mana && mana.counting.length > 0 && stage.kind !== "won" && !winBack);
@@ -92,12 +98,8 @@ export default async function LeadPage({
             )}
             <span aria-hidden="true">·</span>
             <span>{source}</span>
-            {lead.assignedToId && assigneeName && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>{t("assign.assignedTo", { name: assigneeName })}</span>
-              </>
-            )}
+            <span aria-hidden="true">·</span>
+            <AssigneeSelect action={assignAction.bind(null, lead.id)} value={lead.assignedToId ?? ""} people={people} />
           </div>
           {/* Where the lead stands, at a glance: when it came in, the last contact, what is next. */}
           <ul aria-label={t("lead.status")} className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
@@ -151,7 +153,7 @@ export default async function LeadPage({
                     <li key={`${item.kind}-${item.id}`} className="flex gap-3">
                       <HistoryIcon item={item} />
                       <div className="min-w-0 flex-1">
-                        <HistoryLine item={item} stageName={stageName} reasonName={reasonName} />
+                        <HistoryLine item={item} stageName={stageName} reasonName={reasonName} imported={imported} />
                         {"note" in item && <p className="mt-1 text-sm break-words whitespace-pre-wrap">{item.note}</p>}
                         <p className="mt-1 text-xs text-muted-foreground tabular-nums">
                           {item.authorName ? `${item.authorName} · ` : ""}
@@ -194,18 +196,33 @@ export default async function LeadPage({
             )}
             <StaggerItem>
             <Panel title={t("lead.moveTo")} id="move">
-              <div className="flex flex-wrap gap-2">
-                {stages
-                  .filter((s) => s.kind !== "cold" && s.key !== lead.stage)
-                  .map((s) => (
-                    <form key={s.key} action={move}>
-                      <input type="hidden" name="stage" value={s.key} />
-                      <SubmitButton variant={s.kind === "won" ? "default" : "outline"} pendingLabel={t("lead.moving")}>
+              {/* The usual next step as one button; any other stage from the menu below it. */}
+              {nextStage && (
+                <form action={move}>
+                  <input type="hidden" name="stage" value={nextStage.key} />
+                  <SubmitButton variant={nextStage.kind === "won" ? "default" : "secondary"} pendingLabel={t("lead.moving")} className="w-full justify-between">
+                    {nextStage.name}
+                    <ArrowRight aria-hidden="true" />
+                  </SubmitButton>
+                </form>
+              )}
+              {otherStages.length > 0 && (
+                <form action={move} className="flex gap-2">
+                  <NativeSelect name="stage" defaultValue="" required aria-label={t("lead.moveOther")} className="min-w-0 flex-1">
+                    <option value="" disabled>
+                      {t("lead.moveOther")}
+                    </option>
+                    {otherStages.map((s) => (
+                      <option key={s.key} value={s.key}>
                         {s.name}
-                      </SubmitButton>
-                    </form>
-                  ))}
-              </div>
+                      </option>
+                    ))}
+                  </NativeSelect>
+                  <SubmitButton variant="outline" pendingLabel={t("lead.moving")}>
+                    {t("lead.moveSubmit")}
+                  </SubmitButton>
+                </form>
+              )}
               {coldStages
                 .filter((s) => s.key !== lead.stage)
                 .map((s) => (
@@ -300,61 +317,46 @@ export default async function LeadPage({
               )}
             </Panel>
             </StaggerItem>
+            {mana && mana.memberships.length > 0 && (
             <StaggerItem>
-            <Panel title={t("lead.mana")} id="mana">
-              {!mana ? (
-                <p className="text-sm text-muted-foreground">{t("lead.manaNone")}</p>
-              ) : mana.memberships.length === 0 ? (
-                <p className="text-sm text-muted-foreground">{t("lead.manaNoMembership")}</p>
-              ) : (
-                <ul className="flex flex-col gap-1">
-                  {mana.memberships.map((m) => (
-                    <li key={m.id} className="flex flex-col gap-1 rounded-md bg-well px-3 py-2">
-                      <p className="text-sm font-medium">
-                        {m.name}
-                        <span className="ml-2 text-xs font-normal text-muted-foreground">{t(`mstatus.${m.status}` as MessageKey)}</span>
-                      </p>
-                      <p className="text-xs text-muted-foreground tabular-nums">
-                        {m.status === "future"
-                          ? t("lead.manaStarts", { date: formatDay(m.startDate) })
-                          : m.status === "ended"
-                            ? m.pendingChangeDate
-                              ? t("lead.manaEnded", { date: formatDay(m.pendingChangeDate) })
-                              : t("mstatus.ended")
-                            : t("lead.manaSince", { date: formatDay(m.startDate) })}
-                        {m.status !== "ended" && m.pendingChangeKind === "cancel" && m.pendingChangeDate
-                          ? ` · ${t("lead.manaCancel", { date: formatDay(m.pendingChangeDate) })}`
-                          : ""}
-                        {m.pendingChangeKind === "freeze" && m.pendingChangeDate
-                          ? ` · ${t("lead.manaFreeze", { date: formatDay(m.pendingChangeDate) })}`
-                          : ""}
-                      </p>
-                      {!mana.ignored.includes(m.membershipId) ? null : <p className="text-xs text-muted-foreground">{t("lead.manaNotCounted")}</p>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </Panel>
+              <Panel title={t("lead.mana")} id="mana">
+                {!mana ? (
+                  <p className="text-sm text-muted-foreground">{t("lead.manaNone")}</p>
+                ) : mana.memberships.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t("lead.manaNoMembership")}</p>
+                ) : (
+                  <ul className="flex flex-col gap-1">
+                    {mana.memberships.map((m) => (
+                      <li key={m.id} className="flex flex-col gap-1 rounded-md bg-well px-3 py-2">
+                        <p className="text-sm font-medium">
+                          {m.name}
+                          <span className="ml-2 text-xs font-normal text-muted-foreground">{t(`mstatus.${m.status}` as MessageKey)}</span>
+                        </p>
+                        <p className="text-xs text-muted-foreground tabular-nums">
+                          {m.status === "future"
+                            ? t("lead.manaStarts", { date: formatDay(m.startDate) })
+                            : m.status === "ended"
+                              ? m.pendingChangeDate
+                                ? t("lead.manaEnded", { date: formatDay(m.pendingChangeDate) })
+                                : t("mstatus.ended")
+                              : t("lead.manaSince", { date: formatDay(m.startDate) })}
+                          {m.status !== "ended" && m.pendingChangeKind === "cancel" && m.pendingChangeDate
+                            ? ` · ${t("lead.manaCancel", { date: formatDay(m.pendingChangeDate) })}`
+                            : ""}
+                          {m.pendingChangeKind === "freeze" && m.pendingChangeDate
+                            ? ` · ${t("lead.manaFreeze", { date: formatDay(m.pendingChangeDate) })}`
+                            : ""}
+                        </p>
+                        {!mana.ignored.includes(m.membershipId) ? null : <p className="text-xs text-muted-foreground">{t("lead.manaNotCounted")}</p>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Panel>
+  
             </StaggerItem>
-            <StaggerItem>
-            <Panel title={t("assign.title")} id="assign">
-              <form action={assignAction.bind(null, lead.id)} className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                <Label htmlFor="assignee" className="sr-only">
-                  {t("assign.title")}
-                </Label>
-                <NativeSelect id="assignee" name="assignee" defaultValue={lead.assignedToId ?? ""} className="sm:max-w-xs">
-                  <option value="">{t("assign.none")}</option>
-                  {people.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </NativeSelect>
-                <SubmitButton variant="outline">{t("assign.save")}</SubmitButton>
-              </form>
-            </Panel>
-            </StaggerItem>
-            <StaggerItem>
+          )}
+              <StaggerItem>
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 px-1 text-sm">
               <MicroLabel as="dt" className="self-center">
                 {t("lead.source")}
@@ -364,6 +366,14 @@ export default async function LeadPage({
                 {t("lead.created")}
               </MicroLabel>
               <dd className="tabular-nums">{formatDateTime(lead.createdAt)}</dd>
+              {(!mana || mana.memberships.length === 0) && (
+                <>
+                  <MicroLabel as="dt" className="self-center">
+                    {t("lead.mana")}
+                  </MicroLabel>
+                  <dd className="text-muted-foreground">{!mana ? t("lead.manaNone") : t("lead.manaNoMembership")}</dd>
+                </>
+              )}
               {lead.coldReason && (
                 <>
                   <MicroLabel as="dt" className="self-center">
@@ -390,15 +400,28 @@ function HistoryIcon({ item }: { item: HistoryItem }) {
   );
 }
 
+/** The note the Pipedrive import wrote (ticket 15): no author, and it starts like this. */
+const pipedrivePrefix = "Från Pipedrive: ";
+
 function HistoryLine({
   item,
   stageName,
   reasonName,
+  imported,
 }: {
   item: HistoryItem;
   stageName: (key: string | null) => string;
   reasonName: (key: string | null) => string;
+  imported: boolean;
 }) {
+  if (item.kind === "note" && imported && item.authorName === null && item.body.startsWith(pipedrivePrefix)) {
+    return (
+      <div className="flex flex-col items-start gap-1 text-sm">
+        <Chip>{t("lead.fromPipedrive")}</Chip>
+        <p className="break-words whitespace-pre-wrap text-muted-foreground">{item.body.slice(pipedrivePrefix.length)}</p>
+      </div>
+    );
+  }
   if (item.kind === "note") return <p className="text-sm break-words whitespace-pre-wrap">{item.body}</p>;
   if (item.kind === "contact_logged") {
     return <p className="text-sm">{t("history.contact", { outcome: t(`outcome.${item.outcome}` as MessageKey) })}</p>;
@@ -406,9 +429,11 @@ function HistoryLine({
   return (
     <div className="text-sm">
       <p>
-        {item.fromStage
-          ? t("history.stageChanged", { from: stageName(item.fromStage), to: stageName(item.toStage) })
-          : t("history.stageStart", { to: stageName(item.toStage) })}
+        {item.via === "pipedrive"
+          ? t("history.imported", { to: stageName(item.toStage) })
+          : item.fromStage
+            ? t("history.stageChanged", { from: stageName(item.fromStage), to: stageName(item.toStage) })
+            : t("history.stageStart", { to: stageName(item.toStage) })}
       </p>
       {item.coldReason && <p className="text-muted-foreground">{t("history.coldBecause", { reason: reasonName(item.coldReason) })}</p>}
       {item.via === "mana" && <p className="text-muted-foreground">{t("history.viaMana")}</p>}

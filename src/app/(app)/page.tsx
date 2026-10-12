@@ -128,7 +128,11 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
           )}
         </StaggerItem>
 
-        <StaggerItem>
+        <StaggerItem className="flex flex-col gap-3">
+          {/* Beside the attention list (xl), start level with its card, below its heading. */}
+          <div aria-hidden="true" className="invisible max-xl:hidden">
+            <MicroLabel as="p">{t("home.attention")}</MicroLabel>
+          </div>
           <Surface as="div" className="p-4">
             <dl className="grid grid-cols-3 gap-4 xl:grid-cols-1">
               {(

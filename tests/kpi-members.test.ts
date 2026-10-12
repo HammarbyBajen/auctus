@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countsOn, memberTrend, monthlyRevenue, monthOverMonth, payingMembersOn, rollingMonths, type KpiMembership } from "@/lib/kpi/members";
+import { countsOn, memberTrend, monthlyRevenue, monthOverMonth, payingMembersOn, rollingMonths, snapshotOn, type KpiMembership } from "@/lib/kpi/members";
 
 const m = (over: Partial<KpiMembership>): KpiMembership => ({
   manaUserId: "u1",
@@ -102,5 +102,38 @@ describe("the twelve-month trend", () => {
     const point = (count: number) => ({ month: "", asOf: "", count });
     expect(monthOverMonth([point(200), point(210)])).toBeCloseTo(0.05);
     expect(monthOverMonth([point(0), point(210)])).toBeNull();
+  });
+});
+
+describe("snapshots", () => {
+  const memberships = [
+    m({ manaUserId: "a" }),
+    m({ manaUserId: "a", name: "Förvaringsbox", priceAmount: 5000 }),
+    m({ manaUserId: "b", name: "Förvaringsbox", priceAmount: 5000 }),
+    m({ manaUserId: "c", name: "Fri träning", priceAmount: 0 }),
+  ];
+
+  it("saves paying members, revenue in öre and members per membership", () => {
+    expect(snapshotOn(memberships, "2026-10-10")).toEqual({
+      day: "2026-10-10",
+      payingMembers: 2,
+      revenue: 179500,
+      byName: { Basic: 1, Förvaringsbox: 2 },
+    });
+  });
+
+  it("uses a past month's last snapshot over the rebuilt count, and keeps this month live", () => {
+    const snapshots = [
+      { day: "2026-09-29", payingMembers: 50, revenue: 0, byName: { Basic: 40 } },
+      { day: "2026-09-30", payingMembers: 60, revenue: 0, byName: { Basic: 45 } },
+      { day: "2026-10-09", payingMembers: 99, revenue: 0, byName: { Basic: 99 } },
+    ];
+    const trend = memberTrend(memberships, "2026-10-10", snapshots);
+    expect(trend.series[""].at(-2)).toEqual({ month: "2026-09", asOf: "2026-09-30", count: 60 });
+    expect(trend.series.Basic.at(-2)?.count).toBe(45);
+    expect(trend.series["Förvaringsbox"].at(-2)?.count).toBe(0);
+    expect(trend.series[""].at(-1)).toEqual({ month: "2026-10", asOf: "2026-10-10", count: 2 });
+    // A month without a snapshot is rebuilt from the memberships.
+    expect(trend.series[""].at(-3)).toMatchObject({ month: "2026-08", count: 0 });
   });
 });

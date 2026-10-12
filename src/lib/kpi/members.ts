@@ -67,6 +67,22 @@ export function payingMembersOn(memberships: KpiMembership[], day: string, name?
   return people.size;
 }
 
+/** The key numbers as they stand on a day, as saved after each sync. Revenue is in öre. */
+export type Snapshot = { day: string; payingMembers: number; revenue: number; byName: Record<string, number> };
+
+export function snapshotOn(memberships: KpiMembership[], day: string): Snapshot {
+  const byName: Record<string, number> = {};
+  for (const name of new Set(memberships.filter((m) => countsOn(m, day)).map((m) => m.name))) {
+    byName[name] = payingMembersOn(memberships, day, name);
+  }
+  return {
+    day,
+    payingMembers: payingMembersOn(memberships, day),
+    revenue: memberships.reduce((sum, m) => (countsOn(m, day) ? sum + (m.priceAmount ?? 0) : sum), 0),
+    byName,
+  };
+}
+
 /** Today's monthly revenue in kronor: the sum of the counting memberships' prices. */
 export function monthlyRevenue(memberships: KpiMembership[], today: string): number {
   return memberships.reduce((sum, m) => (countsOn(m, today) ? sum + (m.priceAmount ?? 0) : sum), 0) / 100;
@@ -87,16 +103,31 @@ export function rollingMonths(today: string, count = 12): string[] {
   });
 }
 
-/** Paying members at the end of each of the last twelve months (today for this one). Months before Mana show 0. */
-export function memberTrend(memberships: KpiMembership[], today: string): MemberTrend {
+/**
+ * Paying members at the end of each of the last twelve months (today for this
+ * one). A past month uses its last saved snapshot when there is one, so the
+ * line keeps what was true then; otherwise it is rebuilt from the memberships'
+ * start and end dates. Months before Mana show 0.
+ */
+export function memberTrend(memberships: KpiMembership[], today: string, snapshots: Snapshot[] = []): MemberTrend {
   const months = rollingMonths(today);
   const asOf = (month: string) => (month === today.slice(0, 7) ? today : lastDayOfMonth(month));
   const held = new Map<string, number>();
   for (const m of memberships) if (countsOn(m, today)) held.set(m.name, (held.get(m.name) ?? 0) + 1);
   const names = [...held.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "sv")).map(([n]) => n);
 
+  const lastSnapshot = new Map<string, Snapshot>();
+  for (const s of [...snapshots].sort((a, b) => a.day.localeCompare(b.day))) lastSnapshot.set(s.day.slice(0, 7), s);
+  const thisMonth = today.slice(0, 7);
+
   const seriesFor = (name?: string) =>
-    months.map((month) => ({ month, asOf: asOf(month), count: payingMembersOn(memberships, asOf(month), name) }));
+    months.map((month) => {
+      const saved = month === thisMonth ? undefined : lastSnapshot.get(month);
+      if (saved) {
+        return { month, asOf: saved.day, count: name === undefined ? saved.payingMembers : (saved.byName[name] ?? 0) };
+      }
+      return { month, asOf: asOf(month), count: payingMembersOn(memberships, asOf(month), name) };
+    });
   const series: Record<string, MonthPoint[]> = { "": seriesFor() };
   for (const name of names) series[name] = seriesFor(name);
   return { names, series };

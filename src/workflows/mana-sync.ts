@@ -2,7 +2,9 @@ import { FatalError } from "workflow";
 import { db } from "@/db";
 import { createManaClient } from "@/lib/mana/config";
 import { describeManaError } from "@/lib/mana/errors";
+import { recordKpiSnapshot } from "@/lib/kpi/service";
 import { afterSync } from "@/lib/mana/leads";
+import { todayInStockholm } from "@/lib/tasks/dates";
 import { failRun, runBatch, startRun } from "@/lib/mana/sync";
 import { detectWinBacks, syncPurchases } from "@/lib/mana/winback-service";
 
@@ -43,10 +45,11 @@ async function purchasesStep(studioId: string) {
 async function afterSyncStep(studioId: string) {
   "use step";
   // Link CRM people to Mana, move leads whose person has just joined to Won,
-  // then make win-back leads (if switched on).
+  // then make win-back leads (if switched on), and save today's key numbers.
   const won = await afterSync(db, studioId);
   const winBack = await detectWinBacks(db, studioId);
-  return { won, winBack };
+  const snapshot = await recordKpiSnapshot(db, studioId, todayInStockholm());
+  return { won, winBack, snapshot: snapshot !== null };
 }
 
 /**

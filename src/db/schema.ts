@@ -390,6 +390,29 @@ export type SyncProgress = {
 };
 
 /** One run of the Mana sync. Only one can be running per studio at a time. */
+/**
+ * The home page's key numbers as they were on a day, saved after each Mana
+ * sync (ticket 26). The trend reads past months from here, so a freeze or a
+ * price change that Mana no longer shows does not rewrite history.
+ */
+export const kpiSnapshot = pgTable(
+  "kpi_snapshot",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** The day in Tegen's time zone, YYYY-MM-DD. */
+    day: date("day", { mode: "string" }).notNull(),
+    payingMembers: integer("paying_members").notNull(),
+    /** Monthly revenue in öre. */
+    revenue: integer("revenue").notNull(),
+    /** Paying members per membership name. */
+    byName: jsonb("by_name").$type<Record<string, number>>().notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.day] })],
+);
+
 export const syncRun = pgTable(
   "sync_run",
   {

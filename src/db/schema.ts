@@ -150,6 +150,8 @@ export const pipelineStage = pgTable(
     position: integer("position").notNull(),
     /** open: still being worked, won: became a member, cold: not going to join. */
     kind: text("kind").notNull().default("open"),
+    /** Set when an owner removes the stage (ticket 07). Hidden from choices, kept so old history can still name it. */
+    archivedAt: timestamp("archived_at"),
   },
   (table) => [primaryKey({ columns: [table.studioId, table.key] })],
 );
@@ -164,6 +166,31 @@ export const coldReason = pgTable(
     key: text("key").notNull(),
     name: text("name").notNull(),
     position: integer("position").notNull(),
+    /** Set when an owner removes the reason (ticket 07). Leads that have it keep it. */
+    archivedAt: timestamp("archived_at"),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.key] })],
+);
+
+/**
+ * A field the studio adds to its leads (ticket 07), such as goal, injury or
+ * interest. Text, or one of a list of choices. Values live on the lead
+ * (lead.custom_fields). A removed field is hidden and its values are kept.
+ */
+export const leadField = pgTable(
+  "lead_field",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    /** text or choice */
+    type: text("type").notNull().default("text"),
+    /** The choices, for a choice field. */
+    options: jsonb("options").$type<string[]>().notNull().default([]),
+    position: integer("position").notNull(),
+    archivedAt: timestamp("archived_at"),
   },
   (table) => [primaryKey({ columns: [table.studioId, table.key] })],
 );
@@ -232,6 +259,8 @@ export const lead = pgTable(
     winBackReason: text("win_back_reason"),
     /** Where an imported lead came from, for example "pipedrive:person:123", so a rerun of the import skips it. */
     externalRef: text("external_ref"),
+    /** The studio's own fields (ticket 07), by field key. */
+    customFields: jsonb("custom_fields").$type<Record<string, string>>().notNull().default({}),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

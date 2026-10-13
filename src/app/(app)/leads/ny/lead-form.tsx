@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/app/native-select";
 import { createLead, type LeadFormState } from "../actions";
 import { leadSources } from "@/lib/leads/constants";
+import { LeadFieldInputs, type LeadFieldDef } from "@/components/app/lead-fields";
 import { t, type MessageKey } from "@/lib/i18n";
 
 /** Which field each error belongs to, so it is shown and focused there. */
@@ -25,7 +26,7 @@ function FieldError({ id, message }: { id: string; message?: string }) {
   );
 }
 
-export function LeadForm() {
+export function LeadForm({ fields = [] }: { fields?: LeadFieldDef[] }) {
   const [state, action, pending] = useActionState<LeadFormState, FormData>(createLead, {});
   const values = state.values;
   const errorField = state.error ? fieldOf[state.error] : undefined;
@@ -114,6 +115,8 @@ export function LeadForm() {
           ))}
         </NativeSelect>
       </div>
+
+      {fields.length > 0 && <LeadFieldInputs fields={fields} values={values?.fields ?? {}} />}
 
       <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:justify-end">
         <ButtonLink href="/leads" variant="ghost">

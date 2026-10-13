@@ -11,6 +11,7 @@ import { MicroLabel } from "@/components/app/micro-label";
 import { NativeSelect } from "@/components/app/native-select";
 import { Notice } from "@/components/app/notice";
 import { Stagger, StaggerItem } from "@/components/app/stagger";
+import { LeadFieldInputs } from "@/components/app/lead-fields";
 import { Panel } from "@/components/app/surface";
 import { SubmitButton } from "@/components/app/submit-button";
 import { formatDateTime, formatDay } from "@/lib/format";
@@ -18,14 +19,14 @@ import { daysAgo, groupActivity } from "@/lib/leads/activity";
 import { isWinBackSource } from "@/lib/leads/constants";
 import { getLead, type HistoryItem } from "@/lib/leads/service";
 import { getManaInfo } from "@/lib/mana/leads";
-import { listColdReasons, listStages, listWinBackReasons } from "@/lib/pipeline/service";
+import { listColdReasons, listLeadFields, listStages, listWinBackReasons } from "@/lib/pipeline/service";
 import { dueState, isGreyedOut, todayInStockholm } from "@/lib/tasks/dates";
 import { listStudioUsers, listTasksForLead } from "@/lib/tasks/service";
 import { can } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
-import { assignAction, finishTask, moveStage, removeTask, saveWinBackReason } from "../actions";
+import { assignAction, finishTask, moveStage, removeTask, saveLeadFieldsAction, saveWinBackReason } from "../actions";
 import { AssigneeSelect } from "./assignee-select";
 import { ManaRefresher } from "./mana-refresher";
 import { ActivityForm } from "./activity-form";
@@ -36,28 +37,32 @@ export default async function LeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ dubblett?: string; fel?: string }>;
+  searchParams: Promise<{ dubblett?: string; fel?: string; falt?: string }>;
 }) {
   const user = await requirePermission("leads", "read");
   const { id } = await params;
-  const { dubblett, fel } = await searchParams;
+  const { dubblett, fel, falt } = await searchParams;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
   const found = await getLead(db, user.studioId, id);
   if (!found) notFound();
   const { lead, person, stage, assigneeName, history } = found;
   const today = todayInStockholm();
-  const [stages, reasons, taskLists, people, mana, winBackReasons] = await Promise.all([
-    listStages(db, user.studioId),
-    listColdReasons(db, user.studioId),
+  const [allStages, allReasons, taskLists, people, mana, winBackReasons, fields] = await Promise.all([
+    listStages(db, user.studioId, { includeArchived: true }),
+    listColdReasons(db, user.studioId, { includeArchived: true }),
     listTasksForLead(db, user.studioId, lead.id),
     listStudioUsers(db, user.studioId),
     getManaInfo(db, user.studioId, person.manaUserId),
     listWinBackReasons(db, user.studioId),
+    listLeadFields(db, user.studioId),
   ]);
+  // Removed stages and reasons still name old history; only the current ones are offered.
+  const stages = allStages.filter((s) => !s.archivedAt);
+  const reasons = allReasons.filter((r) => !r.archivedAt);
   const winBack = isWinBackSource(lead.source);
   const canDelete = can(user.role, "settings", "manage");
-  const stageName = (key: string | null) => stages.find((s) => s.key === key)?.name ?? key ?? "";
-  const reasonName = (key: string | null) => reasons.find((r) => r.key === key)?.name ?? key ?? "";
+  const stageName = (key: string | null) => allStages.find((s) => s.key === key)?.name ?? key ?? "";
+  const reasonName = (key: string | null) => allReasons.find((r) => r.key === key)?.name ?? key ?? "";
   const coldStages = stages.filter((s) => s.kind === "cold");
   const imported = lead.externalRef?.startsWith("pipedrive:") ?? false;
   // The next step: the stage after this one in pipeline order (Medlem after the last open one); none once won or cold.
@@ -320,6 +325,19 @@ export default async function LeadPage({
               )}
             </Panel>
             </StaggerItem>
+            {fields.length > 0 && (
+              <StaggerItem>
+                <Panel title={t("fields.title")} id="fields">
+                  {falt === "1" && <Notice tone="success">{t("fields.saved")}</Notice>}
+                  <form action={saveLeadFieldsAction.bind(null, lead.id)} className="flex flex-col gap-4">
+                    <LeadFieldInputs fields={fields} values={lead.customFields} />
+                    <SubmitButton variant="outline" className="self-start">
+                      {t("fields.save")}
+                    </SubmitButton>
+                  </form>
+                </Panel>
+              </StaggerItem>
+            )}
             {mana && mana.memberships.length > 0 && (
             <StaggerItem>
               <Panel title={t("lead.mana")} id="mana">

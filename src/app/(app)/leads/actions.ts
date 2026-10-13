@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { lead as leadTable } from "@/db/schema";
+import { listLeadFields, PipelineError, readFieldValues, saveLeadFieldValues } from "@/lib/pipeline/service";
 import { leadSources } from "@/lib/leads/constants";
 import { addNote, createOrMatchLead, getLead, LeadError, logContact, moveLeadStage } from "@/lib/leads/service";
 import { createManaClient } from "@/lib/mana/config";
@@ -15,7 +18,7 @@ import type { MessageKey } from "@/lib/i18n";
 
 export type LeadFormState = {
   error?: MessageKey;
-  values?: { name: string; email: string; phone: string; source: string };
+  values?: { name: string; email: string; phone: string; source: string; fields?: Record<string, string> };
 };
 
 const emailSchema = z.email();
@@ -27,6 +30,8 @@ export async function createLead(_: LeadFormState, formData: FormData): Promise<
     email: String(formData.get("email") ?? "").trim(),
     phone: String(formData.get("phone") ?? "").trim(),
     source: String(formData.get("source") ?? "manual"),
+    // What was typed in the studio's own fields, so it is not lost if the form comes back with an error.
+    fields: Object.fromEntries([...formData.entries()].filter(([k]) => k.startsWith("field_")).map(([k, v]) => [k.slice(6), String(v)])),
   };
 
   if (values.name === "") return { error: "leadForm.errorName", values };
@@ -43,6 +48,14 @@ export async function createLead(_: LeadFormState, formData: FormData): Promise<
     source,
     createdById: user.id,
   });
+  // The studio's own fields from the form (ticket 07), added to what the lead already has.
+  const fieldValues = readFieldValues(await listLeadFields(db, user.studioId), formData);
+  if (Object.keys(fieldValues).length > 0) {
+    await db
+      .update(leadTable)
+      .set({ customFields: { ...lead.customFields, ...fieldValues } })
+      .where(eq(leadTable.id, lead.id));
+  }
   revalidatePath("/leads");
   redirect(`/leads/${lead.id}${duplicate ? "?dubblett=1" : ""}`);
 }
@@ -181,4 +194,17 @@ export async function saveWinBackReason(leadId: string, formData: FormData) {
   }
   revalidatePath("/");
   revalidatePath(`/leads/${leadId}`);
+}
+
+/** Saves the studio's own fields on a lead (ticket 07). */
+export async function saveLeadFieldsAction(leadId: string, formData: FormData) {
+  const user = await requirePermission("leads", "write");
+  try {
+    await saveLeadFieldValues(db, user.studioId, leadId, formData);
+  } catch (error) {
+    if (error instanceof PipelineError) notFound();
+    throw error;
+  }
+  revalidatePath(`/leads/${leadId}`);
+  redirect(`/leads/${leadId}?falt=1`);
 }

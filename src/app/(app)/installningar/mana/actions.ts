@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { start } from "workflow/api";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { studioSettings } from "@/db/schema";
 import { acknowledgeApiChanges } from "@/lib/mana/api-watch-service";
 import { listMembershipKinds, saveIgnoredMemberships } from "@/lib/mana/leads";
 import { setAddOnMemberships, setWinBackEnabled } from "@/lib/mana/winback-service";
@@ -46,4 +48,14 @@ export async function acknowledgeApi() {
   await acknowledgeApiChanges(db, user.id);
   revalidatePath("/", "layout");
   redirect("/installningar/mana#api");
+}
+
+/** Sets how many days without a visit put a paying member on the "Hör av dig till" list (ticket 13). */
+export async function saveAtRiskDays(formData: FormData) {
+  const user = await requirePermission("settings", "manage");
+  const days = Number(formData.get("days"));
+  if (!Number.isInteger(days) || days < 7 || days > 180) redirect("/installningar/mana?riskfel=1#at-risk");
+  await db.update(studioSettings).set({ atRiskDays: days, updatedAt: new Date() }).where(eq(studioSettings.studioId, user.studioId));
+  revalidatePath("/installningar/mana");
+  redirect("/installningar/mana?risksparat=1#at-risk");
 }

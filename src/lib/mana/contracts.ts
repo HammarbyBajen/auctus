@@ -90,3 +90,36 @@ export const paymentsPageSchema = z.object({
   meta,
 });
 export type PaymentsPage = z.infer<typeof paymentsPageSchema>;
+
+/** Class bookings at the studio (ticket 13): who, which class start, and how it went. */
+export const classBookingsPageSchema = z.object({
+  data: z.object({
+    items: z.array(
+      z.object({
+        id: z.string().min(1),
+        userId: z.string().min(1),
+        startsAt: z.string().min(1),
+        status: z.string(),
+      }),
+    ),
+  }),
+  links,
+  meta,
+});
+export type ClassBookingsPage = z.infer<typeof classBookingsPageSchema>;
+
+/** Gym check-ins at the studio (ticket 13): who came in, and when. */
+export const gymCheckInsPageSchema = z.object({
+  data: z.object({
+    items: z.array(
+      z.object({
+        id: z.string().min(1),
+        createdAt: z.string().min(1),
+        user: z.object({ id: z.string().min(1) }),
+      }),
+    ),
+  }),
+  links,
+  meta,
+});
+export type GymCheckInsPage = z.infer<typeof gymCheckInsPageSchema>;

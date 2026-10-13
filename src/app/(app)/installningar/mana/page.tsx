@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { studioSettings } from "@/db/schema";
 import { ButtonLink } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MicroLabel } from "@/components/app/micro-label";
 import { Notice } from "@/components/app/notice";
@@ -19,23 +20,23 @@ import { getSyncStatus } from "@/lib/mana/status";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
-import { acknowledgeApi, saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
+import { acknowledgeApi, saveAtRiskDays, saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ManaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ startad?: string; sparat?: string; vinnsparat?: string }>;
+  searchParams: Promise<{ startad?: string; sparat?: string; vinnsparat?: string; risksparat?: string; riskfel?: string }>;
 }) {
   const user = await requirePermission("settings", "manage");
-  const { startad, sparat, vinnsparat } = await searchParams;
+  const { startad, sparat, vinnsparat, risksparat, riskfel } = await searchParams;
   const [status, kinds, ignored, addOns, [settings], api] = await Promise.all([
     getSyncStatus(db, user.studioId),
     listMembershipKinds(db, user.studioId),
     getIgnoredMembershipIds(db, user.studioId),
     getAddOnMembershipIds(db, user.studioId),
-    db.select({ winBackEnabled: studioSettings.winBackEnabled }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
+    db.select({ winBackEnabled: studioSettings.winBackEnabled, atRiskDays: studioSettings.atRiskDays }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
     getApiWatchStatus(db),
   ]);
 
@@ -87,6 +88,19 @@ export default async function ManaPage({
           <SubmitButton variant="outline" className="self-start">
             {t("mana.winbackSave")}
           </SubmitButton>
+        </form>
+      </Panel>
+
+      <Panel title={t("atRisk.settingsTitle")} id="at-risk">
+        <p className="text-sm text-muted-foreground">{t("atRisk.settingsIntro")}</p>
+        {risksparat === "1" && <Notice tone="success">{t("atRisk.settingsSaved")}</Notice>}
+        {riskfel === "1" && <Notice tone="danger">{t("atRisk.settingsError")}</Notice>}
+        <form action={saveAtRiskDays} className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="at-risk-days">{t("atRisk.settingsLabel")}</Label>
+            <Input id="at-risk-days" name="days" type="number" inputMode="numeric" min={7} max={180} required defaultValue={settings?.atRiskDays ?? 30} className="w-28" />
+          </div>
+          <SubmitButton variant="outline">{t("atRisk.settingsSave")}</SubmitButton>
         </form>
       </Panel>
 

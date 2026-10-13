@@ -62,6 +62,8 @@ export const studioSettings = pgTable("studio_settings", {
   addOnMembershipIds: jsonb("add_on_membership_ids").$type<string[]>().notNull().default([]),
   /** Mana memberships that are not real memberships (for example a locker), by Mana membership id. */
   ignoredMembershipIds: jsonb("ignored_membership_ids").$type<string[]>().notNull().default([]),
+  /** A paying member with no visit for this many days is at risk (ticket 13). */
+  atRiskDays: integer("at_risk_days").notNull().default(30),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -390,6 +392,61 @@ export type SyncProgress = {
 };
 
 /** One run of the Mana sync. Only one can be running per studio at a time. */
+/**
+ * A class booking or gym check-in, mirrored from Mana (ticket 13). Only what
+ * the at-risk rule needs: who, when, and how a booking went. A past booking
+ * that is booked or checked in counts as a visit; cancelled, no-show and wait
+ * list do not.
+ */
+export const manaVisit = pgTable(
+  "mana_visit",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** Mana's booking id, or "gym:" and the check-in id. */
+    id: text("id").notNull(),
+    manaUserId: text("mana_user_id").notNull(),
+    at: timestamp("at").notNull(),
+    /** class or gym */
+    kind: text("kind").notNull(),
+    /** For a class: booked, checked_in, canceled, canceled_late, no_show or wait_list. A gym check-in is checked_in. */
+    status: text("status").notNull(),
+    syncedAt: timestamp("synced_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.studioId, table.id] }),
+    index("mana_visit_user_idx").on(table.studioId, table.manaUserId, table.at),
+  ],
+);
+
+/**
+ * A paying member who has not been in for a while (ticket 13), for staff to
+ * check on. Never shown or sent to the member. Open until someone marks them
+ * contacted or dismisses it with a reason, or until they come back or stop
+ * paying (resolved).
+ */
+export const atRiskAlert = pgTable(
+  "at_risk_alert",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    manaUserId: text("mana_user_id").notNull(),
+    /** The last visit when the alert was made; null when there has been none. A new alert needs a newer visit. */
+    lastVisitAt: timestamp("last_visit_at"),
+    /** open, contacted, dismissed or resolved */
+    status: text("status").notNull().default("open"),
+    /** Why it was dismissed: holiday, injury or other. */
+    reason: text("reason"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    handledAt: timestamp("handled_at"),
+    handledById: text("handled_by_id").references(() => user.id, { onDelete: "set null" }),
+  },
+  (table) => [index("at_risk_alert_studio_idx").on(table.studioId, table.status)],
+);
+
 /** A copy of Mana's public OpenAPI spec, kept each time its content changes (ticket 24). */
 export const manaApiSpec = pgTable("mana_api_spec", {
   /** sha256 of the spec written with sorted keys. */

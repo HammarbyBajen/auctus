@@ -6,6 +6,10 @@ import {
   type UserMembershipsPage,
   paymentsPageSchema,
   type PaymentsPage,
+  classBookingsPageSchema,
+  type ClassBookingsPage,
+  gymCheckInsPageSchema,
+  type GymCheckInsPage,
 } from "./contracts";
 import { ManaError } from "./errors";
 
@@ -169,6 +173,30 @@ export class ManaClient {
     const items: PaymentsPage["data"]["items"] = [];
     while (url) {
       const page: PaymentsPage = parseContract(paymentsPageSchema, await this.getJson(url), "betalningar");
+      items.push(...page.data.items);
+      url = page.links.next;
+    }
+    return items;
+  }
+
+  /** Class bookings at the studio for classes starting between `fromAt` and `toAt`, following every page (ticket 13). */
+  async getClassBookings(fromAt: string, toAt: string) {
+    let url: string | null = this.studioUrl("/class-event-bookings", { fromAt, toAt, pageSize: "100" });
+    const items: ClassBookingsPage["data"]["items"] = [];
+    while (url) {
+      const page: ClassBookingsPage = parseContract(classBookingsPageSchema, await this.getJson(url), "bokningar");
+      items.push(...page.data.items);
+      url = page.links.next;
+    }
+    return items;
+  }
+
+  /** Gym check-ins at the studio between `fromAt` and `toAt`, following every page (ticket 13). */
+  async getGymCheckIns(fromAt: string, toAt: string) {
+    let url: string | null = this.studioUrl("/gym-check-ins", { fromAt, toAt, pageSize: "200" });
+    const items: GymCheckInsPage["data"]["items"] = [];
+    while (url) {
+      const page: GymCheckInsPage = parseContract(gymCheckInsPageSchema, await this.getJson(url), "incheckningar");
       items.push(...page.data.items);
       url = page.links.next;
     }

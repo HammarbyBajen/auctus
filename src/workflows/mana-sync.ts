@@ -3,6 +3,7 @@ import { db } from "@/db";
 import { createManaClient } from "@/lib/mana/config";
 import { describeManaError } from "@/lib/mana/errors";
 import { recordKpiSnapshot } from "@/lib/kpi/service";
+import { detectAtRisk, syncVisits } from "@/lib/mana/at-risk-service";
 import { afterSync } from "@/lib/mana/leads";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { failRun, runBatch, startRun } from "@/lib/mana/sync";
@@ -42,14 +43,29 @@ async function purchasesStep(studioId: string) {
   }
 }
 
+async function visitsStep(studioId: string) {
+  "use step";
+  // Class bookings and gym check-ins since a few days before the newest saved
+  // one (ticket 13). A failure only means the at-risk list is a day older, so
+  // it does not fail the sync.
+  try {
+    const client = await createManaClient(db, studioId);
+    return await syncVisits(db, client, studioId);
+  } catch {
+    return null;
+  }
+}
+
 async function afterSyncStep(studioId: string) {
   "use step";
   // Link CRM people to Mana, move leads whose person has just joined to Won,
-  // then make win-back leads (if switched on), and save today's key numbers.
+  // then make win-back leads (if switched on), flag members who are away, and
+  // save today's key numbers.
   const won = await afterSync(db, studioId);
   const winBack = await detectWinBacks(db, studioId);
+  const atRisk = await detectAtRisk(db, studioId);
   const snapshot = await recordKpiSnapshot(db, studioId, todayInStockholm());
-  return { won, winBack, snapshot: snapshot !== null };
+  return { won, winBack, atRisk, snapshot: snapshot !== null };
 }
 
 /**
@@ -67,6 +83,7 @@ export async function manaSyncWorkflow(studioId: string) {
     done = await batchStep(studioId, runId);
   }
   await purchasesStep(studioId);
+  await visitsStep(studioId);
   const after = await afterSyncStep(studioId);
   return { runId, skipped: false, ...after };
 }

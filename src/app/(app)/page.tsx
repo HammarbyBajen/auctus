@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { AlertCircle, CircleCheck, Clock, Phone, RotateCcw, TimerReset } from "lucide-react";
+import { eq } from "drizzle-orm";
 import { db } from "@/db";
+import { studioSettings } from "@/db/schema";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { SubmitButton } from "@/components/app/submit-button";
 import { ButtonAnchor } from "@/components/ui/button";
 import { Chip } from "@/components/app/chip";
 import { EmptyState } from "@/components/app/empty-state";
@@ -13,11 +18,14 @@ import { formatDay, formatNumber } from "@/lib/format";
 import { formatSpan, type AttentionItem, type Reason } from "@/lib/home/attention";
 import { getHomeData } from "@/lib/home/service";
 import { getKpi } from "@/lib/kpi/service";
+import { daysAgo } from "@/lib/leads/activity";
+import { dismissReasons, listAtRisk, type AtRiskRow } from "@/lib/mana/at-risk-service";
 import { can } from "@/lib/permissions";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { rowChip } from "@/lib/leads/row";
 import { listStages } from "@/lib/pipeline/service";
 import { isGreyedOut } from "@/lib/tasks/dates";
+import { dismissAtRisk, markAtRiskContacted } from "./at-risk-actions";
 import { MemberTrend } from "./member-trend";
 import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -67,10 +75,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { fel, visa } = await searchParams;
   const scope = visa === "mina" ? "mine" : "all";
   const showKpi = can(user.role, "kpi", "read");
-  const [{ items, counts }, stages, kpi] = await Promise.all([
+  const [{ items, counts }, stages, kpi, atRisk, [settings]] = await Promise.all([
     getHomeData(db, user.studioId, user.id, scope),
     listStages(db, user.studioId),
     showKpi ? getKpi(db, user.studioId, todayInStockholm()) : null,
+    listAtRisk(db, user.studioId),
+    db.select({ atRiskDays: studioSettings.atRiskDays }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
   ]);
   const stageOf = (key: string) => stages.find((s) => s.key === key);
 
@@ -150,6 +160,24 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             </dl>
           </Surface>
         </StaggerItem>
+
+        {atRisk.length > 0 && (
+          <StaggerItem className="flex min-w-0 flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <MicroLabel as="h3">
+                <span id="at-risk">{t("atRisk.title")}</span>
+              </MicroLabel>
+              <p className="text-xs text-muted-foreground">{t("atRisk.intro", { days: String(settings?.atRiskDays ?? 30) })}</p>
+            </div>
+            <Surface as="div" className="overflow-hidden" aria-labelledby="at-risk">
+              <ul className="divide-y divide-border">
+                {atRisk.map((row) => (
+                  <AtRiskItem key={row.id} row={row} />
+                ))}
+              </ul>
+            </Surface>
+          </StaggerItem>
+        )}
       </Stagger>
     </Page>
   );
@@ -198,6 +226,59 @@ function AttentionRow({ item, viewerId, stageName, stageKind }: { item: Attentio
           {t("home.call")}
         </ButtonAnchor>
       )}
+    </li>
+  );
+}
+
+/** A member who has been away: when they were last in, what they pay for, and the ways to follow up. */
+function AtRiskItem({ row }: { row: AtRiskRow }) {
+  const today = todayInStockholm();
+  const last = row.lastVisitAt;
+  return (
+    <li className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="flex min-w-0 flex-col gap-1">
+        <p className="text-sm font-medium break-words">{row.name ?? row.email ?? t("atRisk.noName")}</p>
+        <p className="text-xs text-muted-foreground">
+          {last
+            ? t("atRisk.lastVisit", { date: formatDay(todayInStockholm(last)), n: String(daysAgo(last, today)) })
+            : t("atRisk.never", { date: formatDay(todayInStockholm(row.since)) })}
+          {row.memberships.length > 0 ? ` · ${row.memberships.join(", ")}` : ""}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-wrap items-start gap-2">
+        {row.phone && (
+          <ButtonAnchor href={`tel:${row.phone.replace(/[^\d+]/g, "")}`} variant="outline" size="sm" aria-label={`${t("home.call")} ${row.name ?? ""}`}>
+            <Phone aria-hidden="true" />
+            {t("home.call")}
+          </ButtonAnchor>
+        )}
+        <form action={markAtRiskContacted.bind(null, row.id)}>
+          <SubmitButton size="sm" variant="secondary">
+            {t("atRisk.contacted")}
+          </SubmitButton>
+        </form>
+        <details className="group">
+          <summary className="focus-ring inline-flex min-h-11 cursor-pointer list-none items-center rounded-md px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sm:min-h-8">
+            {t("atRisk.dismiss")}
+          </summary>
+          <form action={dismissAtRisk.bind(null, row.id)} className="mt-2 flex flex-col gap-2 rounded-md bg-well p-3">
+            <fieldset className="flex flex-col gap-1">
+              <legend className="mb-1 text-sm font-medium">{t("atRisk.reasonLabel")}</legend>
+              <RadioGroup name="reason" required className="gap-0">
+                {dismissReasons.map((reason) => (
+                  <Label key={reason} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-normal hover:bg-accent sm:min-h-9">
+                    <RadioGroupItem value={reason} />
+                    {t(`atRisk.reason.${reason}` as MessageKey)}
+                  </Label>
+                ))}
+              </RadioGroup>
+            </fieldset>
+            <SubmitButton size="sm" className="self-start">
+              {t("atRisk.dismiss")}
+            </SubmitButton>
+          </form>
+        </details>
+      </div>
     </li>
   );
 }

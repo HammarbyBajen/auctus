@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AlertCircle, ArrowLeft, ArrowRight, CheckCircle2, Clock, Mail, MessageSquare, Phone, PhoneCall } from "lucide-react";
 import { db } from "@/db";
@@ -20,6 +21,7 @@ import { getManaInfo } from "@/lib/mana/leads";
 import { listColdReasons, listStages, listWinBackReasons } from "@/lib/pipeline/service";
 import { dueState, isGreyedOut, todayInStockholm } from "@/lib/tasks/dates";
 import { listStudioUsers, listTasksForLead } from "@/lib/tasks/service";
+import { can } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -53,6 +55,7 @@ export default async function LeadPage({
     listWinBackReasons(db, user.studioId),
   ]);
   const winBack = isWinBackSource(lead.source);
+  const canDelete = can(user.role, "settings", "manage");
   const stageName = (key: string | null) => stages.find((s) => s.key === key)?.name ?? key ?? "";
   const reasonName = (key: string | null) => reasons.find((r) => r.key === key)?.name ?? key ?? "";
   const coldStages = stages.filter((s) => s.kind === "cold");
@@ -383,6 +386,11 @@ export default async function LeadPage({
                 </>
               )}
             </dl>
+            {canDelete && (
+              <Link href={`/leads/${lead.id}/radera`} className="focus-ring mt-4 inline-flex rounded-xs px-1 text-sm text-destructive underline-offset-4 hover:underline">
+                {t("privacy.deleteLink")}
+              </Link>
+            )}
             </StaggerItem>
           </div>
         </div>

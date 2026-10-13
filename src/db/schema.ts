@@ -397,6 +397,23 @@ export type SyncProgress = {
 
 /** One run of the Mana sync. Only one can be running per studio at a time. */
 /**
+ * A record that a person was permanently deleted (ticket 17), so an erasure
+ * request can be shown to have been carried out. It holds no personal data:
+ * only when, by whom and how much went.
+ */
+export const deletionLog = pgTable("deletion_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studioId: uuid("studio_id")
+    .notNull()
+    .references(() => studio.id, { onDelete: "cascade" }),
+  deletedAt: timestamp("deleted_at").notNull().defaultNow(),
+  deletedById: text("deleted_by_id").references(() => user.id, { onDelete: "set null" }),
+  leads: integer("leads").notNull(),
+  notes: integer("notes").notNull(),
+  tasks: integer("tasks").notNull(),
+});
+
+/**
  * A class booking or gym check-in, mirrored from Mana (ticket 13). Only what
  * the at-risk rule needs: who, when, and how a booking went. A past booking
  * that is booked or checked in counts as a visit; cancelled, no-show and wait

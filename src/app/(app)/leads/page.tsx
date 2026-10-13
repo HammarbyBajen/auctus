@@ -5,6 +5,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { Chip } from "@/components/app/chip";
 import { ScrollCurrent } from "@/components/app/scroll-current";
 import { MicroLabel } from "@/components/app/micro-label";
+import { Notice } from "@/components/app/notice";
 import { Page } from "@/components/app/page";
 import { EmptyState } from "@/components/app/empty-state";
 import { Surface } from "@/components/app/surface";
@@ -110,6 +111,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
       }
     >
       <div className="flex flex-col gap-4">
+        {params.raderad === "1" && <Notice tone="success">{t("privacy.deleted")}</Notice>}
         <SearchForm
           key={JSON.stringify(filters)}
           filters={filters}

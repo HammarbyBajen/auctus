@@ -33,15 +33,19 @@ export type Thresholds = {
   warnHoursBeforeDeadline: number;
   /** A lead with no activity this many days in one stage counts as stalled. */
   stalledDays: number;
-  /** A paying member with no visit for this many days is at risk. */
-  atRiskDays: number;
+  /** ISO weekdays (1 = Monday ... 7 = Sunday) the first-contact clock runs (ticket 06). */
+  clockDays: number[];
+  /** Single days off (YYYY-MM-DD) the clock skips, such as public holidays. */
+  daysOff: string[];
 };
 
+// (Older rows may also hold an unused atRiskDays; the at-risk threshold is its own column, studio_settings.at_risk_days.)
 export const defaultThresholds: Thresholds = {
   firstContactHours: 24,
   warnHoursBeforeDeadline: 4,
   stalledDays: 7,
-  atRiskDays: 30,
+  clockDays: [1, 2, 3, 4, 5, 6, 7],
+  daysOff: [],
 };
 
 /** Settings, not code: thresholds and the Mana connection details. The Mana API key itself stays in the environment. */

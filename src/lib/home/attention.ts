@@ -1,8 +1,9 @@
 import { initialStage, isWinBackSource } from "@/lib/leads/constants";
 import type { StageKind } from "@/lib/pipeline/defaults";
 import { dueState } from "@/lib/tasks/dates";
+import { addRunningHours, type Clock } from "./clock";
 
-export type Thresholds = {
+export type Thresholds = Clock & {
   firstContactHours: number;
   warnHoursBeforeDeadline: number;
   stalledDays: number;
@@ -106,8 +107,10 @@ export function buildAttention(input: {
     const reasons: Reason[] = [];
     const openTasks = tasksByLead.get(lead.id) ?? [];
 
-    if (lead.stage === initialStage) {
-      const msLeft = lead.createdAt.getTime() + thresholds.firstContactHours * HOUR - now.getTime();
+    // The first-contact promise counts only the days the clock runs (ticket 06).
+    const deadline = lead.stage === initialStage ? addRunningHours(lead.createdAt, thresholds.firstContactHours, thresholds) : null;
+    if (deadline) {
+      const msLeft = deadline.getTime() - now.getTime();
       if (msLeft < 0) reasons.push({ type: "first_contact_overdue", msOver: -msLeft });
       else if (msLeft <= thresholds.warnHoursBeforeDeadline * HOUR) reasons.push({ type: "first_contact_soon", msLeft });
       else reasons.push({ type: "first_contact_ok", msLeft });

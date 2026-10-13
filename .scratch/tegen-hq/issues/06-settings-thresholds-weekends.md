@@ -4,9 +4,11 @@
 
 **Blocked by:** 05
 
-**Status:** ready-for-agent
+**Status:** done (2026-10-13)
 
-- [ ] Thresholds are editable by Owners only
-- [ ] The deadline clock can be set to skip chosen weekdays or days off
-- [ ] The landing page uses the new values immediately
-- [ ] A lead arriving on a skipped day gets its deadline counted from the next running day
+- [x] Thresholds are editable by Owners only
+- [x] The deadline clock can be set to skip chosen weekdays or days off
+- [x] The landing page uses the new values immediately
+- [x] A lead arriving on a skipped day gets its deadline counted from the next running day
+
+Notes: under Inställningar → Tidsgränser och helger. The clock applies to the first-contact deadline; stalled days stay calendar days. Running weekdays default to all seven, so nothing changed until an owner chooses. No weekday ticked means no first-contact deadline. The unused atRiskDays key in thresholds was dropped from the type (the at-risk threshold is studio_settings.at_risk_days).

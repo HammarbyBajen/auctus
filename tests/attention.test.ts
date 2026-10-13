@@ -8,7 +8,7 @@ import {
 } from "@/lib/home/attention";
 import { mondayOfWeek, startOfDayInStockholm, startOfMonthInStockholm, startOfWeekInStockholm } from "@/lib/home/time";
 
-const thresholds: Thresholds = { firstContactHours: 24, warnHoursBeforeDeadline: 4, stalledDays: 7 };
+const thresholds: Thresholds = { firstContactHours: 24, warnHoursBeforeDeadline: 4, stalledDays: 7, clockDays: [1, 2, 3, 4, 5, 6, 7], daysOff: [] };
 const now = new Date("2026-10-09T10:00:00Z");
 const today = "2026-10-09";
 const H = 3_600_000;
@@ -53,6 +53,22 @@ describe("first contact deadline", () => {
     expect(item.reasons[0]).toMatchObject({ type: "first_contact_ok" });
   });
 
+  it("pauses on days the clock does not run: a Saturday-night lead is not late on Sunday", () => {
+    const weekdaysOnly = { ...thresholds, clockDays: [1, 2, 3, 4, 5] };
+    const saturdayNight = new Date("2026-10-17T21:00:00Z"); // 23:00 in Stockholm
+    const sundayEvening = new Date("2026-10-18T18:00:00Z");
+    const atSunday = buildAttention({ leads: [lead({ createdAt: saturdayNight })], tasks: [], now: sundayEvening, today: "2026-10-18", thresholds: weekdaysOnly, viewerId: "me", scope: "all" });
+    expect(atSunday[0].reasons[0]).toMatchObject({ type: "first_contact_ok" });
+    // With every day running, the same lead would be close to late by then.
+    const always = buildAttention({ leads: [lead({ createdAt: saturdayNight })], tasks: [], now: sundayEvening, today: "2026-10-18", thresholds, viewerId: "me", scope: "all" });
+    expect(always[0].reasons[0]).toMatchObject({ type: "first_contact_soon" });
+  });
+
+  it("shows no first-contact deadline when no day runs", () => {
+    const never = buildAttention({ leads: [lead({ createdAt: ago(48 * H) })], tasks: [], now, today, thresholds: { ...thresholds, clockDays: [] }, viewerId: "me", scope: "all" });
+    expect(never.flatMap((i) => i.reasons).some((r) => r.type.startsWith("first_contact"))).toBe(false);
+  });
+
   it("is overdue the moment the deadline is crossed, not before", () => {
     expect(run([lead({ createdAt: ago(24 * H) })])[0].reasons[0].type).toBe("first_contact_soon");
     expect(run([lead({ createdAt: ago(24 * H + 1) })])[0].reasons[0].type).toBe("first_contact_overdue");
@@ -64,7 +80,7 @@ describe("first contact deadline", () => {
       tasks: [],
       now,
       today,
-      thresholds: { firstContactHours: 2, warnHoursBeforeDeadline: 1, stalledDays: 7 },
+      thresholds: { ...thresholds, firstContactHours: 2, warnHoursBeforeDeadline: 1 },
       viewerId: "me",
       scope: "all",
     });

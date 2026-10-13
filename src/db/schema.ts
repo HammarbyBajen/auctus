@@ -397,6 +397,22 @@ export type SyncProgress = {
 
 /** One run of the Mana sync. Only one can be running per studio at a time. */
 /**
+ * A personal link for choosing a password (ticket 14): sent by an owner to a
+ * new user, or to someone who has forgotten theirs. Only a hash of the token
+ * is stored; the link is shown once when it is made. One use, then it is gone.
+ */
+export const userInvite = pgTable("user_invite", {
+  tokenHash: text("token_hash").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  expiresAt: timestamp("expires_at").notNull(),
+  usedAt: timestamp("used_at"),
+});
+
+/**
  * A record that a person was permanently deleted (ticket 17), so an erasure
  * request can be shown to have been carried out. It holds no personal data:
  * only when, by whom and how much went.

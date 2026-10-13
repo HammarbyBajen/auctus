@@ -14,5 +14,6 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // The workflow paths belong to Vercel Workflow and must not be intercepted.
-  matcher: ["/((?!login|api|_next/static|_next/image|favicon.ico|\\.well-known/workflow/).*)"],
+  // The welcome page is where a new user chooses a password, so they have no session yet.
+  matcher: ["/((?!login|valkommen|api|_next/static|_next/image|favicon.ico|\\.well-known/workflow/).*)"],
 };

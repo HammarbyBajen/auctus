@@ -26,6 +26,16 @@ export const studio = pgTable("studio", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
+/** A web lead's attribution, parsed (ticket 09). Click ids are kept whole. */
+export type ParsedAttribution = {
+  utmSource?: string;
+  utmMedium?: string;
+  campaign?: string;
+  clickIds?: Record<string, string>;
+  ref?: string;
+  direct?: boolean;
+};
+
 export type Thresholds = {
   /** Hours a new lead may wait for first contact (the 24-hour promise). */
   firstContactHours: number;
@@ -261,6 +271,10 @@ export const lead = pgTable(
     externalRef: text("external_ref"),
     /** The studio's own fields (ticket 07), by field key. */
     customFields: jsonb("custom_fields").$type<Record<string, string>>().notNull().default({}),
+    /** Where a web lead came from, exactly as tegen-web sent it (ticket 09). Never cleaned up. */
+    attribution: text("attribution"),
+    /** The same, split into UTM source and medium, campaign, click ids and referrer. */
+    attributionParsed: jsonb("attribution_parsed").$type<ParsedAttribution>(),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -425,6 +439,35 @@ export type SyncProgress = {
 };
 
 /** One run of the Mana sync. Only one can be running per studio at a time. */
+/**
+ * One lead as tegen-web sent it to the intake endpoint (ticket 09): the raw
+ * body, when it arrived and the sender's own id, so a retry is recognised.
+ * Test leads are kept here only, never made into leads.
+ */
+export const leadSubmission = pgTable(
+  "lead_submission",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** The sender's id for the lead; the same id twice is one lead. */
+    senderId: text("sender_id").notNull(),
+    /** contact, qualification, chat or escalate */
+    route: text("route").notNull(),
+    receivedAt: timestamp("received_at").notNull().defaultNow(),
+    payload: jsonb("payload").notNull(),
+    isTest: boolean("is_test").notNull().default(false),
+    /** created, duplicate (added to an existing lead) or test */
+    outcome: text("outcome").notNull(),
+    leadId: uuid("lead_id").references(() => lead.id, { onDelete: "set null" }),
+  },
+  (table) => [
+    uniqueIndex("lead_submission_sender_idx").on(table.studioId, table.senderId),
+    index("lead_submission_received_idx").on(table.studioId, table.receivedAt),
+  ],
+);
+
 /**
  * A personal link for choosing a password (ticket 14): sent by an owner to a
  * new user, or to someone who has forgotten theirs. Only a hash of the token

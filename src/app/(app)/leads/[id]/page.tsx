@@ -15,6 +15,7 @@ import { LeadFieldInputs } from "@/components/app/lead-fields";
 import { Panel } from "@/components/app/surface";
 import { SubmitButton } from "@/components/app/submit-button";
 import { formatDateTime, formatDay } from "@/lib/format";
+import { webNotePrefix } from "@/lib/intake/service";
 import { daysAgo, groupActivity } from "@/lib/leads/activity";
 import { isWinBackSource } from "@/lib/leads/constants";
 import { getLead, type HistoryItem } from "@/lib/leads/service";
@@ -387,6 +388,15 @@ export default async function LeadPage({
                 {t("lead.created")}
               </MicroLabel>
               <dd className="tabular-nums">{formatDateTime(lead.createdAt)}</dd>
+              {lead.attribution && (
+                <>
+                  <MicroLabel as="dt" className="self-center">
+                    {t("lead.attribution")}
+                  </MicroLabel>
+                  {/* Exactly as tegen-web sent it: click ids are never shortened. */}
+                  <dd className="break-all">{lead.attribution}</dd>
+                </>
+              )}
               {(!mana || mana.memberships.length === 0) && (
                 <>
                   <MicroLabel as="dt" className="self-center">
@@ -445,6 +455,15 @@ function HistoryLine({
       <div className="flex flex-col items-start gap-1 text-sm">
         <Chip>{t("lead.fromPipedrive")}</Chip>
         <p className="break-words whitespace-pre-wrap text-muted-foreground">{item.body.slice(pipedrivePrefix.length)}</p>
+      </div>
+    );
+  }
+  if (item.kind === "note" && item.authorName === null && item.body.startsWith(webNotePrefix)) {
+    const [, rest] = /^[^:]*:\s*([\s\S]*)$/.exec(item.body) ?? [null, item.body];
+    return (
+      <div className="flex flex-col items-start gap-1 text-sm">
+        <Chip>{t("lead.fromWeb")}</Chip>
+        <p className="break-words whitespace-pre-wrap">{rest}</p>
       </div>
     );
   }

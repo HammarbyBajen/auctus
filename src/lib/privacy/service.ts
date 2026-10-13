@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { atRiskAlert, deletionLog, lead, leadNote, person, pipelineStage, task } from "@/db/schema";
+import { atRiskAlert, deletionLog, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
 
 type Db = typeof defaultDb;
 
@@ -27,7 +27,8 @@ export async function deletionPreview(db: Db, studioId: string, personId: string
 
 /**
  * Permanently deletes a person and everything the CRM holds about them: their
- * leads, and with them notes, history and tasks, plus any at-risk alert. One
+ * leads, and with them notes, history and tasks, the web submissions they came
+ * from, plus any at-risk alert. One
  * transaction, so it happens fully or not at all. A row in the deletion log
  * (no personal data) records that it was done.
  *
@@ -43,6 +44,9 @@ export async function deletePerson(db: Db, studioId: string, personId: string, d
     if (preview.person.manaUserId) {
       await tx.delete(atRiskAlert).where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.manaUserId, preview.person.manaUserId)));
     }
+    // The raw web submissions hold the same personal data, so they go too (ticket 09).
+    const ids = (await tx.select({ id: lead.id }).from(lead).where(eq(lead.personId, personId))).map((l) => l.id);
+    if (ids.length > 0) await tx.delete(leadSubmission).where(inArray(leadSubmission.leadId, ids));
     await tx.delete(lead).where(eq(lead.personId, personId));
     await tx.delete(person).where(and(eq(person.studioId, studioId), eq(person.id, personId)));
     await tx.insert(deletionLog).values({ studioId, deletedById, leads: preview.leads, notes: preview.notes, tasks: preview.tasks });

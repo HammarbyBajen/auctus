@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { studioSettings } from "@/db/schema";
 import { acknowledgeApiChanges } from "@/lib/mana/api-watch-service";
+import { saveAtRiskEmails } from "@/lib/mana/at-risk-service";
 import { listMembershipKinds, saveIgnoredMemberships } from "@/lib/mana/leads";
 import { setAddOnMemberships, setWinBackEnabled } from "@/lib/mana/winback-service";
 import { requirePermission } from "@/lib/session";
@@ -58,4 +59,16 @@ export async function saveAtRiskDays(formData: FormData) {
   await db.update(studioSettings).set({ atRiskDays: days, updatedAt: new Date() }).where(eq(studioSettings.studioId, user.studioId));
   revalidatePath("/installningar/mana");
   redirect("/installningar/mana?risksparat=1#at-risk");
+}
+
+/** Tegen's email texts for the Hör av dig till list: one for members never seen in Mana, one for those who stopped coming. */
+export async function saveAtRiskEmailsAction(formData: FormData) {
+  const user = await requirePermission("settings", "manage");
+  const text = (name: string, max: number) => String(formData.get(name) ?? "").slice(0, max);
+  await saveAtRiskEmails(db, user.studioId, {
+    never: { subject: text("neverSubject", 200), body: text("neverBody", 4000) },
+    away: { subject: text("awaySubject", 200), body: text("awayBody", 4000) },
+  });
+  revalidatePath("/", "layout");
+  redirect("/installningar/mana?mejlsparat=1#at-risk-email");
 }

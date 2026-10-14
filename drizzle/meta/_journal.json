@@ -169,6 +169,13 @@
       "when": 1791976810570,
       "tag": "0023_bouncy_tomorrow_man",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791995633442,
+      "tag": "0024_mighty_zaladane",
+      "breakpoints": true
     }
   ]
 }

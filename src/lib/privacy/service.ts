@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { atRiskAlert, deletionLog, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
+import { atRiskAlert, atRiskNote, deletionLog, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
 
 type Db = typeof defaultDb;
 
@@ -28,7 +28,7 @@ export async function deletionPreview(db: Db, studioId: string, personId: string
 /**
  * Permanently deletes a person and everything the CRM holds about them: their
  * leads, and with them notes, history and tasks, the web submissions they came
- * from, plus any at-risk alert. One
+ * from, plus any at-risk alert and what staff noted about it. One
  * transaction, so it happens fully or not at all. A row in the deletion log
  * (no personal data) records that it was done.
  *
@@ -42,6 +42,7 @@ export async function deletePerson(db: Db, studioId: string, personId: string, d
   if (!preview) return null;
   await db.transaction(async (tx) => {
     if (preview.person.manaUserId) {
+      await tx.delete(atRiskNote).where(and(eq(atRiskNote.studioId, studioId), eq(atRiskNote.manaUserId, preview.person.manaUserId)));
       await tx.delete(atRiskAlert).where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.manaUserId, preview.person.manaUserId)));
     }
     // The raw web submissions hold the same personal data, so they go too (ticket 09).

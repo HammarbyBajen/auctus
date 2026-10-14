@@ -78,6 +78,8 @@ export const studioSettings = pgTable("studio_settings", {
   ignoredMembershipIds: jsonb("ignored_membership_ids").$type<string[]>().notNull().default([]),
   /** A paying member with no visit for this many days is at risk (ticket 13). */
   atRiskDays: integer("at_risk_days").notNull().default(30),
+  /** Email templates for the Hör av dig till list: one for members never seen in Mana, one for those who stopped coming. */
+  atRiskEmails: jsonb("at_risk_emails").$type<AtRiskEmails>(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -552,9 +554,40 @@ export const atRiskAlert = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
     handledAt: timestamp("handled_at"),
     handledById: text("handled_by_id").references(() => user.id, { onDelete: "set null" }),
+    /** Away until this day (holiday, injury): if they still have not been in after it, they are back on the list. */
+    returnBy: date("return_by", { mode: "string" }),
+    /** Who on the staff gets in touch. */
+    assignedToId: text("assigned_to_id").references(() => user.id, { onDelete: "set null" }),
   },
   (table) => [index("at_risk_alert_studio_idx").on(table.studioId, table.status)],
 );
+
+/**
+ * What staff did about a member who has been away: a call (answered or not),
+ * an email or text, a dismissal, or just a note. Kept per member across
+ * alerts, so whoever calls next sees what was said before. Staff only.
+ */
+export const atRiskNote = pgTable(
+  "at_risk_note",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    manaUserId: text("mana_user_id").notNull(),
+    alertId: uuid("alert_id").references(() => atRiskAlert.id, { onDelete: "set null" }),
+    /** answered, no_answer, messaged, dismissed or note */
+    kind: text("kind").notNull(),
+    body: text("body").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+  },
+  (table) => [index("at_risk_note_member_idx").on(table.studioId, table.manaUserId, table.createdAt)],
+);
+
+/** An email template for members who have been away. Written by Tegen; empty until they have. */
+export type AtRiskEmail = { subject: string; body: string };
+export type AtRiskEmails = { never: AtRiskEmail; away: AtRiskEmail };
 
 /** A copy of Mana's public OpenAPI spec, kept each time its content changes (ticket 24). */
 export const manaApiSpec = pgTable("mana_api_spec", {

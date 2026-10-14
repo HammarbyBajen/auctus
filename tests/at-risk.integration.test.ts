@@ -94,7 +94,7 @@ describe.skipIf(!hasDb)("at-risk members", () => {
 
   it("does not bring a handled alert back until the person has been in again", async () => {
     const [away] = (await risk.listAtRisk(db, studioId)).filter((r) => r.name === "Namn away");
-    await risk.handleAtRisk(db, studioId, away.id, ownerId, { kind: "dismissed", reason: "holiday" });
+    await risk.dismissAlert(db, studioId, away.id, ownerId, { reason: "holiday", returnBy: null, body: "" });
     expect((await risk.detectAtRisk(db, studioId, day("2026-11-02", 9))).created).toBe(0);
     // Back once in October, then away for 30 days again: a new alert.
     await db.insert(schema.manaVisit).values({ studioId, id: "b9", manaUserId: "away", at: day("2026-10-01"), kind: "class", status: "booked" });
@@ -106,5 +106,42 @@ describe.skipIf(!hasDb)("at-risk members", () => {
     const result = await risk.detectAtRisk(db, studioId, day("2026-11-02", 9));
     expect(result.resolved).toBe(1);
     expect((await risk.listAtRisk(db, studioId, day("2026-11-02", 9))).map((r) => r.name)).not.toContain("Namn ghost");
+  });
+
+  it("keeps a note of every try, and takes a member off the list only when someone answered", async () => {
+    const now = day("2026-11-03", 9);
+    const [regular] = (await risk.listAtRisk(db, studioId, now)).filter((r) => r.name === "Namn regular");
+    await risk.logContact(db, studioId, regular.id, ownerId, "no_answer", "", day("2026-11-03", 10));
+    await risk.logContact(db, studioId, regular.id, ownerId, "messaged", "Skickade sms", day("2026-11-03", 11));
+    const row = (await risk.listAtRisk(db, studioId, now)).find((r) => r.id === regular.id)!;
+    expect(row.attempts).toBe(2);
+    expect(row.notes.map((n) => [n.kind, n.body, n.by])).toEqual([
+      ["messaged", "Skickade sms", "Ägare"],
+      ["no_answer", "", "Ägare"],
+    ]);
+    await risk.logContact(db, studioId, regular.id, ownerId, "answered", "Tillbaka efter jul", day("2026-11-04", 10));
+    expect((await risk.listAtRisk(db, studioId, now)).map((r) => r.id)).not.toContain(regular.id);
+    // Nothing more can be logged on a handled alert.
+    expect(await risk.logContact(db, studioId, regular.id, ownerId, "no_answer", "")).toBe(false);
+  });
+
+  it("brings a member back after their back-by day if they still have not been in, with the earlier notes", async () => {
+    const [away] = (await risk.listAtRisk(db, studioId, day("2026-11-03", 9))).filter((r) => r.name === "Namn away");
+    await risk.dismissAlert(db, studioId, away.id, ownerId, { reason: "injury", returnBy: "2026-11-20", body: "Knäskada" });
+    expect((await risk.detectAtRisk(db, studioId, day("2026-11-15", 9))).created).toBe(0);
+    expect((await risk.detectAtRisk(db, studioId, day("2026-11-21", 9))).created).toBe(1);
+    const back = (await risk.listAtRisk(db, studioId, day("2026-11-21", 9))).find((r) => r.name === "Namn away")!;
+    expect(back.notes[0]).toMatchObject({ kind: "dismissed", body: "Knäskada" });
+    expect(back.attempts).toBe(0);
+  });
+
+  it("shares the members nobody has among the chosen staff", async () => {
+    const now = day("2026-11-21", 9);
+    expect(await risk.distributeAlerts(db, studioId, [ownerId], now)).toBe(1);
+    const [row] = await risk.listAtRisk(db, studioId, now);
+    expect([row.assignedToId, row.assigneeName]).toEqual([ownerId, "Ägare"]);
+    expect(await risk.distributeAlerts(db, studioId, [ownerId], now)).toBe(0);
+    await risk.assignAlert(db, studioId, row.id, null);
+    expect((await risk.listAtRisk(db, studioId, now))[0].assignedToId).toBeNull();
   });
 });

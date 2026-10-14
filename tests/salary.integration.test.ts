@@ -80,25 +80,31 @@ describe.skipIf(!hasDb)("salary: pulling and locking a month", () => {
       ["course:kids", null],
       ["service:pt60", null],
     ]);
-    expect(await salary.listInstructors(db, studioId)).toEqual([{ id: "i-anna", name: "Anna A" }]);
+    const coaches = await salary.listCoaches(db, studioId);
+    expect(coaches.map((c) => [c.id, c.name, c.freeClassesPerWeek])).toEqual([["i-anna", "Anna A", 0]]);
   });
 
-  it("shows hours per person once linked, with unset kinds flagged and not paid", async () => {
-    await salary.savePerson(db, studioId, { name: "Anna", manaInstructorId: "i-anna", freeClassesPerWeek: 1, activeFrom: null, notes: "" });
+  it("shows hours per Mana instructor straight away, with unset kinds flagged and not paid", async () => {
+    expect(await salary.saveDeal(db, studioId, "i-anna", { freeClassesPerWeek: 1, activeFrom: null, notes: "" })).toBe("saved");
     const month = await salary.getMonth(db, studioId, "2026-10");
     const anna = month.result!.people[0];
+    expect(anna.name).toBe("Anna A");
     expect(anna.byType).toEqual({ "class:wod": 1.5, "service:pt60": 1, "course:kids": 0.75 });
+    expect(anna.total).toBe(3.25);
     expect(anna.toPay).toBe(0);
     expect(month.result!.unassigned).toHaveLength(1);
     expect(month.result!.notCounted).toEqual({ canceled: 1 });
     expect(month.result!.types.every((t) => t.paid === null)).toBe(true);
   });
 
-  it("refuses to link one Mana instructor to two people", async () => {
-    expect(await salary.savePerson(db, studioId, { name: "Annan", manaInstructorId: "i-anna", freeClassesPerWeek: 0, activeFrom: null, notes: "" })).toEqual({ status: "instructor_taken" });
+  it("keeps a coach's deal when the month is pulled again", async () => {
+    await salary.pullMonth(db, fake([]), studioId, "2026-10", ownerId, t0);
+    expect((await salary.listCoaches(db, studioId))[0].freeClassesPerWeek).toBe(1);
+    expect(await salary.saveDeal(db, studioId, "i-okand", { freeClassesPerWeek: 1, activeFrom: null, notes: "" })).toBe("not_found");
   });
 
   it("pays by the rules, with the first class of the week free", async () => {
+    await salary.pullMonth(db, fake([classEvent("c1", "2026-09-29T17:00:00+02:00"), classEvent("c2", "2026-10-06T07:00:00+02:00", 30), classEvent("c3", "2026-10-06T17:00:00+02:00")]), studioId, "2026-10", ownerId, t0);
     await salary.setRule(db, studioId, "class:wod", true);
     await salary.setRule(db, studioId, "service:pt60", true);
     await salary.setRule(db, studioId, "course:kids", false);

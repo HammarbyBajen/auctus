@@ -88,6 +88,8 @@ export type PersonResult = {
   name: string;
   /** Hours per type key, in the month. */
   byType: Record<string, number>;
+  /** All counted hours in the month, paid or not. */
+  total: number;
   freeClasses: number;
   freeHours: number;
   /** Paid hours minus free hours. */
@@ -99,7 +101,7 @@ export type MonthResult = {
   people: PersonResult[];
   /** The types that occur, with their rule (paid null = not decided yet). */
   types: Rule[];
-  /** Counted work in the month with no instructor, or one not linked to a person. */
+  /** Counted work in the month with no instructor, or one no person stands for. */
   unassigned: { id: string; typeLabel: string; startsAt: string; instructorId: string | null; minutes: number }[];
   /** PT and Onramp bookings in the month that did not count (booked, canceled, refunded, no-show), by status. */
   notCounted: Record<string, number>;
@@ -126,7 +128,7 @@ export function calculateMonth(input: { month: string; work: Work[]; people: Per
     .filter((w) => inMonth(w) && (!w.instructorId || !personByInstructor.has(w.instructorId)))
     .map((w) => ({ id: w.id, typeLabel: w.typeLabel, startsAt: w.startsAt.toISOString(), instructorId: w.instructorId, minutes: minutesOf(w) }));
 
-  const people: PersonResult[] = input.people.map((p) => {
+  const people: PersonResult[] = input.people.flatMap((p) => {
     const own = p.manaInstructorId ? counted.filter((w) => w.instructorId === p.manaInstructorId) : [];
 
     // Free classes: per week, the first N paid group classes (not Tegenbutik), from the active-from day.
@@ -147,26 +149,33 @@ export function calculateMonth(input: { month: string; work: Work[]; people: Per
     }
 
     const byTypeMinutes: Record<string, number> = {};
+    let totalMinutes = 0;
     let paidMinutes = 0;
     let freeMinutes = 0;
     let freeClasses = 0;
     for (const w of own.filter(inMonth)) {
       const m = minutesOf(w);
       byTypeMinutes[w.typeKey] = (byTypeMinutes[w.typeKey] ?? 0) + m;
+      totalMinutes += m;
       if (rule.get(w.typeKey)?.paid === true) paidMinutes += m;
       if (free.has(w.id)) {
         freeMinutes += m;
         freeClasses += 1;
       }
     }
-    return {
-      personId: p.id,
-      name: p.name,
-      byType: Object.fromEntries(Object.entries(byTypeMinutes).map(([k, m]) => [k, hours(m)])),
-      freeClasses,
-      freeHours: hours(freeMinutes),
-      toPay: hours(paidMinutes - freeMinutes),
-    };
+    // Only people who worked in the month are listed.
+    if (Object.keys(byTypeMinutes).length === 0) return [];
+    return [
+      {
+        personId: p.id,
+        name: p.name,
+        byType: Object.fromEntries(Object.entries(byTypeMinutes).map(([k, m]) => [k, hours(m)])),
+        total: hours(totalMinutes),
+        freeClasses,
+        freeHours: hours(freeMinutes),
+        toPay: hours(paidMinutes - freeMinutes),
+      },
+    ];
   });
 
   return {

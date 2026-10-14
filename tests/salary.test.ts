@@ -45,12 +45,14 @@ describe("hours", () => {
   it("come from real minutes, a 30-minute class is half an hour", () => {
     const r = calculateMonth({ month: "2026-10", people: [anna], rules, work: [work("2026-10-06T07:00:00+02:00", 30), work("2026-10-07T17:00:00+02:00", 60)] });
     expect(r.people[0].byType["class:wod"]).toBe(1.5);
+    expect(r.people[0].total).toBe(1.5);
     expect(r.people[0].toPay).toBe(1.5);
   });
 
   it("leave out work outside the month", () => {
     const r = calculateMonth({ month: "2026-10", people: [anna], rules, work: [work("2026-09-30T18:00:00+02:00", 60), work("2026-11-01T10:00:00+01:00", 60)] });
-    expect(r.people[0].byType).toEqual({});
+    // Nobody who did not work in the month is listed.
+    expect(r.people).toEqual([]);
   });
 
   it("count a PT booking only when completed, and list the others by status", () => {
@@ -81,7 +83,7 @@ describe("hours", () => {
       work: [work("2026-10-06T10:00:00+02:00", 60, { instructorId: null }), work("2026-10-06T11:00:00+02:00", 60, { instructorId: "i-okand" })],
     });
     expect(r.unassigned.map((u) => u.instructorId)).toEqual([null, "i-okand"]);
-    expect(r.people[0].byType).toEqual({});
+    expect(r.people).toEqual([]);
   });
 });
 
@@ -164,14 +166,14 @@ describe("export", () => {
 
   it("has one column per kind and decimal hours", () => {
     const sheet = exportSheet(result);
-    expect(sheet.header).toEqual(["Namn", "WOD", "Fria pass", "Fria timmar", "Timmar att betala"]);
-    expect(sheet.rows).toEqual([["Åsa Öberg", 2.5, 1, 1, 1.5]]);
+    expect(sheet.header).toEqual(["Namn", "WOD", "Timmar totalt", "Fria pass", "Fria timmar", "Timmar att betala"]);
+    expect(sheet.rows).toEqual([["Åsa Öberg", 2.5, 2.5, 1, 1, 1.5]]);
   });
 
   it("writes CSV for Swedish Excel", () => {
     const csv = toCsv(exportSheet(result));
     expect(csv.startsWith("﻿Namn;WOD;")).toBe(true);
-    expect(csv).toContain("Åsa Öberg;2,5;1;1;1,5");
+    expect(csv).toContain("Åsa Öberg;2,5;2,5;1;1;1,5");
   });
 
   it("writes a zip that holds the workbook", () => {

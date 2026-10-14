@@ -14,7 +14,7 @@ function items(showSettings: boolean, showSalary: boolean): Item[] {
   return [
     { href: "/", label: t("nav.home"), icon: Home },
     { href: "/leads", label: t("nav.leads"), icon: Users },
-    ...(showSalary ? [{ href: "/lon", label: t("nav.salary"), icon: Clock }] : []),
+    ...(showSalary ? [{ href: "/timmar", label: t("nav.salary"), icon: Clock }] : []),
     ...(showSettings ? [{ href: "/installningar", label: t("nav.settings"), icon: Settings }] : []),
   ];
 }

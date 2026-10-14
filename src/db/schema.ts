@@ -682,28 +682,10 @@ export const manaPurchase = pgTable(
 
 // ---- Salary (WFM) module (tickets 20-23): coach hours from Mana, names and hours only, no money ----
 
-/** A coach: who they are, which Mana instructor they are, and their deal. */
-export const salaryPerson = pgTable(
-  "salary_person",
-  {
-    id: uuid("id").primaryKey().defaultRandom(),
-    studioId: uuid("studio_id")
-      .notNull()
-      .references(() => studio.id, { onDelete: "cascade" }),
-    name: text("name").notNull(),
-    /** The Mana instructor whose sessions are this person's. */
-    manaInstructorId: text("mana_instructor_id"),
-    /** Group classes a week held unpaid, in exchange for training for free. */
-    freeClassesPerWeek: integer("free_classes_per_week").notNull().default(0),
-    /** From when the free classes apply (YYYY-MM-DD). Empty means from the start. */
-    activeFrom: date("active_from", { mode: "string" }),
-    notes: text("notes").notNull().default(""),
-    createdAt: timestamp("created_at").notNull().defaultNow(),
-  },
-  (table) => [uniqueIndex("salary_person_instructor_idx").on(table.studioId, table.manaInstructorId)],
-);
-
-/** Mana's instructors (id and name), kept from the latest pull for linking people. */
+/**
+ * A coach, straight from Mana's instructors (id and name, kept from the latest
+ * pull), plus the one thing Mana does not know: their free-class deal.
+ */
 export const salaryInstructor = pgTable(
   "salary_instructor",
   {
@@ -713,6 +695,11 @@ export const salaryInstructor = pgTable(
     id: text("id").notNull(),
     name: text("name").notNull(),
     seenAt: timestamp("seen_at").notNull().defaultNow(),
+    /** Group classes a week held unpaid, in exchange for training for free. */
+    freeClassesPerWeek: integer("free_classes_per_week").notNull().default(0),
+    /** From when the free classes apply (YYYY-MM-DD). Empty means from the start. */
+    activeFrom: date("active_from", { mode: "string" }),
+    notes: text("notes").notNull().default(""),
   },
   (table) => [primaryKey({ columns: [table.studioId, table.id] })],
 );

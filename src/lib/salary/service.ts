@@ -1,8 +1,8 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { salaryInstructor, salaryLog, salaryMonth, salaryPerson, salaryTypeRule, salaryWork, user } from "@/db/schema";
+import { salaryInstructor, salaryLog, salaryMonth, salaryTypeRule, salaryWork, user } from "@/db/schema";
 import { ManaError } from "@/lib/mana/errors";
-import { calculateMonth, pullWindow, type MonthResult, type Work } from "./calc";
+import { calculateMonth, pullWindow, type MonthResult, type Person, type Work } from "./calc";
 
 type Db = typeof defaultDb;
 
@@ -133,38 +133,23 @@ export async function pullMonth(db: Db, source: SalarySource, studioId: string, 
   return { status: "pulled" as const, sessions: rows.length, newTypes: types.size };
 }
 
-// ---- People ----
+// ---- Coaches ----
 
-export async function listPeople(db: Db, studioId: string) {
-  return db.select().from(salaryPerson).where(eq(salaryPerson.studioId, studioId)).orderBy(asc(salaryPerson.name));
+/** The coaches: Mana's instructors as of the latest pull, with their free-class deal. */
+export async function listCoaches(db: Db, studioId: string) {
+  return db.select().from(salaryInstructor).where(eq(salaryInstructor.studioId, studioId)).orderBy(asc(salaryInstructor.name));
 }
 
-export async function listInstructors(db: Db, studioId: string) {
-  return db.select({ id: salaryInstructor.id, name: salaryInstructor.name }).from(salaryInstructor).where(eq(salaryInstructor.studioId, studioId)).orderBy(asc(salaryInstructor.name));
-}
+export type DealInput = { freeClassesPerWeek: number; activeFrom: string | null; notes: string };
 
-export type PersonInput = { name: string; manaInstructorId: string | null; freeClassesPerWeek: number; activeFrom: string | null; notes: string };
-
-/** Adds or changes a coach. One Mana instructor belongs to one person at most. */
-export async function savePerson(db: Db, studioId: string, input: PersonInput, id?: string) {
-  if (input.manaInstructorId) {
-    const [taken] = await db
-      .select({ id: salaryPerson.id })
-      .from(salaryPerson)
-      .where(and(eq(salaryPerson.studioId, studioId), eq(salaryPerson.manaInstructorId, input.manaInstructorId)))
-      .limit(1);
-    if (taken && taken.id !== id) return { status: "instructor_taken" as const };
-  }
-  if (id) {
-    const [row] = await db.update(salaryPerson).set(input).where(and(eq(salaryPerson.studioId, studioId), eq(salaryPerson.id, id))).returning({ id: salaryPerson.id });
-    return row ? { status: "saved" as const, id: row.id } : { status: "not_found" as const };
-  }
-  const [row] = await db.insert(salaryPerson).values({ studioId, ...input }).returning({ id: salaryPerson.id });
-  return { status: "saved" as const, id: row.id };
-}
-
-export async function removePerson(db: Db, studioId: string, id: string) {
-  await db.delete(salaryPerson).where(and(eq(salaryPerson.studioId, studioId), eq(salaryPerson.id, id)));
+/** Sets a coach's free classes per week, from when, and notes. Name and id stay Mana's. */
+export async function saveDeal(db: Db, studioId: string, instructorId: string, input: DealInput) {
+  const [row] = await db
+    .update(salaryInstructor)
+    .set(input)
+    .where(and(eq(salaryInstructor.studioId, studioId), eq(salaryInstructor.id, instructorId)))
+    .returning({ id: salaryInstructor.id });
+  return row ? ("saved" as const) : ("not_found" as const);
 }
 
 // ---- Rules ----
@@ -181,7 +166,7 @@ export async function setRule(db: Db, studioId: string, typeKey: string, paid: b
 
 export type LockedSnapshot = MonthResult & { lockedAt: string };
 
-/** The month's figures: the frozen ones if it is locked, otherwise calculated from what was pulled with today's people and rules. */
+/** The month's figures: the frozen ones if it is locked, otherwise calculated from what was pulled with today's coaches and rules. */
 export async function getMonth(db: Db, studioId: string, month: string, now: Date = new Date()) {
   const [state] = await db
     .select({
@@ -204,17 +189,18 @@ export async function getMonth(db: Db, studioId: string, month: string, now: Dat
 }
 
 async function calculate(db: Db, studioId: string, month: string): Promise<MonthResult> {
-  const [work, people, rules] = await Promise.all([
+  const [work, coaches, rules] = await Promise.all([
     db.select().from(salaryWork).where(and(eq(salaryWork.studioId, studioId), eq(salaryWork.month, month))),
-    listPeople(db, studioId),
+    listCoaches(db, studioId),
     listRules(db, studioId),
   ]);
-  return calculateMonth({
-    month,
-    work: work.map((w) => ({ ...w, source: w.source as Work["source"] })),
-    people,
-    rules,
-  });
+  // Every instructor is a person; one Mana no longer lists still gets their hours, under their id.
+  const people: Person[] = coaches.map((c) => ({ id: c.id, name: c.name, manaInstructorId: c.id, freeClassesPerWeek: c.freeClassesPerWeek, activeFrom: c.activeFrom }));
+  const known = new Set(people.map((p) => p.id));
+  for (const id of new Set(work.map((w) => w.instructorId).filter((id): id is string => Boolean(id)))) {
+    if (!known.has(id)) people.push({ id, name: `Okänd instruktör (${id.slice(0, 8)})`, manaInstructorId: id, freeClassesPerWeek: 0, activeFrom: null });
+  }
+  return calculateMonth({ month, work: work.map((w) => ({ ...w, source: w.source as Work["source"] })), people, rules });
 }
 
 /** The months that have been pulled, newest first. */
@@ -228,7 +214,7 @@ export async function listMonths(db: Db, studioId: string) {
 
 /**
  * Locks a month (ticket 23): its figures are frozen as they are now, so later
- * changes to people, rules or Mana do not move them. Refuses a month whose
+ * changes to coaches, rules or Mana do not move them. Refuses a month whose
  * pull is older than `staleAfterMs`, so the caller refreshes it first.
  */
 export async function lockMonth(db: Db, studioId: string, month: string, userId: string, now: Date = new Date()) {

@@ -31,7 +31,7 @@ export default async function SalaryRulesPage({ searchParams }: { searchParams: 
       description={t("salary.rulesIntro")}
       className="max-w-3xl"
       actions={
-        <ButtonLink href="/lon" variant="ghost" size="sm">
+        <ButtonLink href="/timmar" variant="ghost" size="sm">
           <ArrowLeft aria-hidden="true" />
           {t("salary.title")}
         </ButtonLink>

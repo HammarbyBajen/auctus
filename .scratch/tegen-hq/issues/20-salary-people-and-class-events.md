@@ -22,3 +22,5 @@ Decided by Max (2026-10-14):
 4. PT and Onramp bookings count only when completed.
 5. Export as both Excel and CSV, hours as decimals, one column per class type.
 6. The check against Fredrik's October hand count waits.
+
+Changed by Max (2026-10-14), after the first version: the section is called Timmar (not Lön), shows a summary per person with the categories their hours come from, and the coaches are Mana's instructors directly. Nothing is created in Tegen HQ; the only thing set here is each coach's free classes per week, from when, and notes.

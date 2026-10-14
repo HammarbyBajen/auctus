@@ -20,6 +20,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await requireUser();
   const banner = bannerFor(await getSyncStatus(db, user.studioId), new Date());
   const showSettings = can(user.role, "settings", "manage");
+  const showSalary = can(user.role, "salary", "read");
   // Owners hear about changes to Mana's API (ticket 24) until one marks them checked.
   const api = showSettings ? await getApiWatchStatus(db) : null;
   const apiNotice =
@@ -55,7 +56,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Plus aria-hidden="true" />
           {t("leads.new")}
         </ButtonLink>
-        <SideNav showSettings={showSettings} />
+        <SideNav showSettings={showSettings} showSalary={showSalary} />
         <div className="mt-auto flex items-center justify-between gap-2 px-2">
           <span className="min-w-0 truncate text-xs text-muted-foreground">{user.name}</span>
           <div className="flex items-center">
@@ -102,7 +103,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
       </div>
 
-      <BottomNav showSettings={showSettings} />
+      <BottomNav showSettings={showSettings} showSalary={showSalary} />
     </div>
   );
 }

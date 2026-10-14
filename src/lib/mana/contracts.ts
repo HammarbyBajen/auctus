@@ -123,3 +123,60 @@ export const gymCheckInsPageSchema = z.object({
   meta,
 });
 export type GymCheckInsPage = z.infer<typeof gymCheckInsPageSchema>;
+
+// ---- Salary (WFM) module (ticket 20): coach work, read only ----
+
+const maybeLinks = z.object({ next: z.string().nullable() }).optional();
+
+export const instructorsPageSchema = z.object({
+  data: z.object({ items: z.array(z.object({ id: z.string().min(1), name: z.string() })) }),
+  links: maybeLinks,
+});
+export type InstructorsPage = z.infer<typeof instructorsPageSchema>;
+
+export const classEventsSchema = z.object({
+  data: z.object({
+    items: z.array(
+      z.object({
+        id: z.string().min(1),
+        class: z.object({ id: z.string().min(1), title: z.string() }),
+        startsAt: z.string().min(1),
+        endsAt: z.string().min(1),
+        instructorId: z.string().nullable(),
+      }),
+    ),
+  }),
+  links: maybeLinks,
+});
+export type ClassEventsPage = z.infer<typeof classEventsSchema>;
+
+export const serviceBookingsPageSchema = z.object({
+  data: z.object({
+    items: z.array(
+      z.object({
+        id: z.string().min(1),
+        specialistServiceId: z.string().min(1),
+        instructorId: z.string().nullable(),
+        startsAt: z.string().min(1),
+        endsAt: z.string().min(1),
+        status: z.string(),
+      }),
+    ),
+  }),
+  links: maybeLinks,
+});
+export type ServiceBookingsPage = z.infer<typeof serviceBookingsPageSchema>;
+
+export const namedListSchema = z.object({
+  data: z.object({ items: z.array(z.object({ id: z.string().min(1), name: z.string() })) }),
+  links: maybeLinks,
+});
+export type NamedList = z.infer<typeof namedListSchema>;
+
+export const courseEventsSchema = z.object({
+  data: z.object({
+    items: z.array(z.object({ id: z.string().min(1), startsAt: z.string().min(1), endsAt: z.string().min(1), instructorId: z.string().nullable() })),
+  }),
+  links: maybeLinks,
+});
+export type CourseEventsPage = z.infer<typeof courseEventsSchema>;

@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
-import { Home, Plus, Settings, Users } from "lucide-react";
+import { Clock, Home, Plus, Settings, Users } from "lucide-react";
 import { press, springs } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
 type Item = { href: string; label: string; icon: typeof Home };
 
-function items(showSettings: boolean): Item[] {
+function items(showSettings: boolean, showSalary: boolean): Item[] {
   return [
     { href: "/", label: t("nav.home"), icon: Home },
     { href: "/leads", label: t("nav.leads"), icon: Users },
+    ...(showSalary ? [{ href: "/lon", label: t("nav.salary"), icon: Clock }] : []),
     ...(showSettings ? [{ href: "/installningar", label: t("nav.settings"), icon: Settings }] : []),
   ];
 }
@@ -26,12 +27,12 @@ function isActive(pathname: string, href: string) {
 const MotionLink = motion.create(Link);
 
 /** The sidebar navigation, from large screens up. */
-export function SideNav({ showSettings }: { showSettings: boolean }) {
+export function SideNav({ showSettings, showSalary }: { showSettings: boolean; showSalary: boolean }) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
   return (
     <nav aria-label={t("nav.main")} className="flex flex-col gap-1">
-      {items(showSettings).map((item) => {
+      {items(showSettings, showSalary).map((item) => {
         const active = isActive(pathname, item.href);
         const Icon = item.icon;
         return (
@@ -56,10 +57,10 @@ export function SideNav({ showSettings }: { showSettings: boolean }) {
 }
 
 /** The tab bar along the bottom on phones and tablets, within reach of the thumb. */
-export function BottomNav({ showSettings }: { showSettings: boolean }) {
+export function BottomNav({ showSettings, showSalary }: { showSettings: boolean; showSalary: boolean }) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
-  const all = [...items(showSettings)];
+  const all = [...items(showSettings, showSalary)];
   all.splice(2, 0, { href: "/leads/ny", label: t("nav.newLeadShort"), icon: Plus });
   return (
     <nav

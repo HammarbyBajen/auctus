@@ -32,3 +32,17 @@ export function formatNumber(value: number): string {
 export function formatPercent(share: number): string {
   return percentFormatter.format(share).replace(/\s%/, " %");
 }
+
+const monthFormatter = new Intl.DateTimeFormat("sv-SE", { month: "long", year: "numeric", timeZone: "UTC" });
+
+/** A month (YYYY-MM) in Swedish, for example "oktober 2026". */
+export function formatMonth(month: string): string {
+  return monthFormatter.format(new Date(`${month}-15T12:00:00Z`));
+}
+
+const hoursFormatter = new Intl.NumberFormat("sv-SE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+
+/** Hours as a decimal the Swedish way ("1,5"). */
+export function formatHours(hours: number): string {
+  return hoursFormatter.format(hours);
+}

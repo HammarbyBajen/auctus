@@ -10,7 +10,13 @@ import {
   type ClassBookingsPage,
   gymCheckInsPageSchema,
   type GymCheckInsPage,
+  instructorsPageSchema,
+  classEventsSchema,
+  serviceBookingsPageSchema,
+  namedListSchema,
+  courseEventsSchema,
 } from "./contracts";
+import type { z } from "zod";
 import { ManaError } from "./errors";
 
 export type ManaClientOptions = {
@@ -201,6 +207,48 @@ export class ManaClient {
       url = page.links.next;
     }
     return items;
+  }
+
+  /** Every page of a list, following the next link (salary module). */
+  private async allPages<T>(first: string, schema: z.ZodType<{ data: { items: T[] }; links?: { next: string | null } }>, what: string): Promise<T[]> {
+    let url: string | null = first;
+    const items: T[] = [];
+    while (url) {
+      const page: { data: { items: T[] }; links?: { next: string | null } } = parseContract(schema, await this.getJson(url), what);
+      items.push(...page.data.items);
+      url = page.links?.next ?? null;
+    }
+    return items;
+  }
+
+  /** The studio's instructors, for linking coaches (ticket 20). */
+  async getInstructors() {
+    return this.allPages(this.studioUrl("/instructors", { pageSize: "100" }), instructorsPageSchema, "instructörer");
+  }
+
+  /** Group classes starting in a window. Mana refuses windows of more than 200 classes, so callers keep windows short. */
+  async getClassEvents(fromAt: string, toAt: string) {
+    return this.allPages(this.studioUrl("/class-events", { fromAt, toAt }), classEventsSchema, "pass");
+  }
+
+  /** PT and Onramp bookings starting in a window, with their status. */
+  async getServiceBookings(fromAt: string, toAt: string) {
+    return this.allPages(this.studioUrl("/specialist-service-bookings", { fromAt, toAt, pageSize: "200" }), serviceBookingsPageSchema, "PT-bokningar");
+  }
+
+  /** The specialist services (PT30, PT60, Onramp), for their names. */
+  async getSpecialistServices() {
+    return this.allPages(this.studioUrl("/specialist-services", {}), namedListSchema, "tjänster");
+  }
+
+  /** Courses (Tegen Kids) overlapping a window. */
+  async getCourses(fromAt: string, toAt: string) {
+    return this.allPages(this.studioUrl("/courses", { fromAt, toAt }), namedListSchema, "kurser");
+  }
+
+  /** Every session of one course. */
+  async getCourseEvents(courseId: string) {
+    return this.allPages(this.studioUrl("/course-events", { courseId }), courseEventsSchema, "kurstillfällen");
   }
 
   /** Every membership one person has, past, current and future. */

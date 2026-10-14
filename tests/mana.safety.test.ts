@@ -66,6 +66,19 @@ describe("the CRM never writes to Mana", () => {
   it("exposes no method on the client that could change anything", () => {
     const source = read("src/lib/mana/client.ts");
     const publicMethods = [...source.matchAll(/^\s{2}async (\w+)\(/gm)].map((m) => m[1]);
-    expect(publicMethods.sort()).toEqual(["getClassBookings", "getGymCheckIns", "getPaidPayments", "getUserMemberships", "getUsersPage", "searchUsers"]);
+    expect(publicMethods.sort()).toEqual([
+      "getClassBookings",
+      "getClassEvents",
+      "getCourseEvents",
+      "getCourses",
+      "getGymCheckIns",
+      "getInstructors",
+      "getPaidPayments",
+      "getServiceBookings",
+      "getSpecialistServices",
+      "getUserMemberships",
+      "getUsersPage",
+      "searchUsers",
+    ]);
   });
 });

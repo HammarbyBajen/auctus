@@ -679,3 +679,118 @@ export const manaPurchase = pgTable(
     index("mana_purchase_user_idx").on(table.studioId, table.manaUserId),
   ],
 );
+
+// ---- Salary (WFM) module (tickets 20-23): coach hours from Mana, names and hours only, no money ----
+
+/** A coach: who they are, which Mana instructor they are, and their deal. */
+export const salaryPerson = pgTable(
+  "salary_person",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** The Mana instructor whose sessions are this person's. */
+    manaInstructorId: text("mana_instructor_id"),
+    /** Group classes a week held unpaid, in exchange for training for free. */
+    freeClassesPerWeek: integer("free_classes_per_week").notNull().default(0),
+    /** From when the free classes apply (YYYY-MM-DD). Empty means from the start. */
+    activeFrom: date("active_from", { mode: "string" }),
+    notes: text("notes").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("salary_person_instructor_idx").on(table.studioId, table.manaInstructorId)],
+);
+
+/** Mana's instructors (id and name), kept from the latest pull for linking people. */
+export const salaryInstructor = pgTable(
+  "salary_instructor",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    id: text("id").notNull(),
+    name: text("name").notNull(),
+    seenAt: timestamp("seen_at").notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.id] })],
+);
+
+/** A month of salary work: when it was last pulled from Mana, and whether it is locked (with its frozen figures). */
+export const salaryMonth = pgTable(
+  "salary_month",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** YYYY-MM */
+    month: text("month").notNull(),
+    pulledAt: timestamp("pulled_at"),
+    pulledById: text("pulled_by_id").references(() => user.id, { onDelete: "set null" }),
+    lockedAt: timestamp("locked_at"),
+    lockedById: text("locked_by_id").references(() => user.id, { onDelete: "set null" }),
+    /** The month's figures as they were when locked; a locked month shows these and nothing else. */
+    snapshot: jsonb("snapshot"),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.month] })],
+);
+
+/**
+ * One session of coach work pulled from Mana for a month: a group class, a
+ * PT or Onramp booking, or a Kids course session. Replaced on every pull, so
+ * a class removed in Mana disappears here too.
+ */
+export const salaryWork = pgTable(
+  "salary_work",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    month: text("month").notNull(),
+    /** Source and Mana id, for example "class:<id>". */
+    id: text("id").notNull(),
+    /** class, service or course */
+    source: text("source").notNull(),
+    /** What the rules key on, for example "class:<class id>" or "service:<service id>". */
+    typeKey: text("type_key").notNull(),
+    typeLabel: text("type_label").notNull(),
+    instructorId: text("instructor_id"),
+    startsAt: timestamp("starts_at").notNull(),
+    endsAt: timestamp("ends_at").notNull(),
+    /** For a PT or Onramp booking: completed, booked, canceled, refunded or no_show. */
+    status: text("status"),
+  },
+  (table) => [
+    primaryKey({ columns: [table.studioId, table.month, table.id] }),
+    index("salary_work_month_idx").on(table.studioId, table.month, table.startsAt),
+  ],
+);
+
+/** Whether a kind of work is paid. Unset (null) until an owner decides; unset types are flagged, never dropped. */
+export const salaryTypeRule = pgTable(
+  "salary_type_rule",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    typeKey: text("type_key").notNull(),
+    label: text("label").notNull(),
+    source: text("source").notNull(),
+    paid: boolean("paid"),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.typeKey] })],
+);
+
+/** Who locked or unlocked a month, and when. */
+export const salaryLog = pgTable("salary_log", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  studioId: uuid("studio_id")
+    .notNull()
+    .references(() => studio.id, { onDelete: "cascade" }),
+  month: text("month").notNull(),
+  /** lock or unlock */
+  action: text("action").notNull(),
+  at: timestamp("at").notNull().defaultNow(),
+  byId: text("by_id").references(() => user.id, { onDelete: "set null" }),
+});

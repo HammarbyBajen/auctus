@@ -773,3 +773,20 @@ export const salaryLog = pgTable("salary_log", {
   at: timestamp("at").notNull().defaultNow(),
   byId: text("by_id").references(() => user.id, { onDelete: "set null" }),
 });
+
+/**
+ * What Tegen HQ has posted to Discord, one row per thing, so nothing is
+ * posted twice (a retried step, a second cron call). The key says what it
+ * was, for example "overdue:<lead id>" or "summary:2026-10-15". No personal data.
+ */
+export const discordNotice = pgTable(
+  "discord_notice",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    sentAt: timestamp("sent_at").notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.key] })],
+);

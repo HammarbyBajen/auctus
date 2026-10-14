@@ -1,6 +1,7 @@
 {
   "crons": [
     { "path": "/api/cron/mana-sync", "schedule": "0 3 * * *" },
-    { "path": "/api/cron/mana-api-watch", "schedule": "0 2 * * *" }
+    { "path": "/api/cron/mana-api-watch", "schedule": "0 2 * * *" },
+    { "path": "/api/cron/daily-summary", "schedule": "0 5 * * *" }
   ]
 }

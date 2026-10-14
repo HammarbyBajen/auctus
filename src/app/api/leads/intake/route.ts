@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { studio } from "@/db/schema";
 import { receiveLead } from "@/lib/intake/service";
+import { watchFirstContact } from "@/lib/notify/start";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +23,9 @@ const json = (status: number, body: unknown) => Response.json(body, { status });
 
 /**
  * Lead intake (ticket 09): tegen-web POSTs every lead here as a sixth
- * destination. The contract is in docs/lead-intake.md. Nothing is sent to
- * anyone from here: the lead lands in the pipeline and on the home page.
+ * destination. The contract is in docs/lead-intake.md. The lead lands in the
+ * pipeline and on the home page; the only thing sent anywhere is a post in
+ * the project's Discord test channel if nobody reaches it in time.
  */
 export async function POST(request: Request) {
   if (!authorised(request.headers.get("authorization"))) return json(401, { error: "unauthorized" });
@@ -51,6 +53,8 @@ export async function POST(request: Request) {
     case "invalid":
       return json(400, { error: "invalid_payload", issues: result.issues });
     case "created":
+      // Posts to the test channel on Discord if nobody reaches the lead in time.
+      await watchFirstContact(target.id, result.leadId);
       return json(201, result);
     default:
       return json(200, result);

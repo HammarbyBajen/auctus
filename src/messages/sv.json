@@ -501,5 +501,15 @@
   "salary.notCountedMark": "(räknas inte)",
   "salary.source.classes": "Gruppass",
   "salary.source.services": "PT och Onramp",
-  "salary.source.courses": "Kurser (Kids)"
+  "salary.source.courses": "Kurser (Kids)",
+  "notify.overdue": "Första kontakt försenad: en lead från {source} kom in {created} och skulle ha kontaktats senast {deadline}. Ingen har flyttat den än.\n{url}",
+  "notify.summary.title": "Tegen HQ, läget {day}",
+  "notify.summary.newLeads": "Nya leads i går: {n} ({sources})",
+  "notify.summary.noNewLeads": "Inga nya leads i går",
+  "notify.summary.overdue": "Försenad första kontakt: {n}",
+  "notify.summary.tasks": "Uppgifter: {overdue} försenade, {today} i dag",
+  "notify.summary.atRisk": "Medlemmar som riskerar att sluta: {n}",
+  "notify.summary.syncOk": "Mana-synken gick bra {when}",
+  "notify.summary.syncFailed": "Mana-synken misslyckades {when}",
+  "notify.summary.syncNever": "Mana-synken har inte gått än"
 }

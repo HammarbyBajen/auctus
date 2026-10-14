@@ -10,6 +10,7 @@ import { listLeadFields, PipelineError, readFieldValues, saveLeadFieldValues } f
 import { leadSources } from "@/lib/leads/constants";
 import { addNote, createOrMatchLead, getLead, LeadError, logContact, moveLeadStage } from "@/lib/leads/service";
 import { createManaClient } from "@/lib/mana/config";
+import { watchFirstContact } from "@/lib/notify/start";
 import { refreshPersonFromMana } from "@/lib/mana/leads";
 import { setWinBackReason, WinBackError } from "@/lib/mana/winback-service";
 import { assignLead, createTask, deleteTask, setTaskDone, TaskError } from "@/lib/tasks/service";
@@ -56,6 +57,7 @@ export async function createLead(_: LeadFormState, formData: FormData): Promise<
       .set({ customFields: { ...lead.customFields, ...fieldValues } })
       .where(eq(leadTable.id, lead.id));
   }
+  if (!duplicate) await watchFirstContact(user.studioId, lead.id);
   revalidatePath("/leads");
   redirect(`/leads/${lead.id}${duplicate ? "?dubblett=1" : ""}`);
 }

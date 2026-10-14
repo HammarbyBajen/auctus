@@ -24,3 +24,4 @@ Decided by Max (2026-10-14):
 6. The check against Fredrik's October hand count waits.
 
 Changed by Max (2026-10-14), after the first version: the section is called Timmar (not Lön), shows a summary per person with the categories their hours come from, and the coaches are Mana's instructors directly. Nothing is created in Tegen HQ; the only thing set here is each coach's free classes per week, from when, and notes.
+Later the same day: no free classes, so there is nothing to set per coach and the Coacher page is gone too. A month is pulled for the month itself, not whole weeks around it.

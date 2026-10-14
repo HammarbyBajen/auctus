@@ -4,7 +4,7 @@ import { ManaError } from "@/lib/mana/errors";
 
 const hasDb = Boolean(process.env.DATABASE_URL);
 
-describe.skipIf(!hasDb)("salary: pulling and locking a month", () => {
+describe.skipIf(!hasDb)("hours: pulling and locking a month", () => {
   const tag = `salary-${Date.now()}`;
   let studioId: string;
   let ownerId: string;
@@ -66,59 +66,42 @@ describe.skipIf(!hasDb)("salary: pulling and locking a month", () => {
 
   const t0 = new Date("2026-10-31T12:00:00Z");
 
-  it("pulls the whole weeks around a month, splitting a window Mana finds too big", async () => {
-    const events = [classEvent("c1", "2026-09-29T17:00:00+02:00"), classEvent("c2", "2026-10-06T07:00:00+02:00", 30), classEvent("c3", "2026-10-06T17:00:00+02:00"), classEvent("c4", "2026-10-06T18:00:00+02:00", 60, null)];
+  it("pulls a month, splitting a window Mana finds too big", async () => {
+    const events = [classEvent("c0", "2026-09-29T17:00:00+02:00"), classEvent("c1", "2026-10-01T17:00:00+02:00"), classEvent("c2", "2026-10-02T07:00:00+02:00", 30), classEvent("c3", "2026-10-02T17:00:00+02:00"), classEvent("c4", "2026-10-02T18:00:00+02:00", 60, null)];
     const source = fake(events, 2);
     const result = await salary.pullMonth(db, source, studioId, "2026-10", ownerId, t0);
+    // c0 is in September; the Kids session in August is left out too.
     expect(result).toEqual({ status: "pulled", sessions: 7, newTypes: 3 });
-    // Five weeks, and the week with three classes was asked for again in halves.
+    // Five windows, and the first one, with four classes, was asked for again in halves.
     expect(source.calls.length).toBeGreaterThan(5);
 
-    const rules = await salary.listRules(db, studioId);
-    expect(rules.map((r) => [r.typeKey, r.paid])).toEqual([
-      ["class:wod", null],
-      ["course:kids", null],
-      ["service:pt60", null],
+    const categories = await salary.listCategories(db, studioId);
+    expect(categories.map((c) => [c.typeKey, c.counted])).toEqual([
+      ["class:wod", true],
+      ["course:kids", true],
+      ["service:pt60", true],
     ]);
-    const coaches = await salary.listCoaches(db, studioId);
-    expect(coaches.map((c) => [c.id, c.name, c.freeClassesPerWeek])).toEqual([["i-anna", "Anna A", 0]]);
+    expect(await salary.listCoaches(db, studioId)).toEqual([{ id: "i-anna", name: "Anna A" }]);
   });
 
-  it("shows hours per Mana instructor straight away, with unset kinds flagged and not paid", async () => {
-    expect(await salary.saveDeal(db, studioId, "i-anna", { freeClassesPerWeek: 1, activeFrom: null, notes: "" })).toBe("saved");
+  it("shows every coach's hours straight from Mana, by category", async () => {
     const month = await salary.getMonth(db, studioId, "2026-10");
-    const anna = month.result!.people[0];
+    const anna = month.result!.coaches[0];
     expect(anna.name).toBe("Anna A");
-    expect(anna.byType).toEqual({ "class:wod": 1.5, "service:pt60": 1, "course:kids": 0.75 });
-    expect(anna.total).toBe(3.25);
-    expect(anna.toPay).toBe(0);
+    expect(anna.byType).toEqual({ "class:wod": 2.5, "service:pt60": 1, "course:kids": 0.75 });
+    expect(anna.total).toBe(4.25);
     expect(month.result!.unassigned).toHaveLength(1);
     expect(month.result!.notCounted).toEqual({ canceled: 1 });
-    expect(month.result!.types.every((t) => t.paid === null)).toBe(true);
   });
 
-  it("keeps a coach's deal when the month is pulled again", async () => {
-    await salary.pullMonth(db, fake([]), studioId, "2026-10", ownerId, t0);
-    expect((await salary.listCoaches(db, studioId))[0].freeClassesPerWeek).toBe(1);
-    expect(await salary.saveDeal(db, studioId, "i-okand", { freeClassesPerWeek: 1, activeFrom: null, notes: "" })).toBe("not_found");
-  });
-
-  it("pays by the rules, with the first class of the week free", async () => {
-    await salary.pullMonth(db, fake([classEvent("c1", "2026-09-29T17:00:00+02:00"), classEvent("c2", "2026-10-06T07:00:00+02:00", 30), classEvent("c3", "2026-10-06T17:00:00+02:00")]), studioId, "2026-10", ownerId, t0);
-    await salary.setRule(db, studioId, "class:wod", true);
-    await salary.setRule(db, studioId, "service:pt60", true);
-    await salary.setRule(db, studioId, "course:kids", false);
-    const anna = (await salary.getMonth(db, studioId, "2026-10")).result!.people[0];
-    // WOD 1.5 h (the 30-minute class on Tuesday is the week's free one) + PT 1 h.
-    expect([anna.freeClasses, anna.freeHours, anna.toPay]).toEqual([1, 0.5, 2]);
-  });
-
-  it("replaces the month on a refresh, so a class removed in Mana is gone", async () => {
-    await salary.pullMonth(db, fake([classEvent("c3", "2026-10-06T17:00:00+02:00")]), studioId, "2026-10", ownerId, t0);
-    const anna = (await salary.getMonth(db, studioId, "2026-10")).result!.people[0];
+  it("leaves out the categories an owner unticks, and keeps that choice on the next pull", async () => {
+    await salary.setCounted(db, studioId, ["class:wod", "course:kids", "service:pt60"], ["class:wod", "service:pt60"]);
+    expect((await salary.getMonth(db, studioId, "2026-10")).result!.coaches[0].total).toBe(3.5);
+    await salary.pullMonth(db, fake([classEvent("c3", "2026-10-02T17:00:00+02:00")]), studioId, "2026-10", ownerId, t0);
+    const anna = (await salary.getMonth(db, studioId, "2026-10")).result!.coaches[0];
+    // The class removed in Mana is gone; Kids is still left out.
     expect(anna.byType["class:wod"]).toBe(1);
-    // Rules already decided are kept.
-    expect((await salary.listRules(db, studioId)).find((r) => r.typeKey === "class:wod")!.paid).toBe(true);
+    expect(anna.total).toBe(2);
   });
 
   it("asks for a fresh pull before locking, then freezes the month", async () => {
@@ -126,13 +109,12 @@ describe.skipIf(!hasDb)("salary: pulling and locking a month", () => {
     expect(await salary.lockMonth(db, studioId, "2026-10", ownerId, later)).toEqual({ status: "stale" });
     expect(await salary.lockMonth(db, studioId, "2026-10", ownerId, t0)).toEqual({ status: "locked_now" });
 
-    // Changing a rule, a person or pulling again does not move a locked month.
-    await salary.setRule(db, studioId, "class:wod", false);
-    await salary.setRule(db, studioId, "service:pt60", false);
+    // Changing the categories or pulling again does not move a locked month.
+    await salary.setCounted(db, studioId, ["class:wod", "course:kids", "service:pt60"], []);
     expect(await salary.pullMonth(db, fake([]), studioId, "2026-10", ownerId, t0)).toEqual({ status: "locked" });
     const month = await salary.getMonth(db, studioId, "2026-10");
     expect(month.lockedBy).toBe("Fredrik");
-    expect(month.result!.people[0].toPay).toBe(1);
+    expect(month.result!.coaches[0].total).toBe(2);
   });
 
   it("records who unlocked a month, and then calculates it live again", async () => {
@@ -144,7 +126,7 @@ describe.skipIf(!hasDb)("salary: pulling and locking a month", () => {
     ]);
     const month = await salary.getMonth(db, studioId, "2026-10");
     expect(month.lockedAt).toBeNull();
-    expect(month.result!.people[0].toPay).toBe(0);
+    expect(month.result!.coaches[0].total).toBe(0);
     const [row] = await db.select().from(schema.salaryMonth).where(and(eq(schema.salaryMonth.studioId, studioId), eq(schema.salaryMonth.month, "2026-10")));
     expect(row.snapshot).toBeNull();
   });

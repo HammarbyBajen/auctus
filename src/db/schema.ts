@@ -682,10 +682,7 @@ export const manaPurchase = pgTable(
 
 // ---- Salary (WFM) module (tickets 20-23): coach hours from Mana, names and hours only, no money ----
 
-/**
- * A coach, straight from Mana's instructors (id and name, kept from the latest
- * pull), plus the one thing Mana does not know: their free-class deal.
- */
+/** A coach, straight from Mana's instructors (id and name, kept from the latest pull). */
 export const salaryInstructor = pgTable(
   "salary_instructor",
   {
@@ -695,11 +692,6 @@ export const salaryInstructor = pgTable(
     id: text("id").notNull(),
     name: text("name").notNull(),
     seenAt: timestamp("seen_at").notNull().defaultNow(),
-    /** Group classes a week held unpaid, in exchange for training for free. */
-    freeClassesPerWeek: integer("free_classes_per_week").notNull().default(0),
-    /** From when the free classes apply (YYYY-MM-DD). Empty means from the start. */
-    activeFrom: date("active_from", { mode: "string" }),
-    notes: text("notes").notNull().default(""),
   },
   (table) => [primaryKey({ columns: [table.studioId, table.id] })],
 );
@@ -754,7 +746,7 @@ export const salaryWork = pgTable(
   ],
 );
 
-/** Whether a kind of work is paid. Unset (null) until an owner decides; unset types are flagged, never dropped. */
+/** Whether a category's hours are counted. Every category counts until an owner leaves it out (false). */
 export const salaryTypeRule = pgTable(
   "salary_type_rule",
   {
@@ -764,7 +756,7 @@ export const salaryTypeRule = pgTable(
     typeKey: text("type_key").notNull(),
     label: text("label").notNull(),
     source: text("source").notNull(),
-    paid: boolean("paid"),
+    counted: boolean("counted").notNull().default(true),
   },
   (table) => [primaryKey({ columns: [table.studioId, table.typeKey] })],
 );

@@ -1,9 +1,8 @@
 import type { MonthResult } from "./calc";
 
 /**
- * The month's hours for the accountant (ticket 23): one row per person, one
- * column per kind of work, then total hours, free classes, free hours and
- * hours to pay.
+ * The month's hours (ticket 23): one row per coach, one column per counted
+ * category, then the total.
  * Hours are decimals. As CSV (Swedish Excel: semicolons, decimal commas, a
  * BOM so ÅÄÖ open right) and as a real .xlsx, written here without a
  * dependency: a zip with no compression around five small XML files.
@@ -12,8 +11,9 @@ import type { MonthResult } from "./calc";
 export type Sheet = { header: string[]; rows: (string | number)[][] };
 
 export function exportSheet(result: MonthResult): Sheet {
-  const header = ["Namn", ...result.types.map((t) => t.label), "Timmar totalt", "Fria pass", "Fria timmar", "Timmar att betala"];
-  const rows = result.people.map((p) => [p.name, ...result.types.map((t) => p.byType[t.typeKey] ?? 0), p.total, p.freeClasses, p.freeHours, p.toPay]);
+  const counted = result.types.filter((t) => t.counted);
+  const header = ["Namn", ...counted.map((t) => t.label), "Timmar totalt"];
+  const rows = result.coaches.map((c) => [c.name, ...counted.map((t) => c.byType[t.typeKey] ?? 0), c.total]);
   return { header, rows };
 }
 

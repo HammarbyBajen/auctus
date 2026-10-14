@@ -4,7 +4,7 @@
 
 **Blocked by:** 21
 
-**Status:** done (2026-10-14)
+**Status:** dropped (2026-10-14), see the note at the end
 
 - [x] Free classes per week are deducted per week and booked to the month each class falls in, so a week spanning two months is split correctly
 - [x] Tegenbutik hours are always paid and never use up free classes
@@ -19,3 +19,5 @@ Decided by Max (2026-10-14):
 4. PT and Onramp bookings count only when completed.
 5. Export as both Excel and CSV, hours as decimals, one column per class type.
 6. The check against Fredrik's October hand count waits.
+
+Dropped by Max (2026-10-14): free classes were the wrong idea for counting hours. The Timmar view only shows the hours each coach held classes and courses; nothing is taken off.

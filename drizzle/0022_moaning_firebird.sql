@@ -1,0 +1,1 @@
+ALTER TABLE "salary_type_rule" ADD COLUMN "counted" boolean DEFAULT true NOT NULL;

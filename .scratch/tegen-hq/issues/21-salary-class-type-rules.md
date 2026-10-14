@@ -19,3 +19,5 @@ Decided by Max (2026-10-14):
 4. PT and Onramp bookings count only when completed.
 5. Export as both Excel and CSV, hours as decimals, one column per class type.
 6. The check against Fredrik's October hand count waits.
+
+Changed by Max (2026-10-14): no paid or unpaid rules. Every category (class, PT service, course) counts from the start, and owners untick the ones that should not count, right in the month view. The choice is kept until changed.

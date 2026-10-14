@@ -2,7 +2,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { salaryInstructor, salaryLog, salaryMonth, salaryTypeRule, salaryWork, user } from "@/db/schema";
 import { ManaError } from "@/lib/mana/errors";
-import { calculateMonth, pullWindow, type MonthResult, type Person, type Work } from "./calc";
+import { calculateMonth, pullWindow, type MonthResult, type Work } from "./calc";
 
 type Db = typeof defaultDb;
 
@@ -41,10 +41,10 @@ async function classEventsIn(source: SalarySource, from: Date, to: Date, depth =
 
 /**
  * Pulls a month's coach work from Mana (ticket 20): group classes, PT and
- * Onramp bookings and Kids course sessions, for the whole weeks around the
- * month. Replaces what was pulled before, so a class removed in Mana goes
- * away here too. Every new kind of work gets a rule left unset. A locked
- * month is never pulled.
+ * Onramp bookings and Kids course sessions, in the month (Tegen's time).
+ * Replaces what was pulled before, so a class removed in Mana goes
+ * away here too. A new category counts until an owner leaves it out. A
+ * locked month is never pulled.
  */
 export async function pullMonth(db: Db, source: SalarySource, studioId: string, month: string, userId: string | null, now: Date = new Date()) {
   const [current] = await db.select().from(salaryMonth).where(and(eq(salaryMonth.studioId, studioId), eq(salaryMonth.month, month))).limit(1);
@@ -118,10 +118,10 @@ export async function pullMonth(db: Db, source: SalarySource, studioId: string, 
         .onConflictDoUpdate({ target: [salaryInstructor.studioId, salaryInstructor.id], set: { name: sql`excluded.name`, seenAt: now } });
     }
     if (types.size > 0) {
-      // New kinds start unset; a known kind keeps its rule and only gets its current name.
+      // A new category counts; a known one keeps its choice and only gets its current name.
       await tx
         .insert(salaryTypeRule)
-        .values([...types.values()].map((t) => ({ studioId, ...t, paid: null })))
+        .values([...types.values()].map((t) => ({ studioId, ...t })))
         .onConflictDoUpdate({ target: [salaryTypeRule.studioId, salaryTypeRule.typeKey], set: { label: sql`excluded.label` } });
     }
     await tx
@@ -135,38 +135,32 @@ export async function pullMonth(db: Db, source: SalarySource, studioId: string, 
 
 // ---- Coaches ----
 
-/** The coaches: Mana's instructors as of the latest pull, with their free-class deal. */
+/** The coaches: Mana's instructors as of the latest pull. */
 export async function listCoaches(db: Db, studioId: string) {
-  return db.select().from(salaryInstructor).where(eq(salaryInstructor.studioId, studioId)).orderBy(asc(salaryInstructor.name));
+  return db.select({ id: salaryInstructor.id, name: salaryInstructor.name }).from(salaryInstructor).where(eq(salaryInstructor.studioId, studioId)).orderBy(asc(salaryInstructor.name));
 }
 
-export type DealInput = { freeClassesPerWeek: number; activeFrom: string | null; notes: string };
+// ---- Categories ----
 
-/** Sets a coach's free classes per week, from when, and notes. Name and id stay Mana's. */
-export async function saveDeal(db: Db, studioId: string, instructorId: string, input: DealInput) {
-  const [row] = await db
-    .update(salaryInstructor)
-    .set(input)
-    .where(and(eq(salaryInstructor.studioId, studioId), eq(salaryInstructor.id, instructorId)))
-    .returning({ id: salaryInstructor.id });
-  return row ? ("saved" as const) : ("not_found" as const);
-}
-
-// ---- Rules ----
-
-export async function listRules(db: Db, studioId: string) {
+export async function listCategories(db: Db, studioId: string) {
   return db.select().from(salaryTypeRule).where(eq(salaryTypeRule.studioId, studioId)).orderBy(asc(salaryTypeRule.source), asc(salaryTypeRule.label));
 }
 
-export async function setRule(db: Db, studioId: string, typeKey: string, paid: boolean | null) {
-  await db.update(salaryTypeRule).set({ paid }).where(and(eq(salaryTypeRule.studioId, studioId), eq(salaryTypeRule.typeKey, typeKey)));
+/** Which categories count: the ones listed in `counted` do, every other one the month has is left out. */
+export async function setCounted(db: Db, studioId: string, typeKeys: string[], counted: string[]) {
+  const keep = new Set(counted);
+  await db.transaction(async (tx) => {
+    for (const typeKey of typeKeys) {
+      await tx.update(salaryTypeRule).set({ counted: keep.has(typeKey) }).where(and(eq(salaryTypeRule.studioId, studioId), eq(salaryTypeRule.typeKey, typeKey)));
+    }
+  });
 }
 
 // ---- Months ----
 
 export type LockedSnapshot = MonthResult & { lockedAt: string };
 
-/** The month's figures: the frozen ones if it is locked, otherwise calculated from what was pulled with today's coaches and rules. */
+/** The month's figures: the frozen ones if it is locked, otherwise calculated from what was pulled with today's choice of categories. */
 export async function getMonth(db: Db, studioId: string, month: string, now: Date = new Date()) {
   const [state] = await db
     .select({
@@ -189,18 +183,12 @@ export async function getMonth(db: Db, studioId: string, month: string, now: Dat
 }
 
 async function calculate(db: Db, studioId: string, month: string): Promise<MonthResult> {
-  const [work, coaches, rules] = await Promise.all([
+  const [work, coaches, categories] = await Promise.all([
     db.select().from(salaryWork).where(and(eq(salaryWork.studioId, studioId), eq(salaryWork.month, month))),
     listCoaches(db, studioId),
-    listRules(db, studioId),
+    listCategories(db, studioId),
   ]);
-  // Every instructor is a person; one Mana no longer lists still gets their hours, under their id.
-  const people: Person[] = coaches.map((c) => ({ id: c.id, name: c.name, manaInstructorId: c.id, freeClassesPerWeek: c.freeClassesPerWeek, activeFrom: c.activeFrom }));
-  const known = new Set(people.map((p) => p.id));
-  for (const id of new Set(work.map((w) => w.instructorId).filter((id): id is string => Boolean(id)))) {
-    if (!known.has(id)) people.push({ id, name: `Okänd instruktör (${id.slice(0, 8)})`, manaInstructorId: id, freeClassesPerWeek: 0, activeFrom: null });
-  }
-  return calculateMonth({ month, work: work.map((w) => ({ ...w, source: w.source as Work["source"] })), people, rules });
+  return calculateMonth({ month, work: work.map((w) => ({ ...w, source: w.source as Work["source"] })), coaches, categories });
 }
 
 /** The months that have been pulled, newest first. */
@@ -214,7 +202,7 @@ export async function listMonths(db: Db, studioId: string) {
 
 /**
  * Locks a month (ticket 23): its figures are frozen as they are now, so later
- * changes to coaches, rules or Mana do not move them. Refuses a month whose
+ * changes to the categories or Mana do not move them. Refuses a month whose
  * pull is older than `staleAfterMs`, so the caller refreshes it first.
  */
 export async function lockMonth(db: Db, studioId: string, month: string, userId: string, now: Date = new Date()) {

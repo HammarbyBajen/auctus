@@ -186,11 +186,11 @@ Per the to-spec method, please confirm that these two seams are the ones you exp
 
 ## Out of Scope (v1)
 
-- Email or SMS automation and campaign tools (planned for a later phase, with a provider, consent handling and Swedish marketing rules).
+- Email or SMS automation and campaign tools in v1. Email follows as M8 on Resend (decided by Max on 2026-10-15, see Further Notes); SMS stays out.
 - Any writing to Mana.
 - A member-facing portal.
 - Bookings or a calendar inside the CRM (follow-up is tasks with due dates).
-- Replacing or syncing Mailchimp.
+- Replacing or syncing Mailchimp in v1. Replacing it with Resend is the last phase of M8 (decided by Max on 2026-10-15); until then Mailchimp keeps sending the newsletter.
 - A full reporting module.
 - Any salary or money calculation (the Salary (WFM) module only produces names and hours).
 - Importing any Wondr history.
@@ -215,5 +215,6 @@ Tracked in [questions-for-erik.md](questions-for-erik.md).
 ## Further Notes
 
 - **Milestones (suggested).** M1 Foundations (login, roles, stages, manual leads, tasks, landing page). M2 Intake (endpoint for `tegen-web`, duplicate and test-lead rules, attribution). M3 Mana (sync, membership display, Won detection). M4 Import, then "Review where we land" with Erik (only after that do notifications and accounts go to Fredrik and Timmy, and is Pipedrive's future decided). M0 (any time): daily Mana API change watch. M5 Retention (win-back leads, at-risk Rule 1). M6 Reporting and polish. M2b KPI: MRR and paying members on the home page. M7 Salary (WFM) module (can be built any time after ticket 10, since it only needs the Mana connection; no deadline, and Erik decides whether to aim for the 15th). Rule 2 and automation follow later.
+- **M8 Email on Resend (decided by Max on 2026-10-15).** Four phases, in order: (1) 1-to-1 emails a staff member sends from the CRM to a lead or an at-risk member, with Tegen's template, logged in the history; (2) drip sequences for new leads, stopped when the person replies, books or becomes a member; (3) win-back and at-risk journeys; (4) the newsletter, replacing Mailchimp. Ground rules: until the review with Erik nothing reaches a real member or lead, manual or automatic, and the code makes that impossible rather than relying on care; Max's own Resend account for now, moved to Tegen later; who controls crossfittegen.se's DNS is still to find out; the words are Tegen's (Fredrik, Timmy, Erik), never invented; consent and unsubscribe follow Swedish marketing rules and GDPR. Research: docs/research/resend.md. Plan: .scratch/tegen-hq/email-plan.md. **Exception to "data stays in the EU":** Resend stores account data, logs, metadata and email content (30 days) in the United States whatever the sending region, under a DPA, the EU SCCs and the EU-US Data Privacy Framework; Max accepted this on 2026-10-15, to be stated in Tegen's privacy policy, and as little as possible is sent there (no tracking, ids only, no member lists before phase 4). Tegen HQ sends from a subdomain of crossfittegen.se, since another Resend account (most likely `tegen-web`'s) already holds the main domain.
 - **Why not off-the-shelf.** Gym CRMs exist, but the point is a thin layer fitted to Tegen's process and to Mana, which Lab37 can extend into a product.
 - **Recommended skills for the build phase** (not installed): `anthropics/skills@frontend-design`, `vercel-labs/agent-skills@web-design-guidelines`, `mattpocock/skills@domain-modeling`, `wshobson/agents@architecture-decision-records`.

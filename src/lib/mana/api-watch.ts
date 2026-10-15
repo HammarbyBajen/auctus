@@ -12,11 +12,21 @@ import { createHash } from "node:crypto";
 
 export const specUrl = "https://www.getmana.app/api/v1/openapi";
 
-/** The endpoints the sync reads. A change to one of them is the one that can break it. */
+/** Every Mana endpoint Tegen HQ reads (a test keeps this in step with the client). A change to one of them is the kind that can break something. */
 export const syncEndpoints = [
   "GET /api/v1/studios/{studioId}/users",
   "GET /api/v1/studios/{studioId}/user-memberships",
   "GET /api/v1/studios/{studioId}/payment-transactions",
+  // Visits for the at-risk list (ticket 13).
+  "GET /api/v1/studios/{studioId}/class-event-bookings",
+  "GET /api/v1/studios/{studioId}/gym-check-ins",
+  // Coach hours for Timmar (tickets 20-23).
+  "GET /api/v1/studios/{studioId}/instructors",
+  "GET /api/v1/studios/{studioId}/class-events",
+  "GET /api/v1/studios/{studioId}/specialist-service-bookings",
+  "GET /api/v1/studios/{studioId}/specialist-services",
+  "GET /api/v1/studios/{studioId}/courses",
+  "GET /api/v1/studios/{studioId}/course-events",
 ];
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };

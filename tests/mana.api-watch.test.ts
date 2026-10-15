@@ -96,3 +96,13 @@ describe("hash and diff", () => {
     expect(diff).toEqual({ added: ["GET /api/v1/news"], removed: [], touchesSync: false });
   });
 });
+
+describe("what the watch covers", () => {
+  it("covers every Mana endpoint the client reads", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { syncEndpoints } = await import("@/lib/mana/api-watch");
+    const read = [...readFileSync("src/lib/mana/client.ts", "utf8").matchAll(/studioUrl\("(\/[a-z-]+)"/g)].map((m) => `GET /api/v1/studios/{studioId}${m[1]}`);
+    expect(read.length).toBeGreaterThan(0);
+    for (const endpoint of read) expect(syncEndpoints, endpoint).toContain(endpoint);
+  });
+});

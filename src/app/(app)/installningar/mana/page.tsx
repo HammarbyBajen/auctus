@@ -7,7 +7,6 @@ import { ButtonLink } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { MicroLabel } from "@/components/app/micro-label";
 import { Notice } from "@/components/app/notice";
 import { Page } from "@/components/app/page";
@@ -16,31 +15,29 @@ import { SubmitButton } from "@/components/app/submit-button";
 import { formatDateTime, formatNumber } from "@/lib/format";
 import { getAddOnMembershipIds, getIgnoredMembershipIds, listMembershipKinds } from "@/lib/mana/leads";
 import { syncEndpoints } from "@/lib/mana/api-watch";
-import { getAtRiskEmails } from "@/lib/mana/at-risk-service";
 import { getApiWatchStatus } from "@/lib/mana/api-watch-service";
 import { getSyncStatus } from "@/lib/mana/status";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
-import { acknowledgeApi, saveAtRiskDays, saveAtRiskEmailsAction, saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
+import { acknowledgeApi, saveAtRiskDays, saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ManaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ startad?: string; sparat?: string; vinnsparat?: string; risksparat?: string; riskfel?: string; mejlsparat?: string }>;
+  searchParams: Promise<{ startad?: string; sparat?: string; vinnsparat?: string; risksparat?: string; riskfel?: string}>;
 }) {
   const user = await requirePermission("settings", "manage");
-  const { startad, sparat, vinnsparat, risksparat, riskfel, mejlsparat } = await searchParams;
-  const [status, kinds, ignored, addOns, [settings], api, emails] = await Promise.all([
+  const { startad, sparat, vinnsparat, risksparat, riskfel } = await searchParams;
+  const [status, kinds, ignored, addOns, [settings], api] = await Promise.all([
     getSyncStatus(db, user.studioId),
     listMembershipKinds(db, user.studioId),
     getIgnoredMembershipIds(db, user.studioId),
     getAddOnMembershipIds(db, user.studioId),
     db.select({ winBackEnabled: studioSettings.winBackEnabled, atRiskDays: studioSettings.atRiskDays }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
     getApiWatchStatus(db),
-    getAtRiskEmails(db, user.studioId),
   ]);
 
   return (
@@ -107,31 +104,6 @@ export default async function ManaPage({
         </form>
       </Panel>
 
-      <Panel title={t("atRisk.emailTitle")} id="at-risk-email">
-        <p className="text-sm text-muted-foreground">{t("atRisk.emailIntro")}</p>
-        {mejlsparat === "1" && <Notice tone="success">{t("atRisk.emailSaved")}</Notice>}
-        <form action={saveAtRiskEmailsAction} className="flex flex-col gap-6">
-          {(["never", "away"] as const).map((group) => (
-            <fieldset key={group} className="flex flex-col gap-3">
-              <legend className="mb-1 text-sm font-medium">{t(group === "never" ? "atRisk.emailNever" : "atRisk.emailAway")}</legend>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor={`${group}-subject`}>{t("atRisk.emailSubject")}</Label>
-                <Input id={`${group}-subject`} name={`${group}Subject`} maxLength={200} defaultValue={emails[group].subject} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor={`${group}-body`}>{t("atRisk.emailBody")}</Label>
-                <Textarea id={`${group}-body`} name={`${group}Body`} rows={6} maxLength={4000} defaultValue={emails[group].body} aria-describedby="at-risk-email-hint" />
-              </div>
-            </fieldset>
-          ))}
-          <p id="at-risk-email-hint" className="text-xs text-muted-foreground">
-            {t("atRisk.emailHint")}
-          </p>
-          <SubmitButton variant="outline" className="self-start">
-            {t("atRisk.emailSave")}
-          </SubmitButton>
-        </form>
-      </Panel>
 
       <Panel title={t("mana.rulesTitle")} id="rules">
         <p className="text-sm text-muted-foreground">{t("mana.rulesIntro")}</p>

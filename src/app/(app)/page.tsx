@@ -23,6 +23,7 @@ import { rowChip } from "@/lib/leads/row";
 import { listStages } from "@/lib/pipeline/service";
 import { isGreyedOut } from "@/lib/tasks/dates";
 import { AtRiskList } from "./at-risk-list";
+import { getEmailSettings } from "@/lib/email/service";
 import { MemberTrend } from "./member-trend";
 import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -72,7 +73,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { fel, visa, risk, riskalla } = await searchParams;
   const scope = visa === "mina" ? "mine" : "all";
   const showKpi = can(user.role, "kpi", "read");
-  const [{ items, counts }, stages, kpi, atRisk, [settings], people, emails] = await Promise.all([
+  const [{ items, counts }, stages, kpi, atRisk, [settings], people, emails, emailSettings] = await Promise.all([
     getHomeData(db, user.studioId, user.id, scope),
     listStages(db, user.studioId),
     showKpi ? getKpi(db, user.studioId, todayInStockholm()) : null,
@@ -80,6 +81,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     db.select({ atRiskDays: studioSettings.atRiskDays }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
     listUsers(db, user.studioId),
     getAtRiskEmails(db, user.studioId),
+    getEmailSettings(db, user.studioId),
   ]);
   const stageOf = (key: string) => stages.find((s) => s.key === key);
 
@@ -171,6 +173,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               viewerId={user.id}
               people={people.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name }))}
               emails={emails}
+              emailMode={emailSettings.mode}
             />
           </StaggerItem>
         )}

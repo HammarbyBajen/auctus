@@ -5,6 +5,14 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  {
+    // Email (M8): one module talks to Resend, so every send goes through its test-mode guard.
+    files: ["src/**/*.{ts,tsx}"],
+    ignores: ["src/lib/email/transport.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [{ name: "resend", message: "Only src/lib/email/transport.ts may talk to Resend: send through src/lib/email/service.ts." }] }],
+    },
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:

@@ -7,11 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
+import { EmailComposer } from "@/components/app/email-composer";
 import { SubmitButton } from "@/components/app/submit-button";
+import type { ComposeState } from "./email-actions";
+import type { EmailMode } from "@/lib/email/mode";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
 
-type Panel = "log" | "dismiss" | "history" | null;
+type Panel = "email" | "log" | "dismiss" | "history" | null;
 
 /**
  * A member's buttons on the Hör av dig till list, with the form for each
@@ -21,7 +24,7 @@ export function AtRiskPanels({
   id,
   name,
   phone,
-  mailto,
+  email,
   history,
   logAction,
   dismissAction,
@@ -32,7 +35,8 @@ export function AtRiskPanels({
   id: string;
   name: string;
   phone: string | null;
-  mailto: string | null;
+  /** Writing to them from Tegen HQ, with Tegen's template for their group (M8 phase 1). */
+  email: { to: string; subject: string; body: string; mode: EmailMode; action: (state: ComposeState, formData: FormData) => Promise<ComposeState> } | null;
   history: React.ReactNode | null;
   logAction: (formData: FormData) => Promise<void>;
   dismissAction: (formData: FormData) => Promise<void>;
@@ -52,11 +56,11 @@ export function AtRiskPanels({
     <Button
       type="button"
       size="sm"
-      variant={panel === "log" ? "secondary" : "ghost"}
+      variant={panel === "log" ? "secondary" : panel === "email" ? "outline" : "ghost"}
       aria-expanded={open === panel}
       aria-controls={panelId(panel)}
       onClick={() => toggle(panel)}
-      className={cn(panel !== "log" && "text-muted-foreground", open === panel && "bg-accent text-foreground")}
+      className={cn(panel !== "log" && panel !== "email" && "text-muted-foreground", open === panel && "bg-accent text-foreground")}
     >
       {icon}
       {label}
@@ -72,17 +76,17 @@ export function AtRiskPanels({
             {t("home.call")}
           </ButtonAnchor>
         )}
-        {mailto && (
-          // Opens the staff member's own mail program: Tegen HQ sends nothing itself.
-          <ButtonAnchor href={mailto} variant="outline" size="sm" aria-label={`${t("atRisk.email")} ${name}`}>
-            <Mail aria-hidden="true" />
-            {t("atRisk.email")}
-          </ButtonAnchor>
-        )}
+        {email && toggleButton("email", t("atRisk.email"), <Mail aria-hidden="true" />)}
         {toggleButton("log", t("atRisk.log"), <MessageSquare aria-hidden="true" />)}
         {toggleButton("dismiss", t("atRisk.dismiss"))}
         {history && toggleButton("history", t("atRisk.history"), <History aria-hidden="true" />)}
       </div>
+
+      {open === "email" && email && (
+        <div id={panelId("email")} className="rounded-md bg-well p-3">
+          <EmailComposer id={panelId("compose")} action={email.action} to={email.to} subject={email.subject} body={email.body} mode={email.mode} />
+        </div>
+      )}
 
       {open === "log" && (
         <form id={panelId("log")} action={submitThenClose(logAction)} className="flex flex-col gap-3 rounded-md bg-well p-3">

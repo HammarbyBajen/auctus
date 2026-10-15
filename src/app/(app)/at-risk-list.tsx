@@ -9,7 +9,9 @@ import { Surface } from "@/components/app/surface";
 import { formatDay, formatNumber } from "@/lib/format";
 import { daysAgo } from "@/lib/leads/activity";
 import { contactOutcomes, dismissReasons, type AtRiskNoteRow, type AtRiskRow } from "@/lib/mana/at-risk-service";
-import { mailtoFor, type AtRiskGroup } from "@/lib/mana/at-risk-work";
+import { atRiskDraft, type AtRiskGroup } from "@/lib/mana/at-risk-work";
+import type { EmailMode } from "@/lib/email/mode";
+import { sendMemberEmail } from "./email-actions";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -48,6 +50,7 @@ export function AtRiskList({
   viewerId,
   people,
   emails,
+  emailMode,
 }: {
   rows: AtRiskRow[];
   days: number;
@@ -57,6 +60,7 @@ export function AtRiskList({
   viewerId: string;
   people: { id: string; name: string }[];
   emails: AtRiskEmails;
+  emailMode: EmailMode;
 }) {
   const today = todayInStockholm();
   // "Mina" on Home: mine and nobody's, as with leads.
@@ -171,7 +175,7 @@ export function AtRiskList({
                     id={`risk-${row.id}`}
                     name={name}
                     phone={row.phone}
-                    mailto={row.email ? mailtoFor({ email: row.email, name: row.name, lastVisitAt: row.lastVisitAt }, emails) : null}
+                    email={row.email ? { to: row.email, ...atRiskDraft(row, emails), mode: emailMode, action: sendMemberEmail.bind(null, row.id) } : null}
                     logAction={logAtRiskContact.bind(null, row.id)}
                     dismissAction={dismissAtRisk.bind(null, row.id)}
                     outcomes={contactOutcomes}

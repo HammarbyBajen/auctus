@@ -255,3 +255,14 @@ export async function getAtRiskEmails(db: Db, studioId: string): Promise<AtRiskE
 export async function saveAtRiskEmails(db: Db, studioId: string, emails: AtRiskEmails) {
   await db.update(studioSettings).set({ atRiskEmails: emails, updatedAt: new Date() }).where(eq(studioSettings.studioId, studioId));
 }
+
+/** The member behind an open alert, for emailing them from the list. */
+export async function alertMember(db: Db, studioId: string, alertId: string) {
+  const [row] = await db
+    .select({ manaUserId: atRiskAlert.manaUserId, name: manaMember.name, email: manaMember.email, lastVisitAt: atRiskAlert.lastVisitAt })
+    .from(atRiskAlert)
+    .innerJoin(manaMember, and(eq(manaMember.studioId, atRiskAlert.studioId), eq(manaMember.manaUserId, atRiskAlert.manaUserId)))
+    .where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.id, alertId), eq(atRiskAlert.status, "open")))
+    .limit(1);
+  return row ?? null;
+}

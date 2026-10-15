@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { atRiskAlert, atRiskNote, deletionLog, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
+import { atRiskAlert, atRiskNote, deletionLog, emailMessage, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
 
 type Db = typeof defaultDb;
 
@@ -28,11 +28,14 @@ export async function deletionPreview(db: Db, studioId: string, personId: string
 /**
  * Permanently deletes a person and everything the CRM holds about them: their
  * leads, and with them notes, history and tasks, the web submissions they came
- * from, plus any at-risk alert and what staff noted about it. One
+ * from, plus any at-risk alert, what staff noted about it and the emails
+ * sent to them (a lead's emails go with the lead). One
  * transaction, so it happens fully or not at all. A row in the deletion log
  * (no personal data) records that it was done.
  *
- * Not touched: the Mana mirror (members, memberships, visits), which is a copy
+ * Not touched: an address on the email suppression list stays, so someone
+ * who unsubscribed or complained is never mailed again (the address alone,
+ * nothing else). The Mana mirror (members, memberships, visits), which is a copy
  * of Mana and comes back on the next sync (erasure in Mana is done in Mana),
  * and the record of which Mana events already made a win-back lead, which
  * stops the same event from making the person again.
@@ -43,6 +46,7 @@ export async function deletePerson(db: Db, studioId: string, personId: string, d
   await db.transaction(async (tx) => {
     if (preview.person.manaUserId) {
       await tx.delete(atRiskNote).where(and(eq(atRiskNote.studioId, studioId), eq(atRiskNote.manaUserId, preview.person.manaUserId)));
+      await tx.delete(emailMessage).where(and(eq(emailMessage.studioId, studioId), eq(emailMessage.manaUserId, preview.person.manaUserId)));
       await tx.delete(atRiskAlert).where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.manaUserId, preview.person.manaUserId)));
     }
     // The raw web submissions hold the same personal data, so they go too (ticket 09).

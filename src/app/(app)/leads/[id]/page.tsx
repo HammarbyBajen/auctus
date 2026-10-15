@@ -31,6 +31,11 @@ import { assignAction, finishTask, moveStage, removeTask, saveLeadFieldsAction, 
 import { AssigneeSelect } from "./assignee-select";
 import { ManaRefresher } from "./mana-refresher";
 import { ActivityForm } from "./activity-form";
+import { EmailComposer } from "@/components/app/email-composer";
+import { getEmailSettings, listEmails } from "@/lib/email/service";
+import { fillTemplate } from "@/lib/email/template";
+import { sendLeadEmail } from "../../email-actions";
+import { EmailHistory } from "../../email-history";
 import { TaskForm } from "./task-form";
 
 export default async function LeadPage({
@@ -48,7 +53,7 @@ export default async function LeadPage({
   if (!found) notFound();
   const { lead, person, stage, assigneeName, history } = found;
   const today = todayInStockholm();
-  const [allStages, allReasons, taskLists, people, mana, winBackReasons, fields] = await Promise.all([
+  const [allStages, allReasons, taskLists, people, mana, winBackReasons, fields, emailSettings, emails] = await Promise.all([
     listStages(db, user.studioId, { includeArchived: true }),
     listColdReasons(db, user.studioId, { includeArchived: true }),
     listTasksForLead(db, user.studioId, lead.id),
@@ -56,6 +61,8 @@ export default async function LeadPage({
     getManaInfo(db, user.studioId, person.manaUserId),
     listWinBackReasons(db, user.studioId),
     listLeadFields(db, user.studioId),
+    getEmailSettings(db, user.studioId),
+    listEmails(db, user.studioId, { leadId: id }),
   ]);
   // Removed stages and reasons still name old history; only the current ones are offered.
   const stages = allStages.filter((s) => !s.archivedAt);
@@ -129,7 +136,7 @@ export default async function LeadPage({
             </ButtonAnchor>
           )}
           {person.email && (
-            <ButtonAnchor href={`mailto:${person.email}`} size="lg" variant="outline">
+            <ButtonAnchor href="#epost" size="lg" variant="outline">
               <Mail aria-hidden="true" />
               {t("lead.mail")}
             </ButtonAnchor>
@@ -174,6 +181,19 @@ export default async function LeadPage({
                 </ol>
               )}
             </Panel>
+            {person.email && (
+              <Panel title={t("email.title")} id="epost" className="mt-6 scroll-mt-20">
+                <EmailComposer
+                  id={`lead-${lead.id}`}
+                  action={sendLeadEmail.bind(null, lead.id)}
+                  to={person.email}
+                  subject={fillTemplate(emailSettings.leadEmail.subject, person.name)}
+                  body={fillTemplate(emailSettings.leadEmail.body, person.name)}
+                  mode={emailSettings.mode}
+                />
+                <EmailHistory emails={emails} />
+              </Panel>
+            )}
           </StaggerItem>
 
           {/* Everything you change about the lead. */}

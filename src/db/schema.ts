@@ -80,6 +80,16 @@ export const studioSettings = pgTable("studio_settings", {
   atRiskDays: integer("at_risk_days").notNull().default(30),
   /** Email templates for the Hör av dig till list: one for members never seen in Mana, one for those who stopped coming. */
   atRiskEmails: jsonb("at_risk_emails").$type<AtRiskEmails>(),
+  /** The email template for answering a new lead (M8 phase 1). Written by Tegen; empty until they have. */
+  leadEmail: jsonb("lead_email").$type<AtRiskEmail>(),
+  /** Who emails come from, for example "CrossFit Tegen <hej@mail.crossfittegen.se>" (a verified Resend domain). */
+  emailFrom: text("email_from"),
+  /**
+   * An owner's half of the switch to real sending. Emails reach real people
+   * only when this is on and the server's EMAIL_LIVE is "true"; until the
+   * review with Erik both stay off, so every email goes to Resend's test address.
+   */
+  emailLive: boolean("email_live").notNull().default(false),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -836,4 +846,68 @@ export const discordNotice = pgTable(
     sentAt: timestamp("sent_at").notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.studioId, table.key] })],
+);
+
+// ---- Email on Resend (M8, phase 1): 1-to-1 emails from the CRM ----
+
+/**
+ * One email sent from Tegen HQ, written before it is handed to Resend so a
+ * retry never sends twice (its id is the idempotency key). In test mode it
+ * went to Resend's test address, and `to` keeps who it was meant for.
+ */
+export const emailMessage = pgTable(
+  "email_message",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** The lead it was about, or the member (Mana user id) for the Hör av dig till list. */
+    leadId: uuid("lead_id").references(() => lead.id, { onDelete: "cascade" }),
+    manaUserId: text("mana_user_id"),
+    /** Who it was meant for. */
+    to: text("to").notNull(),
+    /** Where it actually went: the same address when live, Resend's test address in test mode. */
+    sentTo: text("sent_to"),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    /** live, test, or dry_run (no Resend key on this server, nothing left the building). */
+    mode: text("mode").notNull(),
+    /** queued, sent, delivered, delayed, bounced, complained, failed or suppressed. */
+    status: text("status").notNull().default("queued"),
+    resendId: text("resend_id"),
+    error: text("error"),
+    sentById: text("sent_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("email_message_lead_idx").on(table.leadId, table.createdAt),
+    index("email_message_member_idx").on(table.studioId, table.manaUserId),
+    uniqueIndex("email_message_resend_idx").on(table.resendId),
+  ],
+);
+
+/** Each event Resend reported back once (by its webhook message id), so a retried webhook changes nothing. */
+export const emailEvent = pgTable("email_event", {
+  id: text("id").primaryKey(),
+  messageId: uuid("message_id").references(() => emailMessage.id, { onDelete: "cascade" }),
+  type: text("type").notNull(),
+  receivedAt: timestamp("received_at").notNull().defaultNow(),
+});
+
+/** Addresses never to email again: hard bounces, spam complaints, unsubscribes. Checked before every send. */
+export const emailSuppression = pgTable(
+  "email_suppression",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** Lowercased. */
+    address: text("address").notNull(),
+    /** bounced, complained or unsubscribed */
+    reason: text("reason").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.address] })],
 );

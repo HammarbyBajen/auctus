@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, Clock, Plus, SearchX, Snowflake } from "lucide-react";
+import { AlertCircle, BarChart3, CheckCircle2, Clock, Plus, SearchX, Snowflake } from "lucide-react";
 import { db } from "@/db";
 import { ButtonLink } from "@/components/ui/button";
 import { Chip } from "@/components/app/chip";
@@ -92,6 +92,10 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
       title={t("leads.title")}
       actions={
         <>
+          <ButtonLink href="/rapport" variant="ghost" className="lg:hidden">
+            <BarChart3 aria-hidden="true" />
+            {t("nav.report")}
+          </ButtonLink>
           {cold && (
             <ButtonLink
               href={showCold ? "/leads" : `/leads?steg=${cold.key}`}

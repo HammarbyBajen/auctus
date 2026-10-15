@@ -548,5 +548,22 @@
   "atRisk.emailBody": "Text",
   "atRisk.emailHint": "Skriv {förnamn} eller {namn} där medlemmens namn ska stå.",
   "atRisk.emailSave": "Spara texterna",
-  "atRisk.emailSaved": "Texterna är sparade."
+  "atRisk.emailSaved": "Texterna är sparade.",
+  "nav.report": "Rapport",
+  "report.title": "Rapport",
+  "report.intro": "Varifrån leadsen kommer, hur många som blir medlemmar och hur snabbt någon hör av sig. De senaste tolv månaderna.",
+  "report.leads": "Leads",
+  "report.leadsNote": "De senaste {n} månaderna, alla källor",
+  "report.conversion": "Blev medlemmar",
+  "report.conversionNote": "{won} av {leads} leads som kommit in i Tegen HQ. Importen från Pipedrive räknas inte, den tog inte med vunna affärer.",
+  "report.firstContact": "Tid till första kontakt",
+  "report.firstContactNote": "Medianen. Snittet är {average}, och {share} nåddes inom {limit} timmar.",
+  "report.firstContactNone": "Ingen lead som kommit in i Tegen HQ har kontaktats än. Importerade leads räknas inte.",
+  "report.hours": "{n} h",
+  "report.perMonth": "Per månad och källa",
+  "report.perMonthHint": "Leads efter den månad de kom in. Blev medlemmar räknas bara för leads som kommit in i Tegen HQ, och de senaste månaderna hinner öka.",
+  "report.month": "Månad",
+  "report.total": "Totalt",
+  "report.wonOfOwn": "Blev medlemmar",
+  "report.wonCell": "{won} av {own}"
 }

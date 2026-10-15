@@ -3,17 +3,20 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
-import { Clock, Home, Plus, Settings, Users } from "lucide-react";
+import { BarChart3, Clock, Home, Plus, Settings, Users } from "lucide-react";
 import { press, springs } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
-type Item = { href: string; label: string; icon: typeof Home };
+/** `phone: false` keeps an item out of the bottom bar, which has room for five; it stays in the sidebar. */
+type Item = { href: string; label: string; icon: typeof Home; phone?: false };
 
 function items(showSettings: boolean, showSalary: boolean): Item[] {
   return [
     { href: "/", label: t("nav.home"), icon: Home },
     { href: "/leads", label: t("nav.leads"), icon: Users },
+    // On a phone the report is reached from the Leads page.
+    { href: "/rapport", label: t("nav.report"), icon: BarChart3, phone: false },
     ...(showSalary ? [{ href: "/timmar", label: t("nav.salary"), icon: Clock }] : []),
     ...(showSettings ? [{ href: "/installningar", label: t("nav.settings"), icon: Settings }] : []),
   ];
@@ -60,7 +63,7 @@ export function SideNav({ showSettings, showSalary }: { showSettings: boolean; s
 export function BottomNav({ showSettings, showSalary }: { showSettings: boolean; showSalary: boolean }) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
-  const all = [...items(showSettings, showSalary)];
+  const all = items(showSettings, showSalary).filter((item) => item.phone !== false);
   all.splice(2, 0, { href: "/leads/ny", label: t("nav.newLeadShort"), icon: Plus });
   return (
     <nav

@@ -232,6 +232,8 @@ export function MemberTrend({ trend }: { trend: Trend }) {
         </div>
         <Chart points={points} />
       </div>
+      {/* People, not memberships: the filters add up to more than Alla when people hold two (2026-10-15). */}
+      <p className="text-xs text-muted-foreground">{t("kpi.peopleNote")}</p>
     </Surface>
   );
 }

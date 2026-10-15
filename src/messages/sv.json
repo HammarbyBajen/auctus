@@ -565,5 +565,6 @@
   "report.month": "Månad",
   "report.total": "Totalt",
   "report.wonOfOwn": "Blev medlemmar",
-  "report.wonCell": "{won} av {own}"
+  "report.wonCell": "{won} av {own}",
+  "kpi.peopleNote": "Räknar personer. Den som har flera medlemskap räknas en gång i Alla, men i varje medlemskap de har, så filtren tillsammans blir fler än Alla."
 }

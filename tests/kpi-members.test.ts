@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countsOn, memberTrend, monthlyRevenue, monthOverMonth, movementThisMonth, payingMembersOn, rollingMonths, snapshotOn, type KpiMembership } from "@/lib/kpi/members";
+import { countsOn, frozenOn, memberTrend, priceOn, monthlyRevenue, monthOverMonth, movementThisMonth, payingMembersOn, rollingMonths, snapshotOn, type KpiMembership } from "@/lib/kpi/members";
 
 const m = (over: Partial<KpiMembership>): KpiMembership => ({
   manaUserId: "u1",
@@ -161,5 +161,57 @@ describe("new and lost this month", () => {
     const trend = memberTrend(memberships, "2026-10-10");
     expect(trend.movement[""]).toEqual({ joined: 1, left: 2 });
     expect(trend.movement.Basic).toEqual({ joined: 1, left: 3 });
+  });
+});
+
+describe("price periods (ticket 26)", () => {
+  const period = (over: Partial<NonNullable<KpiMembership["pricePeriods"]>[number]>) => ({
+    fromDate: "2026-10-01",
+    toDate: "2026-10-31",
+    amount: 169500,
+    type: "base",
+    discountPercent: null,
+    disabled: false,
+    ...over,
+  });
+
+  it("does not count a membership while a freeze period covers the day, even with no freeze still to come", () => {
+    const frozen = m({ pricePeriods: [period({ fromDate: "2026-10-10", toDate: "2027-01-31", amount: 0, type: "unknown", disabled: true })] });
+    expect(countsOn(frozen, "2026-10-09")).toBe(true);
+    expect(frozenOn(frozen, "2026-10-15")).toBe(true);
+    expect(countsOn(frozen, "2026-10-15")).toBe(false);
+    expect(countsOn(frozen, "2027-02-01")).toBe(true);
+    expect(payingMembersOn([frozen], "2026-10-15")).toBe(0);
+    expect(snapshotOn([frozen], "2026-10-15").revenue).toBe(0);
+  });
+
+  it("counts a discount at the discounted price, and a member with 100 % off still as a member", () => {
+    const free = m({ pricePeriods: [period({ amount: 0, type: "percent_discount", discountPercent: 100 })] });
+    expect(countsOn(free, "2026-10-15")).toBe(true);
+    expect(priceOn(free, "2026-10-15")).toBe(0);
+    expect(priceOn(free, "2026-11-01")).toBe(169500);
+    const half = m({ pricePeriods: [period({ amount: null, type: "percent_discount", discountPercent: 50 })] });
+    expect(priceOn(half, "2026-10-15")).toBe(84750);
+  });
+
+  it("uses another price for its period", () => {
+    const changed = m({ pricePeriods: [period({ fromDate: "2026-10-01", toDate: null, amount: 149500, type: "unknown" })] });
+    expect(priceOn(changed, "2026-12-01")).toBe(149500);
+    expect(monthlyRevenue([changed], "2026-12-01")).toBe(1495);
+  });
+
+  it("counts a period at 0 that is no discount or freeze as already paid: the ordinary price", () => {
+    // The months paid in Wondr before the move.
+    const prepaid = m({ pricePeriods: [period({ fromDate: "2026-09-23", toDate: "2026-10-31", amount: 0, type: "unknown" })] });
+    expect(countsOn(prepaid, "2026-10-15")).toBe(true);
+    expect(priceOn(prepaid, "2026-10-15")).toBe(169500);
+  });
+
+  it("lets a discount win over the period it sits in", () => {
+    const both = m({
+      pricePeriods: [period({ fromDate: "2026-09-23", toDate: "2026-12-31", amount: 169500 }), period({ amount: 0, type: "percent_discount", discountPercent: 100 })],
+    });
+    expect(priceOn(both, "2026-10-15")).toBe(0);
+    expect(priceOn(both, "2026-11-15")).toBe(169500);
   });
 });

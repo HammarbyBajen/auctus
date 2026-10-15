@@ -418,6 +418,8 @@ export const manaMembership = pgTable(
     pendingChangeDate: date("pending_change_date", { mode: "string" }),
     priceAmount: integer("price_amount"),
     priceCurrency: text("price_currency"),
+    /** Mana's price periods: discounts, other prices and freezes, each with its days (ticket 26). */
+    pricePeriods: jsonb("price_periods").$type<PricePeriod[]>().notNull().default([]),
     syncedAt: timestamp("synced_at").notNull().defaultNow(),
   },
   (table) => [
@@ -584,6 +586,18 @@ export const atRiskNote = pgTable(
   },
   (table) => [index("at_risk_note_member_idx").on(table.studioId, table.manaUserId, table.createdAt)],
 );
+
+/** One stretch of a membership's price, as Mana gives it. Dates are YYYY-MM-DD, both days included; null is open-ended. Amounts in öre. */
+export type PricePeriod = {
+  fromDate: string | null;
+  toDate: string | null;
+  amount: number | null;
+  /** base, percent_discount or unknown */
+  type: string;
+  discountPercent: number | null;
+  /** A freeze: the membership is paused and not paid for. */
+  disabled: boolean;
+};
 
 /** An email template for members who have been away. Written by Tegen; empty until they have. */
 export type AtRiskEmail = { subject: string; body: string };

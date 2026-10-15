@@ -1,3 +1,4 @@
+import type { PricePeriod } from "@/db/schema";
 /**
  * Paying members and monthly revenue from the Mana mirror (ticket 26).
  *
@@ -20,6 +21,8 @@ export type KpiMembership = {
   commitmentEndDate: string | null; // YYYY-MM-DD
   cancelEffectiveDate: string | null; // YYYY-MM-DD, the day notice was given
   priceAmount: number | null; // öre per month
+  /** Mana's price periods (discounts, other prices, freezes). Missing counts as none. */
+  pricePeriods?: PricePeriod[];
 };
 
 export type MonthPoint = {
@@ -54,10 +57,44 @@ function lastDay(m: KpiMembership): string | null | undefined {
   return m.commitmentEndDate ?? m.cancelEffectiveDate ?? null;
 }
 
+const covers = (p: PricePeriod, day: string) => (!p.fromDate || p.fromDate <= day) && (!p.toDate || day <= p.toDate);
+
+/** Frozen on a day: a freeze period covers it, or a freeze Mana still shows as coming has started. */
+export function frozenOn(m: KpiMembership, day: string): boolean {
+  if (m.pendingChangeKind === "freeze" && m.pendingChangeDate && m.pendingChangeDate <= day) return true;
+  return (m.pricePeriods ?? []).some((p) => p.disabled && covers(p, day));
+}
+
+/**
+ * What a membership brings in per month on a day, in öre (ticket 26), by
+ * Mana's price periods:
+ * - frozen: nothing;
+ * - a discount: the discounted price (nothing for 100 %);
+ * - another price for the period: that price;
+ * - a period at 0 that is neither a discount nor a freeze: already paid
+ *   (the months paid in Wondr before the move, a year paid up front), so
+ *   the ordinary price, since the member still pays it;
+ * - no period: the ordinary price.
+ * When periods overlap, a discount wins, then the one that started last.
+ */
+export function priceOn(m: KpiMembership, day: string): number {
+  const base = m.priceAmount ?? 0;
+  if (frozenOn(m, day)) return 0;
+  const periods = (m.pricePeriods ?? []).filter((p) => covers(p, day));
+  const period =
+    periods.find((p) => p.type === "percent_discount") ?? [...periods].sort((a, b) => (b.fromDate ?? "").localeCompare(a.fromDate ?? ""))[0];
+  if (!period) return base;
+  if (period.type === "percent_discount") {
+    return period.amount ?? Math.round(base * (1 - (period.discountPercent ?? 0) / 100));
+  }
+  if (period.amount === null || period.amount === 0) return base;
+  return period.amount;
+}
+
 export function countsOn(m: KpiMembership, day: string): boolean {
   if ((m.priceAmount ?? 0) <= 0) return false;
   if (m.startDate > day) return false;
-  if (m.pendingChangeKind === "freeze" && m.pendingChangeDate && m.pendingChangeDate <= day) return false;
+  if (frozenOn(m, day)) return false;
   const last = lastDay(m);
   if (last !== undefined) return last !== null && day <= last;
   return true;
@@ -105,14 +142,14 @@ export function snapshotOn(memberships: KpiMembership[], day: string): Snapshot 
   return {
     day,
     payingMembers: payingMembersOn(memberships, day),
-    revenue: memberships.reduce((sum, m) => (countsOn(m, day) ? sum + (m.priceAmount ?? 0) : sum), 0),
+    revenue: memberships.reduce((sum, m) => (countsOn(m, day) ? sum + priceOn(m, day) : sum), 0),
     byName,
   };
 }
 
 /** Today's monthly revenue in kronor: the sum of the counting memberships' prices. */
 export function monthlyRevenue(memberships: KpiMembership[], today: string): number {
-  return memberships.reduce((sum, m) => (countsOn(m, today) ? sum + (m.priceAmount ?? 0) : sum), 0) / 100;
+  return memberships.reduce((sum, m) => (countsOn(m, today) ? sum + priceOn(m, today) : sum), 0) / 100;
 }
 
 function lastDayOfMonth(month: string): string {

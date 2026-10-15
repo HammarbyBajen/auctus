@@ -1,0 +1,1 @@
+ALTER TABLE "mana_membership" ADD COLUMN "price_periods" jsonb DEFAULT '[]'::jsonb NOT NULL;

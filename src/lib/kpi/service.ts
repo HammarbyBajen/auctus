@@ -17,6 +17,7 @@ async function loadMemberships(db: Db, studioId: string): Promise<KpiMembership[
       commitmentEndDate: manaMembership.commitmentEndDate,
       cancelEffectiveDate: manaMembership.cancelEffectiveDate,
       priceAmount: manaMembership.priceAmount,
+      pricePeriods: manaMembership.pricePeriods,
     })
     .from(manaMembership)
     .where(eq(manaMembership.studioId, studioId));

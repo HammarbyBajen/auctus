@@ -40,6 +40,21 @@ const pendingChange = z
   })
   .nullable();
 
+/**
+ * A stretch of a membership's price (ticket 26): the ordinary price, a
+ * discount, another price, or a freeze (disableMembership). Lenient on
+ * purpose: Mana marks some as "unknown", and a missing field must not stop
+ * the sync.
+ */
+const pricePeriod = z.object({
+  fromDate: dateString.nullish(),
+  toDate: dateString.nullish(),
+  price: z.object({ amount: z.number().int(), currency: z.string() }).nullish(),
+  type: z.string(),
+  discountPercent: z.number().nullish(),
+  disableMembership: z.boolean().nullish(),
+});
+
 export const userMembershipsSchema = z.object({
   data: z.object({
     items: z.array(
@@ -54,6 +69,7 @@ export const userMembershipsSchema = z.object({
         commitmentEndDate: dateString.nullable(),
         cancelEffectiveDate: dateString.nullable(),
         price: z.object({ amount: z.number().int(), currency: z.string() }),
+        pricePeriods: z.array(pricePeriod).nullish(),
       }),
     ),
   }),

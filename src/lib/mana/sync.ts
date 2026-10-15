@@ -104,6 +104,14 @@ export async function replaceMemberships(
           pendingChangeDate: pendingChangeDay(m.pendingChange),
           priceAmount: m.price.amount,
           priceCurrency: m.price.currency,
+          pricePeriods: (m.pricePeriods ?? []).map((p) => ({
+            fromDate: p.fromDate?.slice(0, 10) ?? null,
+            toDate: p.toDate?.slice(0, 10) ?? null,
+            amount: p.price?.amount ?? null,
+            type: p.type,
+            discountPercent: p.discountPercent ?? null,
+            disabled: p.disableMembership === true,
+          })),
           syncedAt: new Date(),
         })),
       );

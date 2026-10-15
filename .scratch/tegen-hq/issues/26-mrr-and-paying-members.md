@@ -14,10 +14,12 @@ Definitions (from Erik's notes, decided 2026-10-08 where marked):
 - Visible to Owners, not to Staff (decided: admin, owner and studio manager see it, trainers do not; the CRM has Owner and Staff for now).
 - MRR is what members are signed up to pay, not what was collected (failed charges are not in the Mana API).
 
-- [ ] The Mana mirror keeps each membership's price periods (discounts and freezes), and the sync keeps fetching ended memberships too (without them the count only goes up, the Bionic HQ bug)
+- [x] The Mana mirror keeps each membership's price periods (discounts and freezes), and the sync keeps fetching ended memberships too (without them the count only goes up, the Bionic HQ bug)
 - [x] MRR and paying members are calculated by one pure, tested function following the definitions above
 - [x] One snapshot per day is stored from the day this ships, and the months back to September 2026 are rebuilt from start, end and price-period dates
-- [ ] The home page shows MRR and paying members with a trend line, and new and lost paying members this month
+- [x] The home page shows MRR and paying members with a trend line, and new and lost paying members this month
 - [x] Staff do not see it, Owners do
 - [x] Today's numbers are checked against Mana by hand before the tile is trusted, and the result is written down (2026-10-11: September matches Mana's membership report exactly once staff memberships are synced: Basic 200 new, 2 ended, 198 at the end; Förvaringsbox 55; Fri träning 35; Basic (12mån) 15; Performance (löpande) 10. Home page that day: 233 paying members on 30 Sep, 231 today, revenue 377 395 kr.)
 - [ ] Bionic HQ's `src/lib/members/paying.ts` has been read as reference (needs access)
+
+Price periods (decided by Max, 2026-10-15): discounts, freezes and Mana's price for the period all count. A freeze period (disableMembership) means not paying and nothing in revenue: it disappears from "pending change" once it has started, which is why 11 frozen memberships were counted before. A discount counts at the discounted price (a member at 100 % off is still a member, at 0 kr). Another price for a period is that price. A period at 0 that is neither a discount nor a freeze is already paid (the months paid in Wondr before the move, a year paid up front) and counts at the ordinary price; otherwise October would show almost no revenue. Checked on 2026-10-15 against Mana live: 234 → 225 paying members, 382 280 → 358 905 kr.

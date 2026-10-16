@@ -15,28 +15,31 @@ export function TaskForm({ leadId, today }: { leadId: string; today: string }) {
     if (!pending && !state.error) ref.current?.reset();
   }, [pending, state]);
 
+  // Sized by its own card, not the screen: on the lead page it sits in a narrow column.
   return (
-    <form ref={ref} action={action} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_11rem_auto] sm:items-end">
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="task-title">
-          {t("task.titleLabel")}
-        </Label>
-        <Input id="task-title" name="title" maxLength={200} autoComplete="off" />
-      </div>
-      <div className="flex flex-col gap-2">
-        <Label htmlFor="task-due">
-          {t("task.dueLabel")}
-        </Label>
-        <Input id="task-due" name="dueDate" type="date" defaultValue={today} />
-      </div>
-      <Button type="submit" disabled={pending}>
-        {pending ? t("app.saving") : t("task.add")}
-      </Button>
-      {state.error && (
-        <p role="alert" className="text-sm font-medium text-destructive sm:col-span-3">
-          {t(state.error)}
-        </p>
-      )}
-    </form>
+    <div className="@container">
+      <form ref={ref} action={action} className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-3 @min-[30rem]:grid-cols-[minmax(0,1fr)_11rem_auto]">
+        <div className="col-span-2 flex flex-col gap-2 @min-[30rem]:col-span-1">
+          <Label htmlFor="task-title">
+            {t("task.titleLabel")}
+          </Label>
+          <Input id="task-title" name="title" maxLength={200} autoComplete="off" />
+        </div>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="task-due">
+            {t("task.dueLabel")}
+          </Label>
+          <Input id="task-due" name="dueDate" type="date" defaultValue={today} />
+        </div>
+        <Button type="submit" disabled={pending}>
+          {pending ? t("app.saving") : t("task.add")}
+        </Button>
+        {state.error && (
+          <p role="alert" className="col-span-full text-sm font-medium text-destructive">
+            {t(state.error)}
+          </p>
+        )}
+      </form>
+    </div>
   );
 }

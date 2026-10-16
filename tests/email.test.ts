@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { render } from "react-email";
-import { EmailLayout } from "@/lib/email/layout";
+import { emailHtml, emailText } from "@/lib/email/layout";
 import { emailMode, normaliseAddress, recipientFor, testAddress } from "@/lib/email/mode";
 import { fillTemplate, firstName, paragraphs } from "@/lib/email/template";
 
@@ -30,14 +29,19 @@ describe("templates", () => {
     expect(paragraphs("Hej Anna,\r\n\r\nVälkommen in.\nVi ses!\n\n\nTegen")).toEqual(["Hej Anna,", "Välkommen in.\nVi ses!", "Tegen"]);
   });
 
-  it("render as HTML and plain text with the studio's name and no images", async () => {
-    const layout = EmailLayout({ body: "Hej Anna,\n\nVälkommen till oss.", studioName: "CrossFit Tegen" });
-    const html = await render(layout);
-    const text = await render(layout, { plainText: true });
-    expect(html).toContain("Välkommen till oss.");
+  it("render as HTML and plain text with the studio's name and no images", () => {
+    const content = { body: "Hej Anna,\n\nVälkommen till oss.\nVi ses!", studioName: "CrossFit Tegen" };
+    const html = emailHtml(content);
+    expect(html).toContain("Välkommen till oss.<br>Vi ses!");
     expect(html).toContain('lang="sv"');
     expect(html).not.toContain("<img");
-    expect(text).toContain("Hej Anna,");
-    expect(text).toContain("CrossFit Tegen");
+    expect(emailText(content)).toBe("Hej Anna,\n\nVälkommen till oss.\nVi ses!\n\n--\nCrossFit Tegen\n");
+  });
+
+  it("escape what Tegen writes, so text can never become markup", () => {
+    const html = emailHtml({ body: '<script>alert("x")</script> & <b>fet</b>', studioName: "Tegen & Co" });
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt; &amp; &lt;b&gt;fet&lt;/b&gt;");
+    expect(html).toContain("Tegen &amp; Co");
   });
 });

@@ -60,7 +60,7 @@ describe("design invariants (docs/DESIGN.md)", () => {
   it("never hardcodes a colour in a component", () => {
     // theme-color in the root layout is a meta value, not a style, and cannot read a CSS variable.
     // The email layout is HTML for mail programs, which cannot read the app's CSS variables either.
-    expect(violations(/#[0-9a-fA-F]{3,8}\b/, { inClassesOnly: true, except: ["src/app/layout.tsx", "src/lib/email/layout.tsx"] })).toEqual([]);
+    expect(violations(/#[0-9a-fA-F]{3,8}\b/, { inClassesOnly: true, except: ["src/app/layout.tsx", "src/lib/email/layout.ts"] })).toEqual([]);
     expect(violations(/(^|\s)(text|bg|border)-(white|black)(\s|$|\/)/, { inClassesOnly: true })).toEqual([]);
     expect(
       violations(/(^|\s)[a-z:-]*(text|bg|border|ring|fill|stroke)-(red|amber|green|blue|yellow|orange|stone|slate|gray|neutral|zinc|emerald|sky|indigo)-\d{2,3}/, {

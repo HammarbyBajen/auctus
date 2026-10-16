@@ -1,7 +1,6 @@
 import "server-only";
-import { render } from "react-email";
 import { Resend } from "resend";
-import { EmailLayout } from "./layout";
+import { emailHtml, emailText } from "./layout";
 
 /**
  * The only place in Tegen HQ that talks to Resend (a test keeps it that way).
@@ -27,8 +26,8 @@ export function resendTransport(): EmailTransport {
   return {
     async send(email) {
       const resend = new Resend(process.env.RESEND_API_KEY);
-      const layout = EmailLayout({ body: email.body, studioName: email.studioName });
-      const [html, text] = await Promise.all([render(layout), render(layout, { plainText: true })]);
+      const content = { body: email.body, studioName: email.studioName };
+      const [html, text] = [emailHtml(content), emailText(content)];
       const { data, error } = await resend.emails.send(
         {
           from: email.from,

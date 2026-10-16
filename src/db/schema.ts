@@ -483,6 +483,35 @@ export const leadSubmission = pgTable(
 );
 
 /**
+ * A call to the lead intake that was turned away (ticket 09), so a sender
+ * whose calls never arrive can be seen: when, why, which route, which fields.
+ * Never the body or the secret. Anyone can call the address, so only the
+ * latest few hundred are kept.
+ */
+export const intakeRejection = pgTable(
+  "intake_rejection",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    receivedAt: timestamp("received_at").notNull().defaultNow(),
+    /** unauthorized, invalid_json, invalid_payload or too_large */
+    reason: text("reason").notNull(),
+    /** For unauthorized: missing (no header), malformed (not "Bearer …"), wrong (another secret) or not_configured (none on this server). */
+    detail: text("detail"),
+    /** The route, when the body could be read and named one. */
+    route: text("route"),
+    /** For invalid_payload: which fields and why, without their values. */
+    issues: jsonb("issues").$type<{ path: string; message: string }[]>(),
+    /** What called, shortened (for example node or a browser), to tell the website from a stray visitor. */
+    userAgent: text("user_agent"),
+    bytes: integer("bytes"),
+  },
+  (table) => [index("intake_rejection_received_idx").on(table.studioId, table.receivedAt)],
+);
+
+/**
  * A personal link for choosing a password (ticket 14): sent by an owner to a
  * new user, or to someone who has forgotten theirs. Only a hash of the token
  * is stored; the link is shown once when it is made. One use, then it is gone.

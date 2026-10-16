@@ -1,9 +1,9 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, notInArray } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { lead, leadNote, leadSubmission, person } from "@/db/schema";
+import { intakeRejection, lead, leadNote, leadSubmission, person } from "@/db/schema";
 import { createOrMatchLead } from "@/lib/leads/service";
 import type { LeadSource } from "@/lib/leads/constants";
-import { intakePayloadSchema, isTestLead, parseAttribution, sourceForRoute, type IntakePayload } from "./contract";
+import { intakePayloadSchema, intakeRoutes, isTestLead, parseAttribution, sourceForRoute, type IntakePayload } from "./contract";
 
 type Db = typeof defaultDb;
 
@@ -105,4 +105,49 @@ export async function recentSubmissions(db: Db, studioId: string, limit = 25) {
     .where(eq(leadSubmission.studioId, studioId))
     .orderBy(desc(leadSubmission.receivedAt))
     .limit(limit);
+}
+
+/** How many turned-away calls are kept: anyone can call the address, so the table must not grow without end. */
+export const keptRejections = 200;
+
+export type Rejection = {
+  reason: "unauthorized" | "invalid_json" | "invalid_payload" | "too_large";
+  detail?: string | null;
+  /** The parsed body, if there was one: only its route is kept. */
+  body?: unknown;
+  issues?: { path: string; message: string }[];
+  userAgent?: string | null;
+  bytes?: number | null;
+};
+
+/**
+ * Notes a call the intake turned away, so a sender whose leads never arrive
+ * can be seen (Inställningar → Inkommande leads). Keeps the route, the field
+ * names and messages, and what called; never the body or the secret. Only
+ * the latest `keptRejections` stay.
+ */
+export async function recordRejection(db: Db, studioId: string, r: Rejection, now: Date = new Date()) {
+  const named = r.body && typeof r.body === "object" ? (r.body as { route?: unknown }).route : undefined;
+  const route = typeof named === "string" && (intakeRoutes as readonly string[]).includes(named) ? named : null;
+  await db.insert(intakeRejection).values({
+    studioId,
+    receivedAt: now,
+    reason: r.reason,
+    detail: r.detail ?? null,
+    route,
+    issues: r.issues?.slice(0, 20).map((i) => ({ path: i.path.slice(0, 100), message: i.message.slice(0, 200) })) ?? null,
+    userAgent: r.userAgent ? r.userAgent.slice(0, 120) : null,
+    bytes: r.bytes ?? null,
+  });
+  const keep = db
+    .select({ id: intakeRejection.id })
+    .from(intakeRejection)
+    .where(eq(intakeRejection.studioId, studioId))
+    .orderBy(desc(intakeRejection.receivedAt))
+    .limit(keptRejections);
+  await db.delete(intakeRejection).where(and(eq(intakeRejection.studioId, studioId), notInArray(intakeRejection.id, keep)));
+}
+
+export async function recentRejections(db: Db, studioId: string, limit = 25) {
+  return db.select().from(intakeRejection).where(eq(intakeRejection.studioId, studioId)).orderBy(desc(intakeRejection.receivedAt)).limit(limit);
 }

@@ -616,5 +616,17 @@
   "emailSettings.suppressedNone": "Inga spärrade adresser.",
   "emailSettings.reason.bounced": "Studsade",
   "emailSettings.reason.complained": "Anmälde spam",
-  "emailSettings.reason.unsubscribed": "Avregistrerade sig"
+  "emailSettings.reason.unsubscribed": "Avregistrerade sig",
+  "intake.rejectedTitle": "Avvisade anrop",
+  "intake.rejectedIntro": "Anrop till adressen som inte blev någon lead, och varför. Bara orsaken sparas, aldrig vad som skickades eller nyckeln. De 200 senaste finns kvar.",
+  "intake.rejectedNone": "Inga avvisade anrop.",
+  "intake.rejected.unauthorized.missing": "Ingen nyckel skickades med",
+  "intake.rejected.unauthorized.malformed": "Nyckeln skickades i fel format (ska vara Authorization: Bearer …)",
+  "intake.rejected.unauthorized.wrong": "Fel nyckel",
+  "intake.rejected.unauthorized.not_configured": "Servern saknar nyckel, så inget kan tas emot",
+  "intake.rejected.invalid_json": "Innehållet var inte JSON",
+  "intake.rejected.invalid_payload": "Fel i fälten",
+  "intake.rejected.too_large": "För stort (över 64 kB)",
+  "intake.rejectedFrom": "från {agent}",
+  "intake.rejectedWhole": "(hela innehållet)"
 }

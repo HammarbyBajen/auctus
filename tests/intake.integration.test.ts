@@ -35,6 +35,7 @@ describe.skipIf(!hasDb)("lead intake", () => {
 
   afterAll(async () => {
     await db.delete(schema.leadSubmission).where(eq(schema.leadSubmission.studioId, studioId));
+    await db.delete(schema.intakeRejection).where(eq(schema.intakeRejection.studioId, studioId));
     await db.delete(schema.lead).where(eq(schema.lead.studioId, studioId));
     await db.delete(schema.person).where(eq(schema.person.studioId, studioId));
     await db.delete(schema.studio).where(eq(schema.studio.id, studioId));
@@ -48,6 +49,36 @@ describe.skipIf(!hasDb)("lead intake", () => {
     const invalid = await post({ id: "x", route: "contact", name: "Anna" });
     expect(invalid.status).toBe(400);
     expect((await invalid.json()).issues[0].path).toBe("email");
+  });
+
+  it("notes each call it turned away and why, never what it said", async () => {
+    const rejected = await intake.recentRejections(db, studioId);
+    // Newest first: the invalid body, bad JSON, the wrong secret, no secret.
+    expect(rejected.map((r) => [r.reason, r.detail, r.route])).toEqual([
+      ["invalid_payload", null, "contact"],
+      ["invalid_json", null, null],
+      ["unauthorized", "wrong", null],
+      ["unauthorized", "missing", null],
+    ]);
+    expect(rejected[0].issues).toEqual([{ path: "email", message: "email or phone is required" }]);
+    // Nothing the sender wrote is kept.
+    expect(JSON.stringify(rejected)).not.toContain("Anna");
+    const malformed = await POST(new Request("http://localhost:3000/api/leads/intake", { method: "POST", headers: { authorization: "test-secret", "user-agent": "node" }, body: "{}" }));
+    expect(malformed.status).toBe(401);
+    const [latest] = await intake.recentRejections(db, studioId, 1);
+    expect([latest.detail, latest.userAgent]).toEqual(["malformed", "node"]);
+  });
+
+  it("keeps only the latest 200 turned-away calls, since anyone can call the address", async () => {
+    const start = Date.now() + 60_000;
+    for (let i = 0; i < intake.keptRejections + 3; i++) {
+      await intake.recordRejection(db, studioId, { reason: "too_large", bytes: i }, new Date(start + i * 1000));
+    }
+    const kept = await intake.recentRejections(db, studioId, 1000);
+    expect(kept).toHaveLength(intake.keptRejections);
+    // The newest stay, the oldest went.
+    expect(kept[0].bytes).toBe(intake.keptRejections + 2);
+    expect(kept.every((r) => r.reason === "too_large")).toBe(true);
   });
 
   it("creates a lead with its source, attribution and message, and a retry changes nothing", async () => {

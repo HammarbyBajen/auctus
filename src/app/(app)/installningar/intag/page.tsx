@@ -9,7 +9,7 @@ import { Notice } from "@/components/app/notice";
 import { Page } from "@/components/app/page";
 import { Panel } from "@/components/app/surface";
 import { formatDateTime } from "@/lib/format";
-import { recentSubmissions } from "@/lib/intake/service";
+import { recentRejections, recentSubmissions } from "@/lib/intake/service";
 import { requirePermission } from "@/lib/session";
 import { t, type MessageKey } from "@/lib/i18n";
 
@@ -17,8 +17,9 @@ export const dynamic = "force-dynamic";
 
 /**
  * Leads from the website (ticket 09): the address tegen-web sends to, whether
- * the shared secret is set (never the secret itself), and the latest
- * submissions, so a test from Erik can be seen to arrive.
+ * the shared secret is set (never the secret itself), the latest
+ * submissions, so a test from Erik can be seen to arrive, and the calls that
+ * were turned away and why, so one that never arrives can be found.
  */
 export default async function IntakePage() {
   const owner = await requirePermission("settings", "manage");
@@ -27,7 +28,7 @@ export default async function IntakePage() {
   const proto = h.get("x-forwarded-proto") ?? (host?.startsWith("localhost") ? "http" : "https");
   const endpoint = `${proto}://${host}/api/leads/intake`;
   const configured = Boolean(process.env.LEAD_INTAKE_SECRET);
-  const submissions = await recentSubmissions(db, owner.studioId);
+  const [submissions, rejections] = await Promise.all([recentSubmissions(db, owner.studioId), recentRejections(db, owner.studioId)]);
 
   return (
     <Page
@@ -78,6 +79,36 @@ export default async function IntakePage() {
                 <Chip tone={s.outcome === "created" ? "success" : s.outcome === "test" ? "neutral" : "warning"}>
                   {t(`intake.outcome.${s.outcome}` as MessageKey)}
                 </Chip>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <Panel title={t("intake.rejectedTitle")} id="rejected">
+        <p className="text-sm text-muted-foreground">{t("intake.rejectedIntro")}</p>
+        {rejections.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("intake.rejectedNone")}</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border">
+            {rejections.map((r) => (
+              <li key={r.id} className="flex flex-col gap-1 py-2 text-sm first:pt-0 last:pb-0">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="font-medium">{t(`intake.rejected.${r.reason}${r.detail ? `.${r.detail}` : ""}` as MessageKey)}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums">{formatDateTime(r.receivedAt)}</span>
+                </div>
+                {r.issues && r.issues.length > 0 && (
+                  <ul className="text-xs text-muted-foreground">
+                    {r.issues.map((issue, i) => (
+                      <li key={i}>
+                        <span className="font-mono">{issue.path || t("intake.rejectedWhole")}</span>: {issue.message}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {[r.route ? t(`intake.route.${r.route}` as MessageKey) : null, r.userAgent ? t("intake.rejectedFrom", { agent: r.userAgent }) : null].filter(Boolean).join(" · ")}
+                </p>
               </li>
             ))}
           </ul>

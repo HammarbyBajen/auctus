@@ -63,6 +63,8 @@ Example:
 
 A `5xx` or a timeout can be retried with the same `id`.
 
+Every call that is turned away (401, 400 or 413) is noted in Tegen HQ under Inställningar → Inkommande leads, with the reason (no secret sent, wrong format, wrong secret, which fields were wrong) and the time, but never what was sent. So if leads do not arrive, Max can see whether your calls reach Tegen HQ and why they are refused.
+
 Please make the call so that a failure here never affects the other five destinations (for example, fire it last and catch errors), since Tegen HQ is not yet the system anyone relies on.
 
 ## Trying it

@@ -62,9 +62,9 @@ const pad = { top: 8, right: 8, bottom: 20, left: 8 };
 const snapPx = 12;
 
 /**
- * The months with members as a small area chart in the shape of shadcn's
- * "Area Chart - Gradient": a gradient under a smooth line, a dot on each
- * month, grid lines without numbers. A dot follows the mouse along the line;
+ * Twelve months as a small area chart in the shape of shadcn's "Area Chart -
+ * Gradient": a gradient under a smooth line, a dot on each month, grid lines
+ * without numbers. Months before the first one with members stay empty. A dot follows the mouse along the line;
  * near a month it rests on that month's dot, which grows. The readout always
  * shows the nearest month, since a count between two months means nothing.
  * Arrow keys step through the months.
@@ -88,33 +88,35 @@ function Chart({ points: all }: { points: MonthPoint[] }) {
     return () => observer.disconnect();
   }, []);
 
-  // Months before the first one with members (before Mana) are not shown at all.
+  // The axis keeps all twelve months; the line starts at the first one with
+  // members (before Mana there is nothing to draw, not 0).
   const { bottom, top, ticks, from } = trendScale(all.map((p) => p.count));
-  const points = all.slice(from);
-  const last = points.length - 1;
+  const last = all.length - 1;
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
   const step = last > 0 ? innerW / last : 0;
   const x = (i: number) => (last > 0 ? pad.left + i * step : pad.left + innerW / 2);
   const y = (v: number) => pad.top + innerH - ((v - bottom) / (top - bottom)) * innerH;
-  const pts: Pt[] = points.map((p, i) => [x(i), y(p.count)]);
+  const withData = all.slice(from);
+  const pts: Pt[] = withData.map((p, j) => [x(from + j), y(p.count)]);
   const segments = smoothSegments(pts);
   const line = pathOf(pts, segments);
-  const area = last > 0 ? `${line} L${x(last)},${y(bottom)} L${x(0)},${y(bottom)} Z` : "";
-  const labelEvery = Math.ceil(points.length / 6);
+  const area = segments.length > 0 ? `${line} L${x(last)},${y(bottom)} L${x(from)},${y(bottom)} Z` : "";
+  const labelEvery = Math.ceil(all.length / 6);
 
   // Where the hover dot is, and which month the readout shows.
   let shown: number | null = picked;
-  let dot: Pt | null = picked !== null ? pts[picked] : null;
+  let dot: Pt | null = picked !== null ? pts[picked - from] : null;
   let snapped = picked !== null;
   if (pointer !== null && picked === null) {
-    const px = Math.min(x(last), Math.max(x(0), pointer));
+    // Only the months with members can be pointed at.
+    const px = Math.min(x(last), Math.max(x(from), pointer));
     shown = last > 0 ? Math.round((px - pad.left) / step) : 0;
     snapped = Math.abs(px - x(shown)) <= snapPx;
-    if (snapped || segments.length === 0) dot = pts[shown];
+    if (snapped || segments.length === 0) dot = pts[shown - from];
     else {
-      const k = Math.min(last - 1, Math.floor((px - pad.left) / step));
-      dot = [px, heightAt(segments[k], (px - x(k)) / step)];
+      const k = Math.min(segments.length - 1, Math.floor((px - x(from)) / step));
+      dot = [px, heightAt(segments[k], (px - x(from + k)) / step)];
     }
   }
 
@@ -141,7 +143,7 @@ function Chart({ points: all }: { points: MonthPoint[] }) {
       }}
       onKeyDown={(e) => {
         setSpoken(true);
-        if (e.key === "ArrowLeft") setPicked((p) => Math.max(0, (p ?? last) - 1));
+        if (e.key === "ArrowLeft") setPicked((p) => Math.max(from, (p ?? last) - 1));
         else if (e.key === "ArrowRight") setPicked((p) => Math.min(last, (p ?? last) + 1));
         else return;
         e.preventDefault();
@@ -157,7 +159,7 @@ function Chart({ points: all }: { points: MonthPoint[] }) {
         {ticks.map((tick) => (
           <line key={tick} x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} className="stroke-border" strokeWidth={1} />
         ))}
-        {points.map((p, i) =>
+        {all.map((p, i) =>
           (last - i) % labelEvery === 0 ? (
             <text
               key={p.month}
@@ -174,13 +176,13 @@ function Chart({ points: all }: { points: MonthPoint[] }) {
         <path d={line} fill="none" className="stroke-chart-1" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
         {pts.map(([cx, cy], i) => (
           <circle
-            key={points[i].month}
+            key={withData[i].month}
             cx={cx}
             cy={cy}
             r={3}
             className="fill-chart-1 stroke-card transition-[scale] duration-150 motion-reduce:transition-none"
             strokeWidth={1.5}
-            style={{ transformBox: "fill-box", transformOrigin: "center", scale: snapped && shown === i ? 1.6 : 1 }}
+            style={{ transformBox: "fill-box", transformOrigin: "center", scale: snapped && shown === from + i ? 1.6 : 1 }}
           />
         ))}
         {dot && !snapped && <circle cx={dot[0]} cy={dot[1]} r={4} className="fill-chart-1 stroke-card" strokeWidth={2} />}
@@ -192,16 +194,16 @@ function Chart({ points: all }: { points: MonthPoint[] }) {
           // Beside the dot, never over it: right of it, or left near the right edge.
           style={dot[0] < width / 2 ? { left: dot[0] + 12 } : { left: dot[0] - 12, transform: "translateX(-100%)" }}
         >
-          <span className="font-medium first-letter:uppercase">{monthLong.format(asDate(points[shown].month))}</span>
+          <span className="font-medium first-letter:uppercase">{monthLong.format(asDate(all[shown].month))}</span>
           <span className="flex items-center gap-2">
             <span aria-hidden="true" className="size-2.5 shrink-0 rounded-xs bg-chart-1" />
             <span className="text-muted-foreground">{t("kpi.tableCount")}</span>
-            <span className="ml-auto font-medium tabular-nums">{formatNumber(points[shown].count)}</span>
+            <span className="ml-auto font-medium tabular-nums">{formatNumber(all[shown].count)}</span>
           </span>
         </div>
       )}
       <p className="sr-only" aria-live="polite">
-        {spoken && shown !== null ? `${monthLong.format(asDate(points[shown].month))}: ${formatNumber(points[shown].count)}` : ""}
+        {spoken && shown !== null ? `${monthLong.format(asDate(all[shown].month))}: ${formatNumber(all[shown].count)}` : ""}
       </p>
       <table className="sr-only">
         <caption>{t("kpi.chartLabel")}</caption>
@@ -212,7 +214,7 @@ function Chart({ points: all }: { points: MonthPoint[] }) {
           </tr>
         </thead>
         <tbody>
-          {points.map((p) => (
+          {withData.map((p) => (
             <tr key={p.month}>
               <td>{monthLong.format(asDate(p.month))}</td>
               <td>{p.count}</td>

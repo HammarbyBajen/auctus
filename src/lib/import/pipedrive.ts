@@ -1,9 +1,11 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { lead, leadEvent, leadNote, person } from "@/db/schema";
 import { normalizeEmail, normalizePhone } from "@/lib/leads/matching";
 
 type Db = typeof defaultDb;
+/** The database, or a transaction on it, so an import can run inside a larger change. */
+type Conn = Db | Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /**
  * One-off import of open leads from a Pipedrive export (ticket 15): a deals
@@ -241,7 +243,7 @@ export type ImportResult = { created: number; alreadyImported: number; matchedEx
  * Pipedrive person) is skipped, and so is anyone the CRM already has a lead
  * for (matched by email, then phone, like the intake), so nothing is doubled.
  */
-export async function applyImport(db: Db, studioId: string, leads: ImportLead[]): Promise<ImportResult> {
+export async function applyImport(db: Conn, studioId: string, leads: ImportLead[]): Promise<ImportResult> {
   const result: ImportResult = { created: 0, alreadyImported: 0, matchedExisting: 0 };
   const refs = leads.map((l) => l.ref);
   const done = new Set(
@@ -330,4 +332,48 @@ export async function applyImport(db: Db, studioId: string, leads: ImportLead[])
     });
   }
   return result;
+}
+
+export type ReplaceCounts = { leads: number; persons: number; kept: number };
+
+/** Leads that came from a Pipedrive import, and the people who have no other lead. */
+const importedLead = (studioId: string) => and(eq(lead.studioId, studioId), isNotNull(lead.externalRef));
+const onlyImported = (db: Conn, studioId: string) =>
+  and(
+    eq(person.studioId, studioId),
+    exists(db.select({ one: sql`1` }).from(lead).where(and(eq(lead.personId, person.id), isNotNull(lead.externalRef)))),
+    notExists(db.select({ one: sql`1` }).from(lead).where(and(eq(lead.personId, person.id), isNull(lead.externalRef)))),
+  );
+
+/** What a replace would remove, and how many leads made in Tegen HQ stay. */
+export async function previewReplace(db: Conn, studioId: string): Promise<ReplaceCounts> {
+  const [[leads], [persons], [kept]] = await Promise.all([
+    db.select({ n: sql<number>`count(*)::int` }).from(lead).where(importedLead(studioId)),
+    db.select({ n: sql<number>`count(*)::int` }).from(person).where(onlyImported(db, studioId)),
+    db.select({ n: sql<number>`count(*)::int` }).from(lead).where(and(eq(lead.studioId, studioId), isNull(lead.externalRef))),
+  ]);
+  return { leads: leads.n, persons: persons.n, kept: kept.n };
+}
+
+/**
+ * Swaps the earlier Pipedrive import for a new export, so stages match
+ * Pipedrive without comparing the two (2026-10-16). Every lead that came from
+ * an import goes, with its notes, history and tasks, and so does each person
+ * who had no other lead; then the new export is imported. One transaction:
+ * if anything fails, nothing has changed. Leads made in Tegen HQ (by hand,
+ * from the website, win-backs) stay, and the import matches against them so
+ * nobody is doubled. Moves to Medlem that Mana made come back on the next sync.
+ */
+export async function replaceImport(db: Db, studioId: string, leads: ImportLead[]) {
+  return db.transaction(async (tx) => {
+    const removed = await previewReplace(tx, studioId);
+    // Which people go is read before the leads are deleted, since the leads are what tells.
+    const people = await tx.select({ id: person.id }).from(person).where(onlyImported(tx, studioId));
+    await tx.delete(lead).where(importedLead(studioId));
+    for (let i = 0; i < people.length; i += 500) {
+      await tx.delete(person).where(inArray(person.id, people.slice(i, i + 500).map((p) => p.id)));
+    }
+    const imported = await applyImport(tx, studioId, leads);
+    return { removed, imported };
+  });
 }

@@ -1,8 +1,10 @@
 /**
  * Imports open leads from a Pipedrive export (ticket 15). A dry run unless
  * --apply is given. Prints counts only, never names or contact details.
+ * With --replace, every lead from an earlier import goes first (in the same
+ * transaction), so stages match the new export.
  *
- *   pnpm import:pipedrive --deals deals.csv --people people.csv [--apply] [--env .env.production.local]
+ *   pnpm import:pipedrive --deals deals.csv --people people.csv [--replace] [--apply] [--env .env.production.local]
  */
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
@@ -14,6 +16,7 @@ const { values } = parseArgs({
     deals: { type: "string" },
     people: { type: "string" },
     apply: { type: "boolean", default: false },
+    replace: { type: "boolean", default: false },
     env: { type: "string", default: ".env.local" },
   },
 });
@@ -21,7 +24,7 @@ config({ path: values.env });
 
 async function main() {
   if (!values.deals || !values.people) throw new Error("Give --deals and --people (the two Pipedrive CSV files)");
-  const { planImport, applyImport } = await import("../src/lib/import/pipedrive");
+  const { planImport, applyImport, previewReplace, replaceImport } = await import("../src/lib/import/pipedrive");
   const plan = planImport(readFileSync(values.deals, "utf8"), readFileSync(values.people, "utf8"));
 
   const byStage: Record<string, number> = {};
@@ -36,16 +39,19 @@ async function main() {
   console.log("Deals left out:", plan.skipped);
   console.log("Unmapped values:", plan.unmapped);
 
-  if (!values.apply) {
-    console.log("\nDry run: nothing was written. Add --apply to import.");
-    return;
-  }
   const { db, pool } = await import("../src/db");
   const { studio } = await import("../src/db/schema");
   const [tegen] = await db.select().from(studio).where(eq(studio.slug, "tegen"));
   if (!tegen) throw new Error("No studio with slug tegen in this database");
-  const result = await applyImport(db, tegen.id, plan.leads);
-  console.log("\nImported:", result);
+  if (values.replace) console.log("Replacing the earlier import, removes:", await previewReplace(db, tegen.id));
+
+  if (!values.apply) {
+    console.log("\nDry run: nothing was written. Add --apply to import.");
+  } else if (values.replace) {
+    console.log("\nReplaced:", await replaceImport(db, tegen.id, plan.leads));
+  } else {
+    console.log("\nImported:", await applyImport(db, tegen.id, plan.leads));
+  }
   await pool.end();
 }
 

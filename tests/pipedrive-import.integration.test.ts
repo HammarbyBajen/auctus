@@ -66,4 +66,32 @@ describe.skipIf(!hasDb)("pipedrive import", () => {
       matchedExisting: 1,
     });
   });
+
+  it("replaces every imported lead with a new export, keeping leads made in Tegen HQ", async () => {
+    // From the tests above: two imported leads (1, 2) and one made by hand (c-).
+    const before = await importer.previewReplace(db, studioId);
+    expect(before).toEqual({ leads: 2, persons: 2, kept: 1 });
+
+    const fresh = [item("pipedrive:person:1", `a-${tag}@example.test`, "cold"), item("pipedrive:person:4", `d-${tag}@example.test`)];
+    const result = await importer.replaceImport(db, studioId, fresh);
+    expect(result).toEqual({ removed: before, imported: { created: 2, alreadyImported: 0, matchedExisting: 0 } });
+
+    const rows = await db.select().from(schema.lead).where(eq(schema.lead.studioId, studioId));
+    expect(rows.map((r) => [r.externalRef, r.stage]).sort()).toEqual([
+      [null, "new_lead"],
+      ["pipedrive:person:1", "cold"],
+      ["pipedrive:person:4", "new_lead"],
+    ]);
+    // Person 2 is gone with their lead; the hand-made one is untouched.
+    const people = await db.select({ email: schema.person.email }).from(schema.person).where(eq(schema.person.studioId, studioId));
+    expect(people.map((p) => p.email).sort()).toEqual([`a-${tag}@example.test`, `c-${tag}@example.test`, `d-${tag}@example.test`]);
+  });
+
+  it("changes nothing when the new import fails partway", async () => {
+    const before = await db.select({ id: schema.lead.id }).from(schema.lead).where(eq(schema.lead.studioId, studioId));
+    const broken = [item("pipedrive:person:5", `e-${tag}@example.test`), { ...item("pipedrive:person:6", `f-${tag}@example.test`), createdAt: new Date("not a date") }];
+    await expect(importer.replaceImport(db, studioId, broken)).rejects.toThrow();
+    const after = await db.select({ id: schema.lead.id }).from(schema.lead).where(eq(schema.lead.studioId, studioId));
+    expect(after.map((r) => r.id).sort()).toEqual(before.map((r) => r.id).sort());
+  });
 });

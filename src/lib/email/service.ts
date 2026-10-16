@@ -126,17 +126,20 @@ const rank: Record<string, number> = { queued: 0, sent: 1, delayed: 2, delivered
 
 /**
  * Takes one event Resend reported (already verified). Each is handled once.
- * A hard bounce or a spam complaint puts the address on the suppression list,
- * but only for live emails: in test mode it was Resend's test address.
+ * The Resend account is shared with tegen-web's lead emails, so events for
+ * emails Tegen HQ did not send are ignored and not stored. A hard bounce or a
+ * spam complaint puts the address on the suppression list, but only for live
+ * emails: in test mode it was Resend's test address.
  */
 export async function handleEmailEvent(db: Db, eventId: string, event: WebhookEvent) {
   const [message] = event.emailId ? await db.select().from(emailMessage).where(eq(emailMessage.resendId, event.emailId)).limit(1) : [];
+  if (!message) return { handled: false, matched: false };
   const [fresh] = await db
     .insert(emailEvent)
-    .values({ id: eventId, messageId: message?.id ?? null, type: event.type })
+    .values({ id: eventId, messageId: message.id, type: event.type })
     .onConflictDoNothing()
     .returning({ id: emailEvent.id });
-  if (!fresh || !message) return { handled: Boolean(fresh), matched: Boolean(message) };
+  if (!fresh) return { handled: false, matched: true };
 
   const next = statusFor[event.type];
   if (next && (rank[next] ?? 0) >= (rank[message.status] ?? 0)) {

@@ -4,7 +4,7 @@
 
 **Blocked by:** 13
 
-**Status:** built (2026-10-15), in test mode; waiting for a Resend API key, a webhook secret and a verified subdomain
+**Status:** built (2026-10-15), in test mode; API key from Erik's account in place locally (2026-10-16); waiting for the webhook secret and the sender address
 
 - [x] One module talks to Resend (lint rule and a test); the key and webhook secret are read there only, server-side
 - [x] Test mode by default: every email goes to Resend's test address; live needs both EMAIL_LIVE=true on the server and an owner's switch; without a key nothing is sent at all
@@ -14,7 +14,7 @@
 - [x] Templates (new leads; members never seen and members who stopped coming) and the sender are set under Inställningar → E-post, by owners
 - [x] Deleting a person deletes their emails; a suppressed address stays so they are never mailed again
 - [ ] A test send through Resend once the key is in (Max)
-- [ ] The subdomain verified in Resend (Cloudflare access, Erik)
+- [ ] The sender address on crossfittegen.se (already verified in Erik's account) and the webhook in that account (Erik)
 - [ ] Copy for the templates and the footer (Fredrik, Timmy)
 
-Decided by Max (2026-10-15): Resend's storage in the US is accepted and documented (an exception to "data stays in the EU"); Max's own Resend account for now; test addresses only until the review with Erik.
+Decided by Max (2026-10-15): Resend's storage in the US is accepted and documented (an exception to "data stays in the EU"); test addresses only until the review with Erik. Changed 2026-10-16: Erik's Resend account (the one tegen-web uses) instead of Max's own, so no subdomain; webhook events for emails Tegen HQ did not send are ignored.

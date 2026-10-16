@@ -119,6 +119,11 @@ describe.skipIf(!hasDb)("sending email from Tegen HQ (M8 phase 1)", () => {
     expect([result.status, row.status, row.error]).toEqual(["failed", "failed", "rate_limit_exceeded"]);
   });
 
+  it("ignores events for emails Tegen HQ did not send (the account is shared with tegen-web)", async () => {
+    expect(await email.handleEmailEvent(db, `${tag}-other`, { type: "email.delivered", emailId: "re_from_tegen_web", bounceType: null })).toEqual({ handled: false, matched: false });
+    expect(await db.select().from(schema.emailEvent).where(eq(schema.emailEvent.id, `${tag}-other`))).toEqual([]);
+  });
+
   it("lists a person's emails, newest first, with who sent them", async () => {
     const rows = await email.listEmails(db, studioId, { manaUserId: "nobody" });
     expect(rows).toEqual([]);

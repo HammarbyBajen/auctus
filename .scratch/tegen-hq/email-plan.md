@@ -6,6 +6,14 @@ Based on `docs/research/resend.md` (2026-10-15). Decisions so far are Max's (202
 
 **Resend stores all data in the United States** (account data, metadata, logs, and email content for 30 days), whatever sending region is chosen. There is no EU option ([regions](https://resend.com/docs/dashboard/domains/regions), [GDPR](https://resend.com/security/gdpr), both checked 2026-10-15). Transfers rely on the EU SCCs and the EU-US Data Privacy Framework, under a pre-signed DPA. The project rule says data stays in the EU, so this is an exception to it. **Max accepted it on 2026-10-15**, to be documented in Tegen's privacy policy (Tegen is the controller and should agree). Keep as little there as possible: no tracking, ids only in tags, no member lists in Resend before phase 4, no free-text notes in emails. Phase 1 is built now in test mode; real test sends start when the API key is in.
 
+## Changed: Erik's Resend account (2026-10-16)
+
+Tegen HQ sends through **Erik's Resend account**, the one that already holds crossfittegen.se for `tegen-web`'s lead emails; Erik gave Max an API key. So no new account and no subdomain are needed: the sender can be an address on crossfittegen.se (which one is Fredrik's and Erik's to pick). What this means:
+- Tegen HQ's emails share the domain's reputation with the revenue-critical lead emails, so bounces and complaints matter more: the suppression list and test mode stay as they are.
+- A webhook in that account reports every email in it, including `tegen-web`'s; Tegen HQ ignores and does not store events for emails it did not send.
+- The key should be a sending-only key limited to crossfittegen.se (Erik can check in Resend). The webhook is created by Erik, pointing to `https://auctus-eight.vercel.app/api/email/webhook`, with the events email.sent, delivered, delivery_delayed, bounced, complained and failed.
+- Handing over to Tegen later is between Erik and Tegen.
+
 ## Facts that shape the plan
 
 - **Another Resend account already holds crossfittegen.se** (eu-west-1), most likely the one `tegen-web` uses for lead emails. A domain can only be in one account, so Tegen HQ sends from a subdomain (for example `mail.crossfittegen.se`), and the main domain and `tegen-web` stay untouched.

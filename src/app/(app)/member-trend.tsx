@@ -7,6 +7,7 @@ import { MicroLabel } from "@/components/app/micro-label";
 import { Surface } from "@/components/app/surface";
 import { formatNumber, formatPercent } from "@/lib/format";
 import { monthOverMonth, type MemberTrend as Trend, type MonthPoint } from "@/lib/kpi/members";
+import { trendScale } from "@/lib/kpi/scale";
 import { t } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -15,16 +16,9 @@ const monthShort = new Intl.DateTimeFormat("sv-SE", { month: "short", timeZone: 
 const monthName = new Intl.DateTimeFormat("sv-SE", { month: "long", timeZone: "UTC" });
 const asDate = (month: string) => new Date(`${month}-15T12:00:00Z`);
 
-/** A round top for the y scale (268 becomes 300), so ticks are clean numbers and the scale starts at 0. */
-function niceMax(value: number): number {
-  if (value <= 0) return 1;
-  const step = 10 ** Math.floor(Math.log10(value));
-  return [1, 2, 3, 4, 5, 6, 8, 10].map((f) => f * step).find((v) => v >= value) ?? 10 * step;
-}
-
 /**
  * A smooth path through the points that never bends past them (monotone cubic,
- * Fritsch-Carlson): flat stretches stay flat and the curve never dips below 0
+ * Fritsch-Carlson): flat stretches stay flat and the curve never dips below the lowest month
  * or overshoots a month, so the shape cannot misstate the counts.
  */
 function smoothPath(pts: [number, number][]): string {
@@ -68,21 +62,22 @@ function Chart({ points }: { points: MonthPoint[] }) {
     return () => observer.disconnect();
   }, []);
 
-  const top = niceMax(Math.max(...points.map((p) => p.count)));
+  const { bottom, top, ticks, from } = trendScale(points.map((p) => p.count));
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
   const step = innerW / Math.max(1, points.length - 1);
   const x = (i: number) => pad.left + i * step;
-  const y = (v: number) => pad.top + innerH - (v / top) * innerH;
-  const line = smoothPath(points.map((p, i) => [x(i), y(p.count)]));
-  const area = `${line} L${x(points.length - 1)},${y(0)} L${x(0)},${y(0)} Z`;
+  const y = (v: number) => pad.top + innerH - ((v - bottom) / (top - bottom)) * innerH;
+  // The line starts at the first month with members; earlier months have nothing to draw.
+  const line = smoothPath(points.slice(from).map((p, i) => [x(from + i), y(p.count)]));
+  const area = `${line} L${x(points.length - 1)},${y(bottom)} L${x(from)},${y(bottom)} Z`;
   const last = points.length - 1;
   const shown = active ?? null;
 
   const pick = (clientX: number) => {
     const rect = box.current?.getBoundingClientRect();
     if (!rect) return;
-    setActive(Math.min(last, Math.max(0, Math.round((clientX - rect.left - pad.left) / step))));
+    setActive(Math.min(last, Math.max(from, Math.round((clientX - rect.left - pad.left) / step))));
   };
 
   return (
@@ -107,14 +102,14 @@ function Chart({ points }: { points: MonthPoint[] }) {
       }}
       onKeyDown={(e) => {
         setSpoken(true);
-        if (e.key === "ArrowLeft") setActive((a) => Math.max(0, (a ?? last) - 1));
+        if (e.key === "ArrowLeft") setActive((a) => Math.max(from, (a ?? last) - 1));
         else if (e.key === "ArrowRight") setActive((a) => Math.min(last, (a ?? last) + 1));
         else return;
         e.preventDefault();
       }}
     >
       <svg width={width} height={height} aria-hidden="true" className="block overflow-visible">
-        {(Number.isInteger(top / 2) ? [0, top / 2, top] : [0, top]).map((tick) => (
+        {ticks.map((tick) => (
           <g key={tick}>
             <line x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} className="stroke-border" strokeWidth={1} />
             <text x={pad.left - 6} y={y(tick)} dy="0.32em" textAnchor="end" className="fill-muted-foreground text-3xs tabular-nums">
@@ -131,7 +126,7 @@ function Chart({ points }: { points: MonthPoint[] }) {
         )}
         <path d={area} className="fill-chart-1" fillOpacity={0.1} />
         <path d={line} fill="none" className="stroke-chart-1" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        {shown !== null && <line x1={x(shown)} x2={x(shown)} y1={pad.top} y2={y(0)} className="stroke-muted-foreground" strokeWidth={1} />}
+        {shown !== null && <line x1={x(shown)} x2={x(shown)} y1={pad.top} y2={y(bottom)} className="stroke-muted-foreground" strokeWidth={1} />}
         <circle cx={x(shown ?? last)} cy={y(points[shown ?? last].count)} r={4} className="fill-chart-1 stroke-card" strokeWidth={2} />
       </svg>
       {shown !== null && (

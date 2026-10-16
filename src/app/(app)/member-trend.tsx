@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { TrendingDown, TrendingUp } from "lucide-react";
 import { Chip } from "@/components/app/chip";
 import { MicroLabel } from "@/components/app/micro-label";
@@ -16,14 +16,21 @@ const monthShort = new Intl.DateTimeFormat("sv-SE", { month: "short", timeZone: 
 const monthName = new Intl.DateTimeFormat("sv-SE", { month: "long", timeZone: "UTC" });
 const asDate = (month: string) => new Date(`${month}-15T12:00:00Z`);
 
+type Pt = [number, number];
+/** One curve piece between two months: start, two control points, end. */
+type Segment = [Pt, Pt, Pt, Pt];
+
 /**
- * A smooth path through the points that never bends past them (monotone cubic,
- * Fritsch-Carlson): flat stretches stay flat and the curve never dips below the lowest month
- * or overshoots a month, so the shape cannot misstate the counts.
+ * A smooth curve through the points that never bends past them (monotone
+ * cubic, Fritsch-Carlson): flat stretches stay flat and the curve never dips
+ * below the lowest month or overshoots one, so the shape cannot misstate the
+ * counts. The control points sit a third of the way along each piece, so a
+ * piece's x moves evenly with its t, which lets the hover dot find the
+ * curve's height under the mouse.
  */
-function smoothPath(pts: [number, number][]): string {
-  if (pts.length < 2) return pts.length ? `M${pts[0][0]},${pts[0][1]}` : "";
+function smoothSegments(pts: Pt[]): Segment[] {
   const n = pts.length;
+  if (n < 2) return [];
   const slope = pts.slice(1).map(([x1, y1], i) => (y1 - pts[i][1]) / (x1 - pts[i][0]));
   const tangent = pts.map((_, i) => {
     if (i === 0) return slope[0];
@@ -33,24 +40,43 @@ function smoothPath(pts: [number, number][]): string {
     // Months are evenly spaced, so the tangent is the harmonic mean of the two slopes.
     return a * b <= 0 ? 0 : (2 * a * b) / (a + b);
   });
-  let d = `M${pts[0][0]},${pts[0][1]}`;
-  for (let i = 0; i < n - 1; i++) {
+  return pts.slice(1).map(([x1, y1], i) => {
     const [x0, y0] = pts[i];
-    const [x1, y1] = pts[i + 1];
     const h = (x1 - x0) / 3;
-    d += ` C${x0 + h},${y0 + tangent[i] * h} ${x1 - h},${y1 - tangent[i + 1] * h} ${x1},${y1}`;
-  }
-  return d;
+    return [[x0, y0], [x0 + h, y0 + tangent[i] * h], [x1 - h, y1 - tangent[i + 1] * h], [x1, y1]];
+  });
+}
+
+const pathOf = (pts: Pt[], segments: Segment[]) =>
+  pts.length === 0 ? "" : `M${pts[0][0]},${pts[0][1]}` + segments.map(([, c1, c2, end]) => ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${end[0]},${end[1]}`).join("");
+
+/** The curve's height at t (0 to 1) along a piece. */
+function heightAt([p0, c1, c2, p1]: Segment, t: number): number {
+  const u = 1 - t;
+  return u * u * u * p0[1] + 3 * u * u * t * c1[1] + 3 * u * t * t * c2[1] + t * t * t * p1[1];
 }
 
 const height = 120;
-const pad = { top: 8, right: 8, bottom: 20, left: 36 };
+const pad = { top: 8, right: 8, bottom: 20, left: 8 };
+/** How close (px) the mouse must be to a month for its dot to grow and the hover dot to sit on it. */
+const snapPx = 12;
 
-/** Twelve months as a small line chart, with a crosshair and readout on hover or arrow keys. */
-function Chart({ points }: { points: MonthPoint[] }) {
+/**
+ * The months with members as a small area chart in the shape of shadcn's
+ * "Area Chart - Gradient": a gradient under a smooth line, a dot on each
+ * month, grid lines without numbers. A dot follows the mouse along the line;
+ * near a month it rests on that month's dot, which grows. The readout always
+ * shows the nearest month, since a count between two months means nothing.
+ * Arrow keys step through the months.
+ */
+function Chart({ points: all }: { points: MonthPoint[] }) {
   const box = useRef<HTMLDivElement>(null);
+  const gradient = `kpi-fill-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const [width, setWidth] = useState(480);
-  const [active, setActive] = useState<number | null>(null);
+  /** The mouse's x in the chart, while it is over it. */
+  const [pointer, setPointer] = useState<number | null>(null);
+  /** The month picked with the keyboard. */
+  const [picked, setPicked] = useState<number | null>(null);
   // Only keyboard use is announced; a mouse sweeping the chart would make a screen reader read every month.
   const [spoken, setSpoken] = useState(false);
 
@@ -62,23 +88,35 @@ function Chart({ points }: { points: MonthPoint[] }) {
     return () => observer.disconnect();
   }, []);
 
-  const { bottom, top, ticks, from } = trendScale(points.map((p) => p.count));
+  // Months before the first one with members (before Mana) are not shown at all.
+  const { bottom, top, ticks, from } = trendScale(all.map((p) => p.count));
+  const points = all.slice(from);
+  const last = points.length - 1;
   const innerW = width - pad.left - pad.right;
   const innerH = height - pad.top - pad.bottom;
-  const step = innerW / Math.max(1, points.length - 1);
-  const x = (i: number) => pad.left + i * step;
+  const step = last > 0 ? innerW / last : 0;
+  const x = (i: number) => (last > 0 ? pad.left + i * step : pad.left + innerW / 2);
   const y = (v: number) => pad.top + innerH - ((v - bottom) / (top - bottom)) * innerH;
-  // The line starts at the first month with members; earlier months have nothing to draw.
-  const line = smoothPath(points.slice(from).map((p, i) => [x(from + i), y(p.count)]));
-  const area = `${line} L${x(points.length - 1)},${y(bottom)} L${x(from)},${y(bottom)} Z`;
-  const last = points.length - 1;
-  const shown = active ?? null;
+  const pts: Pt[] = points.map((p, i) => [x(i), y(p.count)]);
+  const segments = smoothSegments(pts);
+  const line = pathOf(pts, segments);
+  const area = last > 0 ? `${line} L${x(last)},${y(bottom)} L${x(0)},${y(bottom)} Z` : "";
+  const labelEvery = Math.ceil(points.length / 6);
 
-  const pick = (clientX: number) => {
-    const rect = box.current?.getBoundingClientRect();
-    if (!rect) return;
-    setActive(Math.min(last, Math.max(from, Math.round((clientX - rect.left - pad.left) / step))));
-  };
+  // Where the hover dot is, and which month the readout shows.
+  let shown: number | null = picked;
+  let dot: Pt | null = picked !== null ? pts[picked] : null;
+  let snapped = picked !== null;
+  if (pointer !== null && picked === null) {
+    const px = Math.min(x(last), Math.max(x(0), pointer));
+    shown = last > 0 ? Math.round((px - pad.left) / step) : 0;
+    snapped = Math.abs(px - x(shown)) <= snapPx;
+    if (snapped || segments.length === 0) dot = pts[shown];
+    else {
+      const k = Math.min(last - 1, Math.floor((px - pad.left) / step));
+      dot = [px, heightAt(segments[k], (px - x(k)) / step)];
+    }
+  }
 
   return (
     <div
@@ -86,58 +124,80 @@ function Chart({ points }: { points: MonthPoint[] }) {
       tabIndex={0}
       role="group"
       aria-label={t("kpi.chartLabel")}
-      className="focus-ring relative w-full min-w-0 overflow-hidden rounded-sm"
+      className="focus-ring relative w-full min-w-0 touch-pan-y overflow-hidden rounded-sm"
       onPointerMove={(e) => {
         setSpoken(false);
-        pick(e.clientX);
+        setPicked(null);
+        setPointer(e.clientX - (box.current?.getBoundingClientRect().left ?? 0));
       }}
-      onPointerLeave={() => setActive(null)}
+      onPointerLeave={() => setPointer(null)}
       onFocus={() => {
         setSpoken(true);
-        setActive((a) => a ?? last);
+        setPicked((p) => p ?? last);
       }}
       onBlur={() => {
         setSpoken(false);
-        setActive(null);
+        setPicked(null);
       }}
       onKeyDown={(e) => {
         setSpoken(true);
-        if (e.key === "ArrowLeft") setActive((a) => Math.max(from, (a ?? last) - 1));
-        else if (e.key === "ArrowRight") setActive((a) => Math.min(last, (a ?? last) + 1));
+        if (e.key === "ArrowLeft") setPicked((p) => Math.max(0, (p ?? last) - 1));
+        else if (e.key === "ArrowRight") setPicked((p) => Math.min(last, (p ?? last) + 1));
         else return;
         e.preventDefault();
       }}
     >
       <svg width={width} height={height} aria-hidden="true" className="block overflow-visible">
+        <defs>
+          <linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor="var(--chart-1)" stopOpacity={0.8} />
+            <stop offset="95%" stopColor="var(--chart-1)" stopOpacity={0.1} />
+          </linearGradient>
+        </defs>
         {ticks.map((tick) => (
-          <g key={tick}>
-            <line x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} className="stroke-border" strokeWidth={1} />
-            <text x={pad.left - 6} y={y(tick)} dy="0.32em" textAnchor="end" className="fill-muted-foreground text-3xs tabular-nums">
-              {formatNumber(tick)}
-            </text>
-          </g>
+          <line key={tick} x1={pad.left} x2={width - pad.right} y1={y(tick)} y2={y(tick)} className="stroke-border" strokeWidth={1} />
         ))}
         {points.map((p, i) =>
-          (last - i) % 3 === 0 ? (
-            <text key={p.month} x={x(i)} y={height - 4} textAnchor={i === last ? "end" : "middle"} className="fill-muted-foreground text-3xs">
+          (last - i) % labelEvery === 0 ? (
+            <text
+              key={p.month}
+              x={x(i)}
+              y={height - 4}
+              textAnchor={last > 0 && i === last ? "end" : last > 0 && i === 0 ? "start" : "middle"}
+              className="fill-muted-foreground text-3xs"
+            >
               {monthShort.format(asDate(p.month)).replace(".", "")}
             </text>
           ) : null,
         )}
-        <path d={area} className="fill-chart-1" fillOpacity={0.1} />
+        {area && <path d={area} fill={`url(#${gradient})`} fillOpacity={0.4} />}
         <path d={line} fill="none" className="stroke-chart-1" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-        {shown !== null && <line x1={x(shown)} x2={x(shown)} y1={pad.top} y2={y(bottom)} className="stroke-muted-foreground" strokeWidth={1} />}
-        <circle cx={x(shown ?? last)} cy={y(points[shown ?? last].count)} r={4} className="fill-chart-1 stroke-card" strokeWidth={2} />
+        {pts.map(([cx, cy], i) => (
+          <circle
+            key={points[i].month}
+            cx={cx}
+            cy={cy}
+            r={3}
+            className="fill-chart-1 stroke-card transition-[scale] duration-150 motion-reduce:transition-none"
+            strokeWidth={1.5}
+            style={{ transformBox: "fill-box", transformOrigin: "center", scale: snapped && shown === i ? 1.6 : 1 }}
+          />
+        ))}
+        {dot && !snapped && <circle cx={dot[0]} cy={dot[1]} r={4} className="fill-chart-1 stroke-card" strokeWidth={2} />}
       </svg>
-      {shown !== null && (
+      {shown !== null && dot && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute top-0 flex flex-col rounded-md bg-popover px-2.5 py-1.5 whitespace-nowrap text-popover-foreground elevation-3"
-          // Beside the crosshair, never over the point it describes: right of it, or left near the right edge.
-          style={x(shown) < width / 2 ? { left: x(shown) + 10 } : { left: x(shown) - 10, transform: "translateX(-100%)" }}
+          className="pointer-events-none absolute top-0 flex min-w-32 flex-col gap-1 rounded-lg bg-popover px-2.5 py-1.5 text-xs whitespace-nowrap text-popover-foreground elevation-3"
+          // Beside the dot, never over it: right of it, or left near the right edge.
+          style={dot[0] < width / 2 ? { left: dot[0] + 12 } : { left: dot[0] - 12, transform: "translateX(-100%)" }}
         >
-          <span className="text-sm font-semibold tabular-nums">{formatNumber(points[shown].count)}</span>
-          <span className="text-2xs text-muted-foreground first-letter:uppercase">{monthLong.format(asDate(points[shown].month))}</span>
+          <span className="font-medium first-letter:uppercase">{monthLong.format(asDate(points[shown].month))}</span>
+          <span className="flex items-center gap-2">
+            <span aria-hidden="true" className="size-2.5 shrink-0 rounded-xs bg-chart-1" />
+            <span className="text-muted-foreground">{t("kpi.tableCount")}</span>
+            <span className="ml-auto font-medium tabular-nums">{formatNumber(points[shown].count)}</span>
+          </span>
         </div>
       )}
       <p className="sr-only" aria-live="polite">

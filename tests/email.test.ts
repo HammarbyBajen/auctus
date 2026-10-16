@@ -1,14 +1,23 @@
 import { describe, expect, it } from "vitest";
 import { emailHtml, emailText } from "@/lib/email/layout";
-import { emailMode, normaliseAddress, recipientFor, testAddress } from "@/lib/email/mode";
+import { emailMode, normaliseAddress, recipientFor, testAddress, validSender } from "@/lib/email/mode";
 import { fillTemplate, firstName, paragraphs } from "@/lib/email/template";
 
 describe("when an email may reach a real person", () => {
   it("only when the server and an owner both say so, and there is a key", () => {
-    expect(emailMode({ hasKey: true, serverLive: true, ownerLive: true })).toBe("live");
-    expect(emailMode({ hasKey: true, serverLive: true, ownerLive: false })).toBe("test");
-    expect(emailMode({ hasKey: true, serverLive: false, ownerLive: true })).toBe("test");
-    expect(emailMode({ hasKey: false, serverLive: true, ownerLive: true })).toBe("dry_run");
+    expect(emailMode({ hasKey: true, serverLive: true, ownerLive: true, hasSender: true })).toBe("live");
+    expect(emailMode({ hasKey: true, serverLive: true, ownerLive: false, hasSender: true })).toBe("test");
+    expect(emailMode({ hasKey: true, serverLive: false, ownerLive: true, hasSender: true })).toBe("test");
+    expect(emailMode({ hasKey: false, serverLive: true, ownerLive: true, hasSender: true })).toBe("dry_run");
+  });
+
+  it("never live from Resend's test sender, which cannot reach real people", () => {
+    expect(emailMode({ hasKey: true, serverLive: true, ownerLive: true, hasSender: false })).toBe("test");
+  });
+
+  it("accepts only senders Resend accepts", () => {
+    for (const ok of ["hej@mail.crossfittegen.se", "CrossFit Tegen <hej@mail.crossfittegen.se>", "Åsa Öberg <a@b.se>", '"Tegen, Hammarby" <a@b.se>']) expect(validSender(ok)).toBe(true);
+    for (const bad of ["CrossFit Tegen, Hammarby <a@b.se>", "Tegen; x <a@b.se>", "Tegen <a@b>", "a@b.se, c@d.se", "Tegen <a@b.se", ""]) expect(validSender(bad)).toBe(false);
   });
 
   it("sends a test email to Resend's test address, never to the person", () => {

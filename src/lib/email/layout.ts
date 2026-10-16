@@ -1,3 +1,4 @@
+import { escapeMarkup } from "@/lib/escape";
 import { paragraphs } from "./template";
 
 /**
@@ -9,14 +10,11 @@ import { paragraphs } from "./template";
  * written out.
  */
 
-const escapeHtml = (text: string) =>
-  text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-
 export function emailHtml({ body, studioName }: { body: string; studioName: string }): string {
   const parts = paragraphs(body);
-  const preview = escapeHtml((parts[0] ?? "").slice(0, 120));
+  const preview = escapeMarkup((parts[0] ?? "").slice(0, 120));
   const text = parts
-    .map((p) => `<p style="font-size:16px;line-height:24px;margin:0 0 16px">${escapeHtml(p).replace(/\n/g, "<br>")}</p>`)
+    .map((p) => `<p style="font-size:16px;line-height:24px;margin:0 0 16px">${escapeMarkup(p).replace(/\n/g, "<br>")}</p>`)
     .join("");
   return [
     '<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>',
@@ -26,7 +24,7 @@ export function emailHtml({ body, studioName }: { body: string; studioName: stri
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:560px"><tr><td style="padding:24px 16px">',
     text,
     '<hr style="border:none;border-top:1px solid #e5e5e5;margin:24px 0 12px">',
-    `<p style="font-size:13px;line-height:20px;color:#6b6b6b;margin:0">${escapeHtml(studioName)}</p>`,
+    `<p style="font-size:13px;line-height:20px;color:#6b6b6b;margin:0">${escapeMarkup(studioName)}</p>`,
     "</td></tr></table></td></tr></table></body></html>",
   ].join("");
 }

@@ -47,7 +47,8 @@ export function resendTransport(): EmailTransport {
   };
 }
 
-export type WebhookEvent = { type: string; emailId: string | null; bounceType: string | null };
+/** What an event says: its type, Resend's id for the email, our message id (from the tag every email carries) and a bounce's type. */
+export type WebhookEvent = { type: string; emailId: string | null; messageId: string | null; bounceType: string | null };
 
 /**
  * Checks that a webhook really came from Resend (the signature over the raw
@@ -62,6 +63,11 @@ export function verifyWebhook(payload: string, headers: { id: string | null; tim
     payload,
     headers: { id: headers.id, timestamp: headers.timestamp, signature: headers.signature },
     webhookSecret: secret,
-  }) as { type: string; data?: { email_id?: string; bounce?: { type?: string } } };
-  return { type: event.type, emailId: event.data?.email_id ?? null, bounceType: event.data?.bounce?.type ?? null };
+  }) as { type: string; data?: { email_id?: string; tags?: Record<string, string>; bounce?: { type?: string } } };
+  return {
+    type: event.type,
+    emailId: event.data?.email_id ?? null,
+    messageId: event.data?.tags?.message ?? null,
+    bounceType: event.data?.bounce?.type ?? null,
+  };
 }

@@ -1,3 +1,4 @@
+import { escapeMarkup } from "@/lib/escape";
 import type { MonthResult } from "./calc";
 
 /**
@@ -28,7 +29,6 @@ export function toCsv(sheet: Sheet): string {
 
 // ---- .xlsx ----
 
-const xmlEscape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
 function columnName(index: number): string {
   let n = index + 1;
@@ -47,7 +47,7 @@ function sheetXml(sheet: Sheet): string {
       const ref = `${columnName(c)}${r + 1}`;
       return typeof value === "number"
         ? `<c r="${ref}"><v>${value}</v></c>`
-        : `<c r="${ref}" t="inlineStr"${r === 0 ? ' s="1"' : ""}><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+        : `<c r="${ref}" t="inlineStr"${r === 0 ? ' s="1"' : ""}><is><t xml:space="preserve">${escapeMarkup(value)}</t></is></c>`;
     });
     return `<row r="${r + 1}">${cells.join("")}</row>`;
   });
@@ -66,7 +66,7 @@ function workbookFiles(sheet: Sheet, sheetName: string): [string, string][] {
     ],
     [
       "xl/workbook.xml",
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${xmlEscape(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${escapeMarkup(sheetName)}" sheetId="1" r:id="rId1"/></sheets></workbook>`,
     ],
     [
       "xl/_rels/workbook.xml.rels",

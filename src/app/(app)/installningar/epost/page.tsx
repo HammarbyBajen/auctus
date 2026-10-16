@@ -63,7 +63,7 @@ export default async function EmailSettingsPage({ searchParams }: { searchParams
             <Checkbox name="live" defaultChecked={settings.ownerLive} className="mt-0.5" />
             <span className="flex flex-col gap-1">
               {t("emailSettings.live")}
-              <span className="text-xs text-muted-foreground">{settings.serverLive ? t("emailSettings.liveHint") : t("emailSettings.liveLocked")}</span>
+              <span className="text-xs text-muted-foreground">{!settings.serverLive ? t("emailSettings.liveLocked") : !settings.hasSender ? t("emailSettings.liveNeedsSender") : t("emailSettings.liveHint")}</span>
             </span>
           </Label>
           <div className="flex flex-col gap-2">

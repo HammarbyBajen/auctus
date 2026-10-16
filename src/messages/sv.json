@@ -596,6 +596,7 @@
   "emailSettings.mode.dry_run": "Ingen Resend-nyckel på servern: mejl sparas men skickas inte.",
   "emailSettings.live": "Skicka till riktiga personer",
   "emailSettings.liveHint": "Kräver också att servern är inställd för det. Slås på först efter granskningen med Erik.",
+  "emailSettings.liveNeedsSender": "Kräver en egen avsändare nedan. Resends testavsändare når inga riktiga personer, så utan den stannar allt i testläge.",
   "emailSettings.liveLocked": "Servern är inte inställd för skarpa utskick, så allt stannar i testläge oavsett detta val.",
   "emailSettings.from": "Avsändare",
   "emailSettings.fromHint": "Till exempel CrossFit Tegen <hej@mail.crossfittegen.se>. Domänen måste vara verifierad i Resend. Tomt betyder Resends testavsändare.",

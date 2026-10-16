@@ -347,11 +347,10 @@ const onlyImported = (db: Conn, studioId: string) =>
 
 /** What a replace would remove, and how many leads made in Tegen HQ stay. */
 export async function previewReplace(db: Conn, studioId: string): Promise<ReplaceCounts> {
-  const [[leads], [persons], [kept]] = await Promise.all([
-    db.select({ n: sql<number>`count(*)::int` }).from(lead).where(importedLead(studioId)),
-    db.select({ n: sql<number>`count(*)::int` }).from(person).where(onlyImported(db, studioId)),
-    db.select({ n: sql<number>`count(*)::int` }).from(lead).where(and(eq(lead.studioId, studioId), isNull(lead.externalRef))),
-  ]);
+  // One after another: inside a transaction they share one connection.
+  const [leads] = await db.select({ n: sql<number>`count(*)::int` }).from(lead).where(importedLead(studioId));
+  const [persons] = await db.select({ n: sql<number>`count(*)::int` }).from(person).where(onlyImported(db, studioId));
+  const [kept] = await db.select({ n: sql<number>`count(*)::int` }).from(lead).where(and(eq(lead.studioId, studioId), isNull(lead.externalRef)));
   return { leads: leads.n, persons: persons.n, kept: kept.n };
 }
 

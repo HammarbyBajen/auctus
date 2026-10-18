@@ -16,6 +16,8 @@ export interface ManaSource {
   }>;
   getUserMemberships(manaUserId: string): Promise<UserMembershipsPage["data"]["items"]>;
   lastRequestAt: number | null;
+  /** Whether the key has worked in this run: a later refusal can then be Mana's request budget. */
+  keyWorked?: boolean;
 }
 
 type ManaPerson = UsersPage["data"]["items"][number];
@@ -132,6 +134,9 @@ export const initialProgress: SyncProgress = {
 
 /** A run that has not moved for this long is considered dead. */
 export const defaultLeaseMs = 3 * 60_000;
+/** How long a run waits when Mana's request budget runs out, and how often before it gives up (2 hours). */
+export const pauseMs = 15 * 60_000;
+export const maxPauses = 8;
 
 /**
  * Starts a new sync run for a studio. Only one run can be going at a time:
@@ -152,7 +157,9 @@ export async function startRun(
       .where(and(eq(syncRun.studioId, studioId), eq(syncRun.kind, "mana"), eq(syncRun.status, "running")))
       .limit(1);
     if (running) {
-      if (running.updatedAt.getTime() >= now.getTime() - leaseMs) {
+      // A run waiting for Mana on purpose is busy, not dead, until its wait is over.
+      const movingUntil = Math.max(running.updatedAt.getTime(), running.progress.pausedUntil ?? 0);
+      if (movingUntil >= now.getTime() - leaseMs) {
         return { status: "busy" as const, runId: running.id };
       }
       await tx
@@ -170,6 +177,19 @@ export async function startRun(
 
 async function saveProgress(db: Db, runId: string, progress: SyncProgress, now: Date) {
   await db.update(syncRun).set({ progress, updatedAt: now }).where(eq(syncRun.id, runId));
+}
+
+/**
+ * Notes that a run is waiting for Mana's request budget, and until when.
+ * Returns that time, or null when it has waited as often as it may.
+ */
+export async function pauseRun(db: Db, runId: string, now: Date = new Date()): Promise<number | null> {
+  const [run] = await db.select({ progress: syncRun.progress }).from(syncRun).where(eq(syncRun.id, runId)).limit(1);
+  const pauses = run?.progress.pauses ?? 0;
+  if (!run || pauses >= maxPauses) return null;
+  const pausedUntil = now.getTime() + pauseMs;
+  await saveProgress(db, runId, { ...run.progress, pausedUntil, pauses: pauses + 1 }, now);
+  return pausedUntil;
 }
 
 export async function failRun(db: Db, runId: string, error: unknown) {
@@ -204,8 +224,10 @@ export async function runBatch(
   if (!run) throw new ManaError("api", "Synken hittades inte.");
   if (run.status !== "running") return { done: true };
   const studioId = run.studioId;
-  const progress: SyncProgress = { ...initialProgress, ...run.progress };
+  const progress: SyncProgress = { ...initialProgress, ...run.progress, pausedUntil: null };
   source.lastRequestAt = progress.lastRequestAt;
+  // Progress is only saved after a request went through, so a saved time means the key has worked.
+  source.keyWorked = source.keyWorked || progress.lastRequestAt !== null;
 
   const touch = () => {
     progress.lastRequestAt = source.lastRequestAt;

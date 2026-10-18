@@ -195,6 +195,7 @@
   "mana.memberships": "Medlemskap",
   "mana.syncNow": "Synka nu",
   "mana.syncing": "Synk pågår",
+  "mana.paused": "Mana bad oss vänta, så synken tar en paus. Den fortsätter av sig själv {time}.",
   "mana.notConfigured": "Mana är inte kopplat ännu: studions Mana-id saknas i inställningarna.",
   "mana.recent": "Senaste körningar",
   "mana.run.succeeded": "Lyckades",

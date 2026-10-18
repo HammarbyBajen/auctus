@@ -75,6 +75,7 @@ export default async function ManaPage({
             {status.running ? t("mana.syncing") : t("mana.syncNow")}
           </SubmitButton>
         </form>
+        {status.running?.pausedUntil && <p className="text-xs text-muted-foreground">{t("mana.paused", { time: formatDateTime(status.running.pausedUntil) })}</p>}
       </Panel>
 
       <Panel title={t("mana.winbackTitle")} id="winback">

@@ -11,6 +11,7 @@ const base = "https://www.getmana.app/api/v1/studios/studio-1";
 /** A stand-in for Mana that serves the recorded pages and counts what it was asked. */
 class FakeMana implements ManaSource {
   lastRequestAt: number | null = null;
+  keyWorked?: boolean;
   usersCalls: (string | null)[] = [];
   membershipCalls: string[] = [];
   failMembershipsFor: { id: string; error: Error } | null = null;
@@ -174,6 +175,43 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     const runs = await db.select().from(schema.syncRun).where(eq(schema.syncRun.studioId, studioA));
     expect(runs.find((r) => r.id === first.runId)?.status).toBe("failed");
     expect(runs.filter((r) => r.status === "running")).toHaveLength(1);
+  });
+
+  it("keeps a run that is waiting for Mana's budget as busy, and gives up after two hours of pauses", async () => {
+    await fresh();
+    const first = await sync.startRun(db, studioA);
+    const now = new Date();
+    const until = await sync.pauseRun(db, first.runId, now);
+    expect(until).toBe(now.getTime() + sync.pauseMs);
+    // Ten minutes on, nothing has moved, but the run is waiting on purpose: still busy.
+    expect(await sync.startRun(db, studioA, { now: new Date(now.getTime() + 10 * 60_000) })).toEqual({ status: "busy", runId: first.runId });
+    for (let i = 1; i < sync.maxPauses; i++) expect(await sync.pauseRun(db, first.runId, now)).not.toBeNull();
+    expect(await sync.pauseRun(db, first.runId, now)).toBeNull();
+  });
+
+  it("carries on after a pause, knowing the key has worked", async () => {
+    await fresh();
+    const started = await sync.startRun(db, studioA);
+    const stamped = () => {
+      // The stand-in "makes a request" by stamping the time, like the real client does.
+      const mana = new FakeMana();
+      const original = mana.getUsersPage.bind(mana);
+      mana.getUsersPage = async (next) => {
+        mana.lastRequestAt = 123_456;
+        return original(next);
+      };
+      return mana;
+    };
+    let t = 0;
+    await sync.runBatch(db, stamped(), started.runId, { budgetMs: 1500, clock: () => (t += 1000) });
+    await sync.pauseRun(db, started.runId);
+
+    const next = stamped();
+    expect(next.keyWorked).toBeFalsy();
+    await sync.runBatch(db, next, started.runId, { budgetMs: 1500, clock: () => (t += 1000) });
+    expect(next.keyWorked).toBe(true);
+    const [run] = await db.select().from(schema.syncRun).where(eq(schema.syncRun.id, started.runId));
+    expect([run.status, run.progress.pausedUntil, run.progress.pauses]).toEqual(["running", null, 1]);
   });
 
   it("the database itself refuses two running runs for one studio", async () => {

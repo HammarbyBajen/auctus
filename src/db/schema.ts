@@ -450,6 +450,10 @@ export type SyncProgress = {
   membersTotal: number | null;
   /** When the last request to Mana was made, so spacing holds across steps. */
   lastRequestAt: number | null;
+  /** While Mana has asked us to wait: when the run carries on (epoch ms). */
+  pausedUntil?: number | null;
+  /** How many times this run has paused for Mana's request budget. */
+  pauses?: number;
 };
 
 /** One run of the Mana sync. Only one can be running per studio at a time. */

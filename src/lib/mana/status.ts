@@ -7,7 +7,7 @@ type Db = typeof defaultDb;
 export type SyncStatus = {
   configured: boolean;
   lastSuccessAt: Date | null;
-  running: { phase: SyncProgress["phase"]; done: number; total: number | null } | null;
+  running: { phase: SyncProgress["phase"]; done: number; total: number | null; pausedUntil: Date | null } | null;
   /** The latest failure, only when it is newer than the last success. */
   failure: { at: Date; error: string } | null;
   members: number;
@@ -46,6 +46,7 @@ export async function getSyncStatus(db: Db, studioId: string): Promise<SyncStatu
           phase: runningRun.progress.phase,
           done: runningRun.progress.phase === "users" ? runningRun.progress.usersSeen : runningRun.progress.membersDone,
           total: runningRun.progress.phase === "users" ? runningRun.progress.usersTotal : runningRun.progress.membersTotal,
+          pausedUntil: runningRun.progress.pausedUntil ? new Date(runningRun.progress.pausedUntil) : null,
         }
       : null,
     failure: failureIsNewer && lastFailure ? { at: lastFailure.finishedAt ?? lastFailure.startedAt, error: lastFailure.error ?? "" } : null,

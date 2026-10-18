@@ -11,7 +11,7 @@ type Call = { url: string; method: string; at: number; headers: Record<string, s
 
 function setup(
   handler: (url: string, call: number) => { status: number; body?: unknown; headers?: Record<string, string> } | "throw",
-  options: { minIntervalMs?: number; maxRetries?: number } = {},
+  options: { minIntervalMs?: number; maxRetries?: number; keyWorked?: boolean } = {},
 ) {
   let clock = 1_000_000;
   const calls: Call[] = [];
@@ -135,6 +135,27 @@ describe("ManaClient", () => {
     expect(calls).toHaveLength(1);
     expect(JSON.stringify(error)).not.toContain(KEY);
     expect(error.message).not.toContain(KEY);
+  });
+
+  it("waits out a 401 once after the key has worked, since Mana's spent budget looks like a dead key", async () => {
+    const { client, calls, sleeps } = setup((_url, n) => (n === 2 ? { status: 401 } : { status: 200, body: fixture("users-page-1") }));
+    await client.getUsersPage(usersUrl(1));
+    await client.getUsersPage(usersUrl(1));
+    expect(calls).toHaveLength(3);
+    expect(sleeps).toContain(30_000);
+  });
+
+  it("calls a 401 that stays after the wait rate limited, not a refused key", async () => {
+    const { client, calls } = setup(() => ({ status: 401 }), { keyWorked: true });
+    await expect(client.getUsersPage(usersUrl(1))).rejects.toMatchObject({ code: "rate_limited", details: { status: 401 } });
+    expect(calls).toHaveLength(2);
+  });
+
+  it("leaves a long Retry-After to the caller instead of holding the request open", async () => {
+    const { client, calls, sleeps } = setup(() => ({ status: 429, headers: { "retry-after": "600" } }));
+    await expect(client.getUsersPage(usersUrl(1))).rejects.toMatchObject({ code: "rate_limited" });
+    expect(calls).toHaveLength(1);
+    expect(sleeps.filter((s) => s > 1100)).toEqual([]);
   });
 
   it("does not retry other client errors", async () => {

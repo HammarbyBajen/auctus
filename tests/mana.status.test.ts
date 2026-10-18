@@ -27,7 +27,7 @@ describe("bannerFor", () => {
   });
 
   it("shows progress while a sync is running", () => {
-    expect(bannerFor({ ...base, running: { phase: "memberships", done: 120, total: 456 } }, now)).toEqual({
+    expect(bannerFor({ ...base, running: { phase: "memberships", done: 120, total: 456, pausedUntil: null } }, now)).toEqual({
       tone: "info",
       kind: "running",
       done: 120,
@@ -37,7 +37,7 @@ describe("bannerFor", () => {
 
   it("still reports a failure that is newer than the last success even if a retry is running", () => {
     const banner = bannerFor(
-      { ...base, failure: { at: now, error: "x" }, running: { phase: "users", done: 0, total: null } },
+      { ...base, failure: { at: now, error: "x" }, running: { phase: "users", done: 0, total: null, pausedUntil: null } },
       now,
     );
     expect(banner?.kind).toBe("failed");

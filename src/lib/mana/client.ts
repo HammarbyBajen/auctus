@@ -26,6 +26,8 @@ export type ManaClientOptions = {
   /** Mana allows about one request per second per gym. Keep clear of that. */
   minIntervalMs?: number;
   maxRetries?: number;
+  /** Whether the key has already worked in this run, so a later 401 can be Mana's request budget running out. */
+  keyWorked?: boolean;
   /** When the last request was made (epoch ms), so spacing holds across separate steps. */
   lastRequestAt?: number | null;
   fetchFn?: typeof fetch;
@@ -40,9 +42,20 @@ export type ManaClientOptions = {
  *   anything in Mana, so the CRM cannot write to it by accident.
  * - Requests are spaced at least `minIntervalMs` apart.
  * - A 429 or a server error is retried with a growing pause (and Retry-After
- *   when Mana sends it). Other errors are not retried.
+ *   when Mana sends it, if it is short). A long wait is left to the caller:
+ *   the sync pauses for it instead of holding a function open.
+ * - Mana gives each key a budget of requests over a time window, and when it
+ *   is spent some endpoints answer 401, exactly like a dead key (no
+ *   Retry-After). So a 401 after the key has worked in this run is waited out
+ *   once and then reported as rate limited, not as a refused key.
+ * - Other errors are not retried.
  * - Errors never contain the key or a response body.
  */
+/** How long a 401 mid-run is waited out before it counts as the budget running out. */
+const budgetWaitMs = 30_000;
+/** The longest Retry-After waited out in place. */
+const maxRetryAfterS = 15;
+
 export class ManaClient {
   private readonly baseUrl: string;
   private readonly studioId: string;
@@ -53,6 +66,7 @@ export class ManaClient {
   private readonly sleep: (ms: number) => Promise<void>;
   private readonly now: () => number;
   lastRequestAt: number | null;
+  keyWorked: boolean;
   requestCount = 0;
 
   constructor(options: ManaClientOptions) {
@@ -60,7 +74,8 @@ export class ManaClient {
     this.studioId = options.studioId;
     this.apiKey = options.apiKey;
     this.minIntervalMs = options.minIntervalMs ?? 1100;
-    this.maxRetries = options.maxRetries ?? 5;
+    this.maxRetries = options.maxRetries ?? 3;
+    this.keyWorked = options.keyWorked ?? false;
     this.lastRequestAt = options.lastRequestAt ?? null;
     this.fetchFn = options.fetchFn ?? fetch;
     this.sleep = options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms)));
@@ -87,6 +102,7 @@ export class ManaClient {
       throw new ManaError("contract", "Mana gav en länk till en annan adress, den följdes inte.");
     }
     let attempt = 0;
+    let budgetRetried = false;
     for (;;) {
       await this.waitForTurn();
       this.lastRequestAt = this.now();
@@ -105,6 +121,7 @@ export class ManaClient {
 
       if (response) {
         if (response.ok) {
+          this.keyWorked = true;
           try {
             return await response.json();
           } catch {
@@ -114,6 +131,18 @@ export class ManaClient {
           }
         }
         const requestId = response.headers.get("x-request-id") ?? undefined;
+        if (response.status === 401 && this.keyWorked) {
+          if (!budgetRetried) {
+            budgetRetried = true;
+            await this.sleep(budgetWaitMs);
+            this.lastRequestAt = null;
+            continue;
+          }
+          throw new ManaError("rate_limited", "Mana nekade nyckeln mitt i synken, troligen för att nyckelns förfrågningar är slut för stunden.", {
+            status: response.status,
+            requestId,
+          });
+        }
         if (response.status === 401 || response.status === 403) {
           throw new ManaError("auth", "Mana-nyckeln fungerar inte (nekad åtkomst).", {
             status: response.status,
@@ -137,8 +166,15 @@ export class ManaClient {
           );
         }
         const retryAfter = Number(response.headers.get("retry-after"));
+        if (response.status === 429 && Number.isFinite(retryAfter) && retryAfter > maxRetryAfterS) {
+          // Longer than is worth holding a function open for: the sync pauses instead.
+          throw new ManaError("rate_limited", "Mana säger att vi frågar för ofta (429) och ber oss vänta.", {
+            status: response.status,
+            requestId,
+          });
+        }
         if (response.status === 429 && Number.isFinite(retryAfter) && retryAfter > 0) {
-          await this.sleep(Math.min(retryAfter, 60) * 1000);
+          await this.sleep(retryAfter * 1000);
           this.lastRequestAt = null;
           attempt += 1;
           continue;

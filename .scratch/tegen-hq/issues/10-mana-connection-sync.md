@@ -23,3 +23,5 @@ Verified locally with a real run against Tegen's Mana (460 people, 424 members, 
 Verified on Vercel (2026-10-09): environment variables set, "Synka nu" on the live site succeeded in 943 seconds (well past the 5-minute step limit, so the workflow steps work), with 460 people and 284 memberships (270 active), the same as the local run.
 
 Still to check: Vercel Cron starts the daily run at 03:00 UTC despite Deployment Protection (first chance: the night after 2026-10-09).
+
+Update (2026-10-18): the nightly cron has run every night since 2026-10-10. On 2026-10-17 it failed on Mana's request budget (429) after an extra full sync twelve hours earlier. Since 2026-10-18 a 401 in the middle of a run is waited out once and then treated as the budget running out (Mana answers 401 for that on some endpoints), and a rate-limited run pauses 15 minutes and continues from its saved progress, for up to two hours, instead of failing. Fewer requests per sync is ticket 28.

@@ -4,7 +4,7 @@
 
 **Blocked by:** 13
 
-**Status:** built (2026-10-15), in test mode; API key from Erik's account in place locally (2026-10-16); waiting for the webhook secret and the sender address
+**Status:** built and live in test mode (2026-10-16); waiting for Erik's webhook secret, the sender address and the template copy
 
 - [x] One module talks to Resend (lint rule and a test); the key and webhook secret are read there only, server-side
 - [x] Test mode by default: every email goes to Resend's test address; live needs both EMAIL_LIVE=true on the server and an owner's switch; without a key nothing is sent at all
@@ -13,8 +13,10 @@
 - [x] Resend's webhook is verified on the raw body; each event is handled once; hard bounces and spam complaints of live emails go on a suppression list that is checked before every send
 - [x] Templates (new leads; members never seen and members who stopped coming) and the sender are set under Inställningar → E-post, by owners
 - [x] Deleting a person deletes their emails; a suppressed address stays so they are never mailed again
-- [ ] A test send through Resend once the key is in (Max)
+- [x] A test send through Resend once the key is in (done 2026-10-16, to Resend's test address)
 - [ ] The sender address on crossfittegen.se (already verified in Erik's account) and the webhook in that account (Erik)
 - [ ] Copy for the templates and the footer (Fredrik, Timmy)
 
 Decided by Max (2026-10-15): Resend's storage in the US is accepted and documented (an exception to "data stays in the EU"); test addresses only until the review with Erik. Changed 2026-10-16: Erik's Resend account (the one tegen-web uses) instead of Max's own, so no subdomain; webhook events for emails Tegen HQ did not send are ignored.
+
+Update (2026-10-16/18): the key is set locally and in Vercel. Erik added the webhook (https://auctus-eight.vercel.app/api/email/webhook) but has not sent its `whsec_` signing secret yet; until it is in Vercel (`vercel env add RESEND_WEBHOOK_SECRET production --sensitive`) the endpoint refuses everything and no delivery status comes back. Test emails show what Resend reported ("Testmejl · Levererat"). After a code review (2026-10-16): a temporary bounce reads as delayed; events are matched by the message tag so an early event is not lost; a resend after a failure reuses the same idempotency key; live mode needs Tegen's own sender; senders are checked against what Resend accepts.

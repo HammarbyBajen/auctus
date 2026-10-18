@@ -4,7 +4,7 @@
 
 **Blocked by:** 03, 09
 
-**Status:** done (imported to production 2026-10-09: 555 leads, 6 merged as duplicates)
+**Status:** done (imported 2026-10-09: 555 leads; replaced with a fresh export 2026-10-16: 557 leads)
 
 - [x] Leads are read from the Pipedrive CSV export (people, leads or deals, and notes and activities if exported), or read-only from Notion or Pipedrive, and nothing is ever written back
 - [x] The CSV file is treated as personal data: kept out of git and deleted after the import
@@ -15,3 +15,5 @@
 - [x] Unmapped values (for example an unknown source) are reported, not guessed
 - [x] A dry run shows what would be imported
 - [ ] The imported count matches LAB37's lead count for the same period
+
+Update (2026-10-16): the first import was replaced with a fresh Pipedrive export so stages match Pipedrive, using `pnpm import:pipedrive --replace`: every lead from the earlier import and its people are removed and the new export imported, in one transaction. None of the 555 had any work done in Tegen HQ (no tasks, notes, emails or assignees; the 9 moves to Medlem were Mana's own and came back with the next sync). Result: 557 leads (Kall 523, Kontaktad 9, Konsultation klar 8, Prisinfo 6, Ny lead 5, Bokad provträning 4, Bokat möte 2); 6 cold deals shared an email or phone with another and were matched; the 1 lead made by hand was kept. The CSV files were deleted after the import. From now on leads should be worked only in Tegen HQ.

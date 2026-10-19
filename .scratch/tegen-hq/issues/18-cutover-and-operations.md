@@ -12,3 +12,4 @@
 - [ ] A runbook covers deploy, the Mana key, the intake secret, sync failures and who to call
 - [ ] Notifications move from the test channel to the owners only as decided at the review
 - [ ] Owners have been walked through the system
+- [ ] The day before go-live, the Pipedrive import is replaced once more (`pnpm import:pipedrive --replace`) so stages are current, and the oldest open leads are reviewed once (moved to Kall or parked with "Vänta till", ticket 29), so Home starts clean

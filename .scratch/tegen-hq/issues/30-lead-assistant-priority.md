@@ -1,24 +1,43 @@
-# 30: An assistant that weighs leads (later version)
+# 30: AI in Tegen HQ: a built-in assistant first, then "connect your own agent" (MCP)
 
-**What to build:** An assistant reads each open lead and its history (the form answers, the message, where they came from, calls, notes, emails, stage, time since last contact) and gives it a weight, so Home ranks the leads most likely to join, and those cooling off, higher. It helps Fredrik and Timmy pick who to call; it never acts on a lead by itself.
+**What to build:** AI that helps staff work leads and members: a brief before a call, turning a quick note into the right steps after it, who to call today and why, drafts of messages, and answers to owners' questions plus a weekly summary. First as an assistant built into Tegen HQ on an API key Max supplies; later as an MCP server so staff (Tegen's first, other gyms' later) can connect their own agent and subscription.
 
-**Blocked by:** 29 (Home's groups and order), 18 (go-live: the history has to be worked in Tegen HQ before there is anything to read)
+**Blocked by:** 18 (go-live) for most of its value: until leads are worked in Tegen HQ there is little history to read. Phase A can start before.
 
-**Status:** later (idea from Max, 2026-10-19). Not to be built before Tegen HQ has a few months of its own lead history.
+**Status:** planned with Max (2026-10-19); not started
 
-**Why later:** today almost all history is in Pipedrive, and the leads in Tegen HQ carry one import note each. A weight needs real calls, notes and outcomes to read, and outcomes (who became a member) to check itself against.
+**Decided by Max (2026-10-19):**
+- Built-in assistant first, on Max's API key. The MCP server comes after and reuses the same tools.
+- "Connect your own agent" is for Tegen's staff first and other gyms later, so everything stays scoped per studio and per person (it already is: every row carries a studio).
+- All four uses matter: before/after a call, who to call today, drafting messages, questions and a weekly summary.
 
-**Ideas to settle before building:**
-- **What it reads:** the qualification answers (mål, erfarenhet), the message, attribution (campaign, ad click), stage and time in it, the contact history and notes, emails sent and their status, and whether they are already in Mana.
-- **What it gives back:** a weight (for example hot, warm, cooling) and one short reason in Swedish that staff can see ("Frågade om pris i går, har inte bokat"), never a bare number. Staff can override it, and the override sticks.
-- **Where it shows:** it orders the quiet group on Home (ticket 29) and can lift a lead into the top group; deadlines still come first.
-- **When it runs:** after something happens on a lead (a new message, a logged call) and once a night, not on every page load.
-- **Checking it works:** compare its weights with who actually joined over a period; start by showing the weight beside today's order before letting it change the order.
-- **Privacy:** lead data, including free text, would be sent to an AI provider. Needs a data processing agreement, a mention in Tegen's privacy policy, as little data as possible per call (no phone numbers or emails), and nothing about health beyond what the person wrote themselves. Decide whether member data from Mana may be included.
-- **Cost:** a small model per lead change; estimate from the number of leads per month before building.
+**Ground rules:**
+- The AI suggests, a person decides. It never sends a message, moves a lead or changes data by itself; every suggestion is approved with one click, and logged (what was suggested, by which model, who approved).
+- Every suggestion shows its reason in plain Swedish, never a bare score. Staff can override a weight and the override sticks.
+- As little personal data as possible per call: no phone numbers or email addresses unless the task needs them. Notes about injuries or illness are health data (GDPR special category) and are never sent. Member data from Mana only where the use needs it.
+- Needs before going live: a data processing agreement with the AI provider, a line in Tegen's privacy policy, and a check of where the provider processes data (Tegen HQ itself runs in the EU since 2026-10-19).
+- One guarded door: one module talks to the AI provider (as with email, a lint rule and a test keep it that way); the key is read there only; a monthly cost cap.
 
-- [ ] Decide what it reads and what it may never send (privacy review)
-- [ ] A weight with a short reason per open lead, stored and shown on the lead and on Home
-- [ ] Staff can override a weight; the assistant does not undo an override
-- [ ] Runs on changes and nightly, with a cost cap
-- [ ] Checked against real outcomes before it changes Home's order
+**Phases:**
+
+A. **Foundation.** A tool layer in Tegen HQ, written once and used by both the assistant and the MCP server: get a lead with its history, list who needs attention, list at-risk members, log a contact, add a note, create a task, suggest a stage, draft an email. Each tool checks the person's role, as the pages do. The AI module, the privacy filter (what may be sent), the log of suggestions, and the cost cap.
+
+B. **Before and after a call.** On the lead page: a short brief (where they came from, form answers, what happened so far, a suggested opening). After a call: a written or dictated note becomes a proposed set of steps (logged call, note, task with a date, stage move) to approve.
+
+C. **Who to call today.** A weight with a short reason per open lead and per at-risk member, after something happens on a lead and once a night (batch, cheaper). It orders the quiet group on Home (ticket 29) and Hör av dig till; deadlines still come first. First shown beside today's order and checked against who actually joined, before it changes the order.
+
+D. **Drafting messages.** Email and text drafts in Tegen's tone, from the templates (ticket 27) and the lead's history; always sent by a person.
+
+E. **Questions and a weekly summary.** Owners ask in plain Swedish ("how many from the Höst campaign joined?", "why did people leave in October?"), answered from Tegen HQ's own data with the numbers shown. A weekly summary to the owners (Discord or email).
+
+F. **MCP server.** The same tools exposed over MCP at a Tegen HQ address, signed in per person with OAuth so an agent has exactly that person's permissions; works with the Claude apps and Claude Code. Write tools still need the person's approval in their agent. Tegen's staff first; other gyms when Tegen HQ serves more than one studio.
+
+**Model and cost:** to measure on Tegen's own leads before choosing (Max decides). For scale: weighing about 50 open leads a night is roughly $0.50 a night on Claude Opus 5.5 (about $15 a month), half that through the batch API, and far less on Claude Haiku 5.5. The system prompt and tool definitions are cached to keep repeated calls cheap.
+
+- [ ] Phase A: the tool layer with role checks, the AI module behind one door, the privacy filter, the suggestion log and the cost cap
+- [ ] Privacy: data processing agreement, privacy policy line, where data is processed
+- [ ] Phase B: brief before a call; note to proposed steps after a call
+- [ ] Phase C: weights with reasons, checked against outcomes before they change Home's order
+- [ ] Phase D: message drafts
+- [ ] Phase E: questions and a weekly summary for owners
+- [ ] Phase F: MCP server with per-person sign-in

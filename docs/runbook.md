@@ -74,7 +74,9 @@ Set in Vercel (`vercel env add NAME production --sensitive`, pasted in the termi
 
 - No separate backups (decided with Erik). Neon keeps a restore window (point-in-time restore); the leads also exist in Notion and Pipedrive. Check the length of the window in Neon: project → Settings → (history / restore window).
 - **Restoring:** in Neon, create a branch from a point in time before the problem, check it, then restore the main branch from it (Neon: Restore). Restoring replaces everything after that point, including real work done since; prefer copying back only what was lost.
-- **Try a restore once** (ticket 18): create a branch from an hour ago, point a git-ignored env file at it, count leads, people and members against production with a read-only script, then delete the branch.
+- **Try a restore once** (ticket 18): create a branch from an hour ago, put its connection string as `DATABASE_URL` in `.env.restore-test.local` (git-ignored), compare it with production, then delete the branch:
+  `pnpm tsx scripts/compare-db.ts --a .env.production.local --b .env.restore-test.local`
+  It prints row counts and the newest row per table, never the rows.
 - **Deleting a person** on request: Inställningar → Integritet, or "Radera personen" on the lead. It removes the person, their leads, notes, tasks, submissions and emails; a suppressed email address stays so they are never mailed again; Mana data comes back from Mana (erasure there is done in Mana).
 - Personal data never goes into the repo, Notion or chat; scripts against production print counts only.
 

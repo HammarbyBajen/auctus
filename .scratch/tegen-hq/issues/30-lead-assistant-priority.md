@@ -4,7 +4,7 @@
 
 **Blocked by:** 18 (go-live) for most of its value: until leads are worked in Tegen HQ there is little history to read. Phase A can start before.
 
-**Status:** planned with Max (2026-10-19); not started
+**Status:** phase A built (2026-10-19, migration 0028 to run in production before it is pushed); phases B to F not started
 
 **Decided by Max (2026-10-19):**
 - Built-in assistant first, on Max's API key. The MCP server comes after and reuses the same tools.
@@ -36,11 +36,18 @@ F. **MCP server.** The same tools exposed over MCP at a Tegen HQ address, signed
 
 **Model and cost:** to measure on Tegen's own leads before choosing (Max decides). For scale: weighing about 50 open leads a night is roughly $0.50 a night on Claude Opus 5.5 (about $15 a month), half that through the batch API, and far less on Claude Haiku 5.5. The system prompt and tool definitions are cached to keep repeated calls cheap.
 
-- [ ] Phase A: the tool layer with role checks, the AI module behind one door, the privacy filter, the suggestion log and the cost cap
-- [ ] The note filter: health signs leave a note out whole, contact details removed, private notes never sent; tested with real-looking Swedish notes
+- [x] Phase A: the tool layer with role checks, the AI module behind one door, the privacy filter, the suggestion log and the cost cap
+- [x] The note filter: health signs leave a note out whole, contact details removed, private notes never sent; tested with real-looking Swedish notes
 - [ ] Privacy: data processing agreement, privacy policy line, where data is processed
 - [ ] Phase B: brief before a call; note to proposed steps after a call
 - [ ] Phase C: weights with reasons, checked against outcomes before they change Home's order
 - [ ] Phase D: message drafts
 - [ ] Phase E: questions and a weekly summary for owners
 - [ ] Phase F: MCP server with per-person sign-in
+
+Phase A, built (2026-10-19):
+- `src/lib/ai/privacy.ts`: the filter (52 built-in Swedish words, prefix matching with `*`, short words whole only; body parts left out because they are training words too), contact details taken out, private notes held back, first names only.
+- `src/lib/ai/tools.ts`: `leadContext` (stage, dates, where they came from without click ids, form answers that pass the filter, outcomes and stage moves, filtered notes and task titles, Mana memberships), `attentionList`, `atRiskList`; `stepSchema` (log a contact, add a note, create a task, move a stage) and `applySteps`, which runs approved steps through the normal services as the person who approved them. Each checks the role.
+- `src/lib/ai/client.ts`: the only importer of `@anthropic-ai/sdk` (lint rule, test); `askAi` checks the monthly cap (default 20 USD) and logs every call in `ai_suggestion` with tokens and cost; structured output; server-side fallback on a refusal; `decideSuggestion` records accepted or rejected. Default model `claude-opus-5-5`, changeable with `AI_MODEL` (Max's call, to measure).
+- Inställningar → Assistent: on or off, this month's cost against the cap, the cap, and the studio's own words. The "Privat" box on a note shows only once a key is set.
+- To switch it on later: `vercel env add ANTHROPIC_API_KEY production --sensitive` (and optionally `AI_MODEL`), after the data processing agreement and the privacy policy line.

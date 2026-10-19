@@ -14,13 +14,15 @@
 **Ground rules:**
 - The AI suggests, a person decides. It never sends a message, moves a lead or changes data by itself; every suggestion is approved with one click, and logged (what was suggested, by which model, who approved).
 - Every suggestion shows its reason in plain Swedish, never a bare score. Staff can override a weight and the override sticks.
-- As little personal data as possible per call: no phone numbers or email addresses unless the task needs them. Notes about injuries or illness are health data (GDPR special category) and are never sent. Member data from Mana only where the use needs it.
+- Only the personal data each task needs (GDPR data minimization): no phone numbers or email addresses unless the task needs them; member data from Mana only where the use needs it.
+- Absence: that someone is away and until when ("Tillbaka senast", a freeze's dates) may be sent; the reason for a health-related absence (injury, illness and the like, GDPR special category) is not (decided by Max, 2026-10-19).
+- Notes go through a filter before anything is sent (decided by Max, 2026-10-19). It fails on the safe side: a note with signs of health information (a Swedish word list Tegen can extend: skada, opererad, gravid, sjuk and so on) is left out whole, not edited; phone numbers and email addresses are removed from the notes that pass; staff can mark a note as private, and it is never sent. The filter runs in Tegen HQ, never by asking the AI. Tegen should also check that its privacy policy covers storing health-related absence reasons at all, AI or not.
 - Needs before going live: a data processing agreement with the AI provider, a line in Tegen's privacy policy, and a check of where the provider processes data (Tegen HQ itself runs in the EU since 2026-10-19).
 - One guarded door: one module talks to the AI provider (as with email, a lint rule and a test keep it that way); the key is read there only; a monthly cost cap.
 
 **Phases:**
 
-A. **Foundation.** A tool layer in Tegen HQ, written once and used by both the assistant and the MCP server: get a lead with its history, list who needs attention, list at-risk members, log a contact, add a note, create a task, suggest a stage, draft an email. Each tool checks the person's role, as the pages do. The AI module, the privacy filter (what may be sent), the log of suggestions, and the cost cap.
+A. **Foundation.** A tool layer in Tegen HQ, written once and used by both the assistant and the MCP server: get a lead with its history, list who needs attention, list at-risk members, log a contact, add a note, create a task, suggest a stage, draft an email. Each tool checks the person's role, as the pages do. The AI module, the privacy filter (what may be sent, including the note filter and a "private" mark on notes), the log of suggestions, and the cost cap.
 
 B. **Before and after a call.** On the lead page: a short brief (where they came from, form answers, what happened so far, a suggested opening). After a call: a written or dictated note becomes a proposed set of steps (logged call, note, task with a date, stage move) to approve.
 
@@ -35,6 +37,7 @@ F. **MCP server.** The same tools exposed over MCP at a Tegen HQ address, signed
 **Model and cost:** to measure on Tegen's own leads before choosing (Max decides). For scale: weighing about 50 open leads a night is roughly $0.50 a night on Claude Opus 5.5 (about $15 a month), half that through the batch API, and far less on Claude Haiku 5.5. The system prompt and tool definitions are cached to keep repeated calls cheap.
 
 - [ ] Phase A: the tool layer with role checks, the AI module behind one door, the privacy filter, the suggestion log and the cost cap
+- [ ] The note filter: health signs leave a note out whole, contact details removed, private notes never sent; tested with real-looking Swedish notes
 - [ ] Privacy: data processing agreement, privacy policy line, where data is processed
 - [ ] Phase B: brief before a call; note to proposed steps after a call
 - [ ] Phase C: weights with reasons, checked against outcomes before they change Home's order

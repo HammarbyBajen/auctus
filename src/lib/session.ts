@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -14,13 +15,14 @@ export async function getSession() {
  * Any signed-in user, otherwise back to the login page. A switched-off account
  * is turned away too, on its very next page load: the session cookie is cached
  * for a few minutes, so this one small lookup is what makes it immediate.
+ * Once per request: the layout and the page both ask, and share the answer.
  */
-export async function requireUser() {
+export const requireUser = cache(async () => {
   const session = await getSession();
   if (!session) redirect("/login");
   if (await isSwitchedOff(db, session.user.id)) redirect("/login?avstangd=1");
   return session.user;
-}
+});
 
 /** A signed-in user who may perform an action, otherwise back home with a notice. */
 export async function requirePermission(resource: Resource, action: string) {

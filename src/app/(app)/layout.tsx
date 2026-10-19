@@ -18,18 +18,19 @@ import { t } from "@/lib/i18n";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  const banner = bannerFor(await getSyncStatus(db, user.studioId), new Date());
   const showSettings = can(user.role, "settings", "manage");
   const showSalary = can(user.role, "salary", "read");
+  // Side by side, not one after the other: every page waits for these.
   // Owners hear about changes to Mana's API (ticket 24) until one marks them checked.
-  const api = showSettings ? await getApiWatchStatus(db) : null;
+  const [sync, api, cookieStore] = await Promise.all([getSyncStatus(db, user.studioId), showSettings ? getApiWatchStatus(db) : null, cookies()]);
+  const banner = bannerFor(sync, new Date());
   const apiNotice =
     api && api.pending.length > 0
       ? { tone: api.pending.some((p) => p.changes.touchesSync) ? ("danger" as const) : ("warning" as const), text: api.pending.some((p) => p.changes.touchesSync) ? t("mana.api.noticeSync") : t("mana.api.notice") }
       : api?.lastCheck && !api.lastCheck.ok
         ? { tone: "warning" as const, text: t("mana.api.noticeFailed", { error: api.lastCheck.error ?? "" }) }
         : null;
-  const theme = parseTheme((await cookies()).get(themeCookie)?.value);
+  const theme = parseTheme(cookieStore.get(themeCookie)?.value);
 
   const signOutButton = (
     <form action={signOut}>

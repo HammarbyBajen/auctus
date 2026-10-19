@@ -12,6 +12,7 @@ const base = "https://www.getmana.app/api/v1/studios/studio-1";
 class FakeMana implements ManaSource {
   lastRequestAt: number | null = null;
   keyWorked?: boolean;
+  requestCount = 0;
   usersCalls: (string | null)[] = [];
   membershipCalls: string[] = [];
   failMembershipsFor: { id: string; error: Error } | null = null;
@@ -25,6 +26,7 @@ class FakeMana implements ManaSource {
 
   async getUsersPage(nextUrl: string | null) {
     this.usersCalls.push(nextUrl);
+    this.requestCount += 1;
     const index = nextUrl ? Number(new URL(nextUrl).searchParams.get("pageIndex")) : 0;
     const page = this.users[index];
     return { items: page.data.items, next: page.links.next as string | null, total: page.meta.totalCount as number };
@@ -32,6 +34,7 @@ class FakeMana implements ManaSource {
 
   async getUserMemberships(id: string) {
     this.membershipCalls.push(id);
+    this.requestCount += 1;
     if (this.failMembershipsFor?.id === id) throw this.failMembershipsFor.error;
     return (this.memberships[id] as { data: { items: never[] } } | undefined)?.data.items ?? [];
   }
@@ -212,6 +215,41 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     expect(next.keyWorked).toBe(true);
     const [run] = await db.select().from(schema.syncRun).where(eq(schema.syncRun.id, started.runId));
     expect([run.status, run.progress.pausedUntil, run.progress.pauses]).toEqual(["running", null, 1]);
+  });
+
+  it("reads everyone on a full night, and on a partial night only current members, new people and those who paid or visited", async () => {
+    await fresh();
+    const run = async (now: Date, mana: FakeMana, extra: string[] = []) => {
+      const started = await sync.startRun(db, studioA, { now });
+      if (started.status !== "started") throw new Error("expected a new run");
+      await sync.addExtraIds(db, started.runId, extra);
+      for (;;) if ((await sync.runBatch(db, mana, started.runId, { budgetMs: 60_000 })).done) break;
+      const [row] = await db.select().from(schema.syncRun).where(eq(schema.syncRun.id, started.runId));
+      return row.progress;
+    };
+
+    // Tuesday: nothing has run yet, so a full pass.
+    const first = new FakeMana();
+    const full = await run(new Date("2026-10-20T03:00:00Z"), first);
+    expect(full.mode).toBe("full");
+    expect(first.membershipCalls.sort()).toEqual(["user-a", "user-b", "user-c", "user-d", "user-e"]);
+    expect(full.requests).toBe(first.requestCount);
+
+    // Wednesday: partial. user-e paid since; user-f is new in Mana; user-d has nothing current and did nothing.
+    const second = new FakeMana();
+    second.users[1] = { ...second.users[1], data: { items: [...second.users[1].data.items, { ...second.users[1].data.items[0], userId: "user-f" }] } };
+    const partial = await run(new Date("2026-10-21T03:00:00Z"), second, ["user-e"]);
+    expect(partial.mode).toBe("partial");
+    expect(second.membershipCalls.sort()).toEqual(["user-a", "user-b", "user-c", "user-e", "user-f"]);
+    expect(partial.requests).toBe(second.requestCount);
+    // Everyone is still mirrored, user-f included.
+    const people = await db.select({ id: schema.manaMember.manaUserId }).from(schema.manaMember).where(eq(schema.manaMember.studioId, studioA));
+    expect(people.map((p) => p.id).sort()).toEqual(["user-a", "user-b", "user-c", "user-d", "user-e", "user-f"]);
+
+    // The night to Monday: full again.
+    const third = new FakeMana();
+    expect((await run(new Date("2026-10-26T03:00:00Z"), third)).mode).toBe("full");
+    expect(third.membershipCalls).toHaveLength(5);
   });
 
   it("the database itself refuses two running runs for one studio", async () => {

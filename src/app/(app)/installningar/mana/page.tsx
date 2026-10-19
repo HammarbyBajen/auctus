@@ -172,7 +172,10 @@ export default async function ManaPage({
                 />
                 <div className="min-w-0">
                   <p className="text-sm font-medium">{t(`mana.run.${run.status}` as MessageKey)}</p>
-                  <p className="text-xs text-muted-foreground tabular-nums">{formatDateTime(run.startedAt)}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {formatDateTime(run.startedAt)} · {t(`mana.run.mode.${run.mode}` as MessageKey)}
+                    {run.requests !== null && ` · ${t("mana.run.requests", { n: formatNumber(run.requests) })}`}
+                  </p>
                   {run.error && <p className="text-xs break-words text-destructive">{run.error}</p>}
                 </div>
               </li>

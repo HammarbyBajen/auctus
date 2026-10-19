@@ -222,14 +222,16 @@ describe.skipIf(!hasDb)("Mana membership on leads and automatic Won", () => {
       expect(member.emailNormalized).toBe("fresh@example.test");
     });
 
-    it("does not ask Mana again within ten minutes", async () => {
+    it("asks Mana about a person at most once a day (ticket 28)", async () => {
       const { person } = await newLead(studioA, { email: "again@example.test" });
       const live = new FakeLive([], {});
       const now = new Date();
+      const hours = (h: number) => new Date(now.getTime() + h * 3_600_000);
       await manaLeads.refreshPersonFromMana(db, live, studioA, person.id, now);
-      await manaLeads.refreshPersonFromMana(db, live, studioA, person.id, new Date(now.getTime() + 5 * 60_000));
+      await manaLeads.refreshPersonFromMana(db, live, studioA, person.id, hours(6));
+      await manaLeads.refreshPersonFromMana(db, live, studioA, person.id, hours(23));
       expect(live.searches).toHaveLength(1);
-      await manaLeads.refreshPersonFromMana(db, live, studioA, person.id, new Date(now.getTime() + 11 * 60_000));
+      await manaLeads.refreshPersonFromMana(db, live, studioA, person.id, hours(25));
       expect(live.searches).toHaveLength(2);
     });
 

@@ -1,9 +1,10 @@
-import { and, asc, count, eq, gt, ne, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gt, inArray, ne, or, sql, type SQL } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { manaMember, manaMembership, syncRun, type SyncProgress } from "@/db/schema";
 import { normalizeEmail, normalizePhone } from "@/lib/leads/matching";
 import type { UserMembershipsPage, UsersPage } from "./contracts";
 import { describeManaError, ManaError } from "./errors";
+import { todayInStockholm } from "@/lib/tasks/dates";
 
 type Db = typeof defaultDb;
 
@@ -18,6 +19,8 @@ export interface ManaSource {
   lastRequestAt: number | null;
   /** Whether the key has worked in this run: a later refusal can then be Mana's request budget. */
   keyWorked?: boolean;
+  /** Requests made so far, so a run can record how many it used. */
+  requestCount?: number;
 }
 
 type ManaPerson = UsersPage["data"]["items"][number];
@@ -138,15 +141,36 @@ export const defaultLeaseMs = 3 * 60_000;
 export const pauseMs = 15 * 60_000;
 export const maxPauses = 8;
 
+const DAY_MS = 86_400_000;
+
+/** ISO weekday (1 = Monday) of a YYYY-MM-DD day. */
+const isoWeekday = (day: string) => ((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+
+/**
+ * Full or partial (ticket 28). A full pass reads every person's memberships; a
+ * partial one only those who can have changed. Full when nothing has
+ * succeeded yet, when the last full pass is a week old, and on the night
+ * between Sunday and Monday (the nightly run is early Monday in Stockholm),
+ * once that day.
+ */
+export function syncModeFor(input: { today: string; lastSuccessAt: Date | null; lastFull: { startedAt: Date; day: string } | null; now: Date }): "full" | "partial" {
+  const { today, lastSuccessAt, lastFull, now } = input;
+  if (!lastSuccessAt || !lastFull) return "full";
+  if (now.getTime() - lastFull.startedAt.getTime() >= 7 * DAY_MS) return "full";
+  if (isoWeekday(today) === 1 && lastFull.day !== today) return "full";
+  return "partial";
+}
+
 /**
  * Starts a new sync run for a studio. Only one run can be going at a time:
  * if one has moved recently, this says "busy". A run that has stopped moving
- * is marked failed and replaced.
+ * is marked failed and replaced. The run is full or partial (`syncModeFor`)
+ * unless a mode is given.
  */
 export async function startRun(
   db: Db,
   studioId: string,
-  options: { now?: Date; leaseMs?: number } = {},
+  options: { now?: Date; leaseMs?: number; mode?: "full" | "partial" } = {},
 ): Promise<{ status: "started"; runId: string } | { status: "busy"; runId: string }> {
   const now = options.now ?? new Date();
   const leaseMs = options.leaseMs ?? defaultLeaseMs;
@@ -167,9 +191,27 @@ export async function startRun(
         .set({ status: "failed", finishedAt: now, error: "Synken stannade av och avbröts." })
         .where(eq(syncRun.id, running.id));
     }
+    const succeeded = and(eq(syncRun.studioId, studioId), eq(syncRun.kind, "mana"), eq(syncRun.status, "succeeded"));
+    const [lastSuccess] = await tx.select({ startedAt: syncRun.startedAt }).from(syncRun).where(succeeded).orderBy(desc(syncRun.startedAt)).limit(1);
+    // Runs from before ticket 28 have no mode and were full.
+    const [lastFull] = await tx
+      .select({ startedAt: syncRun.startedAt })
+      .from(syncRun)
+      .where(and(succeeded, sql`coalesce(${syncRun.progress}->>'mode', 'full') = 'full'`))
+      .orderBy(desc(syncRun.startedAt))
+      .limit(1);
+    const mode =
+      options.mode ??
+      syncModeFor({
+        today: todayInStockholm(now),
+        lastSuccessAt: lastSuccess?.startedAt ?? null,
+        lastFull: lastFull ? { startedAt: lastFull.startedAt, day: todayInStockholm(lastFull.startedAt) } : null,
+        now,
+      });
+    const progress: SyncProgress = { ...initialProgress, mode, since: mode === "partial" ? (lastSuccess?.startedAt.getTime() ?? null) : null, extraIds: [], requests: 0 };
     const [created] = await tx
       .insert(syncRun)
-      .values({ studioId, progress: initialProgress, startedAt: now, updatedAt: now })
+      .values({ studioId, progress, startedAt: now, updatedAt: now })
       .returning({ id: syncRun.id });
     return { status: "started" as const, runId: created.id };
   });
@@ -177,6 +219,24 @@ export async function startRun(
 
 async function saveProgress(db: Db, runId: string, progress: SyncProgress, now: Date) {
   await db.update(syncRun).set({ progress, updatedAt: now }).where(eq(syncRun.id, runId));
+}
+
+/** Adds people a partial run should read too (paid or visited since the last run). */
+export async function addExtraIds(db: Db, runId: string, ids: string[]) {
+  if (ids.length === 0) return;
+  const [run] = await db.select({ progress: syncRun.progress }).from(syncRun).where(eq(syncRun.id, runId)).limit(1);
+  if (!run) return;
+  const extraIds = [...new Set([...(run.progress.extraIds ?? []), ...ids])];
+  await db.update(syncRun).set({ progress: { ...run.progress, extraIds } }).where(eq(syncRun.id, runId));
+}
+
+/** Adds requests made outside the member pass (visits, payments) to the run's count. */
+export async function addRunRequests(db: Db, runId: string, n: number) {
+  if (n <= 0) return;
+  await db
+    .update(syncRun)
+    .set({ progress: sql`jsonb_set(${syncRun.progress}, '{requests}', to_jsonb(coalesce((${syncRun.progress}->>'requests')::int, 0) + ${n}))` })
+    .where(eq(syncRun.id, runId));
 }
 
 /**
@@ -208,7 +268,11 @@ export async function failRun(db: Db, runId: string, error: unknown) {
  *    People Mana no longer returns are removed once all pages are read.
  * 2. For every person (members, staff and owners alike, since staff hold
  *    lockers and coach memberships that Mana's own reports count), read their
- *    memberships and replace the mirrored ones.
+ *    memberships and replace the mirrored ones. A partial run (ticket 28) reads
+ *    only people with a current membership (a cancellation or a freeze is not
+ *    a payment, so it can come any day), new people, and the ones in
+ *    `extraIds` (paid or visited since the last run). Anyone else can only
+ *    change by buying something, which shows up as a payment first.
  */
 export async function runBatch(
   db: Db,
@@ -228,16 +292,48 @@ export async function runBatch(
   source.lastRequestAt = progress.lastRequestAt;
   // Progress is only saved after a request went through, so a saved time means the key has worked.
   source.keyWorked = source.keyWorked || progress.lastRequestAt !== null;
+  const requestsBefore = progress.requests ?? 0;
+  const countBefore = source.requestCount ?? 0;
+  const partial = progress.mode === "partial";
 
   const touch = () => {
     progress.lastRequestAt = source.lastRequestAt;
+    progress.requests = requestsBefore + (source.requestCount ?? 0) - countBefore;
     return saveProgress(db, runId, progress, new Date());
   };
+  // Who a partial run reads in phase 2; a full run reads everyone.
+  const selected = (): SQL | undefined =>
+    partial
+      ? or(
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(manaMembership)
+              .where(
+                and(
+                  eq(manaMembership.studioId, studioId),
+                  eq(manaMembership.manaUserId, manaMember.manaUserId),
+                  inArray(manaMembership.status, ["active", "future"]),
+                ),
+              ),
+          ),
+          progress.extraIds?.length ? inArray(manaMember.manaUserId, progress.extraIds) : undefined,
+        )
+      : undefined;
 
   // Phase 1: people
   while (progress.phase === "users") {
     if (outOfTime()) return { done: false };
     const page = await source.getUsersPage(progress.nextUrl);
+    if (partial && page.items.length > 0) {
+      // Someone Mana returns for the first time is read in full, whatever the mode.
+      const ids = page.items.map((u) => u.userId);
+      const known = new Set(
+        (await db.select({ id: manaMember.manaUserId }).from(manaMember).where(and(eq(manaMember.studioId, studioId), inArray(manaMember.manaUserId, ids)))).map((r) => r.id),
+      );
+      const fresh = ids.filter((id) => !known.has(id));
+      if (fresh.length > 0) progress.extraIds = [...new Set([...(progress.extraIds ?? []), ...fresh])];
+    }
     await upsertMembers(db, studioId, page.items, runId);
     progress.usersSeen += page.items.length;
     progress.usersTotal = page.total;
@@ -261,7 +357,7 @@ export async function runBatch(
       const [{ n }] = await db
         .select({ n: count() })
         .from(manaMember)
-        .where(eq(manaMember.studioId, studioId));
+        .where(and(eq(manaMember.studioId, studioId), selected()));
       progress.phase = "memberships";
       progress.membersTotal = n;
       progress.memberCursor = null;
@@ -280,6 +376,7 @@ export async function runBatch(
         and(
           eq(manaMember.studioId, studioId),
           progress.memberCursor ? gt(manaMember.manaUserId, progress.memberCursor) : undefined,
+          selected(),
         ),
       )
       .orderBy(asc(manaMember.manaUserId))

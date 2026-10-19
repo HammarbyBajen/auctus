@@ -148,8 +148,12 @@ export async function afterSync(db: Db, studioId: string) {
   return detectWonForStudio(db, studioId);
 }
 
-/** How long a live lookup counts as fresh, so opening a lead again does not ask Mana again. */
-export const liveCheckFreshMs = 10 * 60_000;
+/**
+ * How long a live lookup counts as fresh, so opening a lead again does not ask
+ * Mana again: a day (ticket 28). The key's request budget is shared with the
+ * nightly sync, which catches anyone who joins in between.
+ */
+export const liveCheckFreshMs = 24 * 60 * 60_000;
 
 /**
  * Looks one person up in Mana right now (by email, otherwise by phone), saves

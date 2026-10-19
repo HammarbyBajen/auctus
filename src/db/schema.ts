@@ -458,6 +458,14 @@ export type SyncProgress = {
   pausedUntil?: number | null;
   /** How many times this run has paused for Mana's request budget. */
   pauses?: number;
+  /** full reads everyone's memberships; partial only those who can have changed (ticket 28). Older runs were full. */
+  mode?: "full" | "partial";
+  /** When the last successful run started (epoch ms): a partial run looks for payments and visits since then. */
+  since?: number | null;
+  /** Besides people with a current membership, a partial run reads these: new people, and anyone who paid or visited since. */
+  extraIds?: string[];
+  /** Requests made to Mana by this run, all steps together. */
+  requests?: number;
 };
 
 /** One run of the Mana sync. Only one can be running per studio at a time. */

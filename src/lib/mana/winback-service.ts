@@ -34,13 +34,18 @@ const sourceFor: Record<SignalKind, ManaSignalSource> = {
 /** A person dismissed (moved to a cold stage) this recently is not nagged about again. */
 export const recentlyDismissedDays = 90;
 
-/** Keeps recent day pass, clip card and drop-in purchases (35 days back). A handful of requests. */
+/**
+ * Keeps recent day pass, clip card and drop-in purchases (35 days back). A
+ * handful of requests. Also says who paid for anything at all since `since`,
+ * so a partial sync knows whose memberships may have changed (ticket 28).
+ */
 export async function syncPurchases(
   db: Db,
   source: { getPaidPayments(fromAt: string): Promise<{ id: string; user: { id: string } | null; paidAt: string | null; kind: string; description: string | null }[]> },
   studioId: string,
   now: Date = new Date(),
-) {
+  since: Date | null = null,
+): Promise<{ saved: number; payers: string[] }> {
   const fromDay = new Date(now.getTime() - 35 * DAY);
   const payments = await source.getPaidPayments(fromDay.toISOString());
   const rows = payments
@@ -58,7 +63,10 @@ export async function syncPurchases(
   await db
     .delete(manaPurchase)
     .where(and(eq(manaPurchase.studioId, studioId), lt(manaPurchase.paidAt, new Date(now.getTime() - 60 * DAY))));
-  return rows.length;
+  const payers = since
+    ? [...new Set(payments.filter((p) => p.user && p.paidAt && new Date(p.paidAt) >= since).map((p) => p.user!.id))]
+    : [];
+  return { saved: rows.length, payers };
 }
 
 /** Finds or creates the CRM person for a Mana person (by link, then email, then phone). */

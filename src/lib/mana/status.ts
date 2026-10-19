@@ -12,7 +12,7 @@ export type SyncStatus = {
   failure: { at: Date; error: string } | null;
   members: number;
   memberships: number;
-  recentRuns: { id: string; status: string; startedAt: Date; finishedAt: Date | null; error: string | null }[];
+  recentRuns: { id: string; status: string; startedAt: Date; finishedAt: Date | null; error: string | null; mode: "full" | "partial"; requests: number | null }[];
 };
 
 export async function getSyncStatus(db: Db, studioId: string): Promise<SyncStatus> {
@@ -58,6 +58,9 @@ export async function getSyncStatus(db: Db, studioId: string): Promise<SyncStatu
       startedAt: r.startedAt,
       finishedAt: r.finishedAt,
       error: r.error,
+      // Runs from before ticket 28 were full and did not count their requests.
+      mode: r.progress.mode ?? "full",
+      requests: r.progress.requests ?? null,
     })),
   };
 }

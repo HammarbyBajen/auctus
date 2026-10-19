@@ -6,7 +6,9 @@ import { recordKpiSnapshot } from "@/lib/kpi/service";
 import { detectAtRisk, syncVisits } from "@/lib/mana/at-risk-service";
 import { afterSync } from "@/lib/mana/leads";
 import { todayInStockholm } from "@/lib/tasks/dates";
-import { failRun, pauseRun, runBatch, startRun } from "@/lib/mana/sync";
+import { addExtraIds, addRunRequests, failRun, pauseRun, runBatch, startRun } from "@/lib/mana/sync";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { manaVisit, syncRun } from "@/db/schema";
 import { detectWinBacks, syncPurchases } from "@/lib/mana/winback-service";
 
 /** How long one step may start new requests. Hobby allows 5 minutes per step, so stay well inside it. */
@@ -35,28 +37,52 @@ async function batchStep(studioId: string, runId: string): Promise<{ done: boole
   }
 }
 
-async function purchasesStep(studioId: string) {
+/** When the last successful run started, for a partial run (null: a full run, which needs no signals). */
+async function sinceOf(runId: string): Promise<Date | null> {
+  const [run] = await db.select({ progress: syncRun.progress }).from(syncRun).where(eq(syncRun.id, runId)).limit(1);
+  return run?.progress.mode === "partial" && run.progress.since ? new Date(run.progress.since) : null;
+}
+
+async function purchasesStep(studioId: string, runId: string) {
   "use step";
   // Recent day passes, clip cards and drop-ins: a few requests. A failure here
-  // only means no day-pass leads today, so it does not fail the sync.
+  // only means no day-pass leads today, so it does not fail the sync. Anyone
+  // who paid since the last run is read in a partial run (ticket 28).
+  let client: Awaited<ReturnType<typeof createManaClient>> | null = null;
   try {
-    const client = await createManaClient(db, studioId);
-    return await syncPurchases(db, client, studioId);
+    client = await createManaClient(db, studioId);
+    const { payers } = await syncPurchases(db, client, studioId, new Date(), await sinceOf(runId));
+    await addExtraIds(db, runId, payers);
   } catch {
-    return 0;
+    // Without the payments, a partial run cannot know who bought something: read everyone.
+    await db.update(syncRun).set({ progress: sql`jsonb_set(${syncRun.progress}, '{mode}', '"full"')` }).where(eq(syncRun.id, runId));
+  } finally {
+    if (client) await addRunRequests(db, runId, client.requestCount);
   }
 }
 
-async function visitsStep(studioId: string) {
+async function visitsStep(studioId: string, runId: string) {
   "use step";
   // Class bookings and gym check-ins since a few days before the newest saved
   // one (ticket 13). A failure only means the at-risk list is a day older, so
-  // it does not fail the sync.
+  // it does not fail the sync. Anyone who visited since the last run is read
+  // in a partial run (ticket 28).
+  let client: Awaited<ReturnType<typeof createManaClient>> | null = null;
   try {
-    const client = await createManaClient(db, studioId);
-    return await syncVisits(db, client, studioId);
+    client = await createManaClient(db, studioId);
+    await syncVisits(db, client, studioId);
+    const since = await sinceOf(runId);
+    if (since) {
+      const visitors = await db
+        .selectDistinct({ id: manaVisit.manaUserId })
+        .from(manaVisit)
+        .where(and(eq(manaVisit.studioId, studioId), gte(manaVisit.at, since)));
+      await addExtraIds(db, runId, visitors.map((v) => v.id));
+    }
   } catch {
-    return null;
+    // The at-risk list waits a day; members with a current membership are read anyway.
+  } finally {
+    if (client) await addRunRequests(db, runId, client.requestCount);
   }
 }
 
@@ -76,7 +102,8 @@ async function afterSyncStep(studioId: string) {
  * Reads members and memberships from Mana. A full pass takes several minutes
  * (one request per member, at most about one per second), so it is split into
  * steps. Each step does what fits in its time and saves its progress, and the
- * next one carries on. When Mana's request budget for the key is spent, the
+ * next one carries on. Most nights read only the people who can have changed
+ * (a partial run, ticket 28); a full pass runs once a week. When Mana's request budget for the key is spent, the
  * run pauses for 15 minutes and carries on, for up to two hours, instead of
  * failing the night's sync.
  */
@@ -84,6 +111,9 @@ export async function manaSyncWorkflow(studioId: string) {
   "use workflow";
   const { runId, busy } = await startStep(studioId);
   if (busy) return { runId, skipped: true };
+  // Visits and payments first: in a partial run they say who else to read (ticket 28).
+  await visitsStep(studioId, runId);
+  await purchasesStep(studioId, runId);
   let done = false;
   while (!done) {
     const batch = await batchStep(studioId, runId);
@@ -91,8 +121,6 @@ export async function manaSyncWorkflow(studioId: string) {
     // A paused run costs nothing while it sleeps; it wakes and continues where it stopped.
     if (batch.pausedUntil) await sleep(new Date(batch.pausedUntil));
   }
-  await purchasesStep(studioId);
-  await visitsStep(studioId);
   const after = await afterSyncStep(studioId);
   return { runId, skipped: false, ...after };
 }

@@ -235,8 +235,11 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
       },
       studioA,
       now,
+      new Date("2026-10-02T00:00:00Z"),
     );
-    expect(stored).toBe(1);
+    expect(stored.saved).toBe(1);
+    // Anyone who paid for anything since the last run, for a partial sync (ticket 28).
+    expect(stored.payers.sort()).toEqual(["u2", "u3"]);
     const rows = await db.select().from(schema.manaPurchase).where(and(eq(schema.manaPurchase.studioId, studioA)));
     expect(rows.map((r) => r.id)).toEqual([`${tag}-a`]);
   });

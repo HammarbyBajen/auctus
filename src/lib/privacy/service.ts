@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { atRiskAlert, atRiskNote, deletionLog, emailMessage, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
+import { aiSuggestion, atRiskAlert, atRiskNote, deletionLog, emailMessage, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
 
 type Db = typeof defaultDb;
 
@@ -28,8 +28,9 @@ export async function deletionPreview(db: Db, studioId: string, personId: string
 /**
  * Permanently deletes a person and everything the CRM holds about them: their
  * leads, and with them notes, history and tasks, the web submissions they came
- * from, plus any at-risk alert, what staff noted about it and the emails
- * sent to them (a lead's emails go with the lead). One
+ * from, plus any at-risk alert, what staff noted about it, the emails sent
+ * to them and what the assistant suggested about them (a lead's emails and
+ * suggestions go with the lead). One
  * transaction, so it happens fully or not at all. A row in the deletion log
  * (no personal data) records that it was done.
  *
@@ -47,6 +48,8 @@ export async function deletePerson(db: Db, studioId: string, personId: string, d
     if (preview.person.manaUserId) {
       await tx.delete(atRiskNote).where(and(eq(atRiskNote.studioId, studioId), eq(atRiskNote.manaUserId, preview.person.manaUserId)));
       await tx.delete(emailMessage).where(and(eq(emailMessage.studioId, studioId), eq(emailMessage.manaUserId, preview.person.manaUserId)));
+      // What the assistant suggested about them (a lead's suggestions go with the lead).
+      await tx.delete(aiSuggestion).where(and(eq(aiSuggestion.studioId, studioId), eq(aiSuggestion.manaUserId, preview.person.manaUserId)));
       await tx.delete(atRiskAlert).where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.manaUserId, preview.person.manaUserId)));
     }
     // The raw web submissions hold the same personal data, so they go too (ticket 09).

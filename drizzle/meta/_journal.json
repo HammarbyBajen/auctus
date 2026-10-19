@@ -197,6 +197,13 @@
       "when": 1792141019538,
       "tag": "0027_organic_black_cat",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1792431644695,
+      "tag": "0028_light_ego",
+      "breakpoints": true
     }
   ]
 }

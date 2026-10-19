@@ -94,8 +94,17 @@ export const studioSettings = pgTable("studio_settings", {
    * review with Erik both stay off, so every email goes to Resend's test address.
    */
   emailLive: boolean("email_live").notNull().default(false),
+  /** The assistant's settings (ticket 30): its monthly cost cap and the studio's own words that mark a note as health-related. */
+  aiSettings: jsonb("ai_settings").$type<AiSettings>(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+export type AiSettings = {
+  /** The most the assistant may cost in a calendar month, in US dollars. */
+  monthlyBudgetUsd?: number;
+  /** Words that hold a note back from the AI, besides the built-in ones (src/lib/ai/privacy.ts). */
+  healthTerms?: string[];
+};
 
 // Better Auth tables (with the admin plugin fields). Names follow Better Auth's defaults.
 export const user = pgTable("user", {
@@ -326,6 +335,8 @@ export const leadNote = pgTable(
       .references(() => lead.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
     authorId: text("author_id").references(() => user.id, { onDelete: "set null" }),
+    /** Never sent to an AI (ticket 30). */
+    private: boolean("private").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [index("lead_note_lead_idx").on(table.leadId, table.createdAt)],
@@ -636,6 +647,8 @@ export const atRiskNote = pgTable(
     /** answered, no_answer, messaged, dismissed or note */
     kind: text("kind").notNull(),
     body: text("body").notNull().default(""),
+    /** Never sent to an AI (ticket 30). */
+    private: boolean("private").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
   },
@@ -955,4 +968,46 @@ export const emailSuppression = pgTable(
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [primaryKey({ columns: [table.studioId, table.address] })],
+);
+
+// ---- The assistant (ticket 30): every call to the AI, what it suggested and what a person decided ----
+
+/**
+ * One call to the AI: what kind of help it was, about whom, which model, what
+ * it cost, and what it suggested. A suggestion is never acted on by itself; a
+ * person accepts or rejects it, and that is recorded here too. The monthly
+ * cost cap is checked against this table.
+ */
+export const aiSuggestion = pgTable(
+  "ai_suggestion",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** Who asked (null for the nightly runs). */
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    /** What kind of help: for example call_brief, after_call, weigh, draft, question. */
+    kind: text("kind").notNull(),
+    leadId: uuid("lead_id").references(() => lead.id, { onDelete: "cascade" }),
+    manaUserId: text("mana_user_id"),
+    model: text("model").notNull(),
+    /** ok, failed or over_budget (not sent: the month's cap was reached). */
+    status: text("status").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    /** What the call cost, in millionths of a US dollar. */
+    costMicroUsd: integer("cost_micro_usd").notNull().default(0),
+    suggestion: jsonb("suggestion"),
+    error: text("error"),
+    /** accepted or rejected, once a person has decided. */
+    decision: text("decision"),
+    decidedById: text("decided_by_id").references(() => user.id, { onDelete: "set null" }),
+    decidedAt: timestamp("decided_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("ai_suggestion_studio_idx").on(table.studioId, table.createdAt),
+    index("ai_suggestion_lead_idx").on(table.leadId),
+  ],
 );

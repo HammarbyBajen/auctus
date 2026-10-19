@@ -103,7 +103,8 @@ export async function recordActivity(leadId: string, _: ActivityFormState, formD
       throw error;
     }
   }
-  if (body !== "") await addNote(db, user.studioId, leadId, body, user.id);
+  // A private note is never sent to the assistant (ticket 30).
+  if (body !== "") await addNote(db, user.studioId, leadId, body, user.id, { private: formData.get("private") === "on" });
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
   return { saved: Date.now() };

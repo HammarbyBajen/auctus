@@ -105,7 +105,7 @@ export async function detectAtRisk(db: Db, studioId: string, now: Date = new Dat
   return { created, resolved: resolve.length, away: away.length };
 }
 
-export type AtRiskNoteRow = { kind: string; body: string; at: Date; by: string | null };
+export type AtRiskNoteRow = { kind: string; body: string; at: Date; by: string | null; private?: boolean };
 
 export type AtRiskRow = {
   id: string;
@@ -143,7 +143,7 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
       .from(manaMembership)
       .where(and(eq(manaMembership.studioId, studioId), inArray(manaMembership.manaUserId, ids), eq(manaMembership.status, "active"))),
     db
-      .select({ manaUserId: atRiskNote.manaUserId, alertId: atRiskNote.alertId, kind: atRiskNote.kind, body: atRiskNote.body, at: atRiskNote.createdAt, by: user.name })
+      .select({ manaUserId: atRiskNote.manaUserId, alertId: atRiskNote.alertId, kind: atRiskNote.kind, body: atRiskNote.body, private: atRiskNote.private, at: atRiskNote.createdAt, by: user.name })
       .from(atRiskNote)
       .leftJoin(user, eq(user.id, atRiskNote.createdById))
       .where(and(eq(atRiskNote.studioId, studioId), inArray(atRiskNote.manaUserId, ids)))
@@ -165,7 +165,7 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
       group: groupOf({ lastVisitAt }),
       assignedToId: o.alert.assignedToId,
       assigneeName: o.assigneeName,
-      notes: theirs.map(({ kind, body, at, by }) => ({ kind, body, at, by })),
+      notes: theirs.map(({ kind, body, at, by, private: isPrivate }) => ({ kind, body, at, by, private: isPrivate })),
       attempts: theirs.filter((n) => n.alertId === o.alert.id && (n.kind === "no_answer" || n.kind === "messaged")).length,
     };
   });

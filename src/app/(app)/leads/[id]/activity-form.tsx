@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { recordActivity, type ActivityFormState } from "../actions";
@@ -13,7 +14,7 @@ import { t, type MessageKey } from "@/lib/i18n";
  * press what happened (Ringde, Inget svar, ...), which logs the contact and
  * saves the note with it. "Spara anteckning" saves a note on its own.
  */
-export function ActivityForm({ leadId }: { leadId: string }) {
+export function ActivityForm({ leadId, showPrivate = false }: { leadId: string; showPrivate?: boolean }) {
   const [state, action, pending] = useActionState<ActivityFormState, FormData>(recordActivity.bind(null, leadId), {});
   const ref = useRef<HTMLFormElement>(null);
 
@@ -40,6 +41,13 @@ export function ActivityForm({ leadId }: { leadId: string }) {
         <p id="activity-hint" className="text-xs text-muted-foreground">
           {t("lead.activityHint")}
         </p>
+      )}
+      {/* Only once the assistant is switched on: until then nothing is ever sent, so there is nothing to keep private from. */}
+      {showPrivate && (
+        <Label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm font-normal sm:min-h-9">
+          <Checkbox name="private" />
+          {t("lead.notePrivate")}
+        </Label>
       )}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <div role="group" aria-label={t("lead.contactTitle")} className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">

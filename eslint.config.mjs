@@ -2,15 +2,37 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
+const resendOnly = "Only src/lib/email/transport.ts may talk to Resend: send through src/lib/email/service.ts.";
+const anthropicOnly = "Only src/lib/ai/client.ts may talk to Anthropic: ask through askAi in that file.";
+
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
+  // One door each: only the email transport talks to Resend, only the AI client to Anthropic.
+  // (One rule per file set: a second no-restricted-imports block would replace the first, not add to it.)
   {
-    // Email (M8): one module talks to Resend, so every send goes through its test-mode guard.
     files: ["src/**/*.{ts,tsx}"],
-    ignores: ["src/lib/email/transport.ts"],
+    ignores: ["src/lib/email/transport.ts", "src/lib/ai/client.ts"],
     rules: {
-      "no-restricted-imports": ["error", { paths: [{ name: "resend", message: "Only src/lib/email/transport.ts may talk to Resend: send through src/lib/email/service.ts." }] }],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [{ name: "resend", message: resendOnly }, { name: "@anthropic-ai/sdk", message: anthropicOnly }],
+          patterns: [{ group: ["@anthropic-ai/sdk/*"], message: anthropicOnly }],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/lib/email/transport.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [{ name: "@anthropic-ai/sdk", message: anthropicOnly }], patterns: [{ group: ["@anthropic-ai/sdk/*"], message: anthropicOnly }] }],
+    },
+  },
+  {
+    files: ["src/lib/ai/client.ts"],
+    rules: {
+      "no-restricted-imports": ["error", { paths: [{ name: "resend", message: resendOnly }] }],
     },
   },
   // Override default ignores of eslint-config-next.

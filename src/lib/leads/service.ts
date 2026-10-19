@@ -139,7 +139,7 @@ export async function listLeads(db: Db, studioId: string, today: string = todayI
 }
 
 export type HistoryItem =
-  | { kind: "note"; id: string; at: Date; authorName: string | null; body: string }
+  | { kind: "note"; id: string; at: Date; authorName: string | null; body: string; private?: boolean }
   | {
       kind: "stage_changed";
       id: string;
@@ -177,6 +177,7 @@ export async function getLead(db: Db, studioId: string, leadId: string) {
       .select({
         id: leadNote.id,
         body: leadNote.body,
+        private: leadNote.private,
         createdAt: leadNote.createdAt,
         authorName: user.name,
       })
@@ -207,6 +208,7 @@ export async function getLead(db: Db, studioId: string, leadId: string) {
       at: n.createdAt,
       authorName: n.authorName,
       body: n.body,
+      private: n.private,
     })),
     ...events.map((e): HistoryItem =>
       e.type === "contact_logged"
@@ -335,12 +337,13 @@ export async function addNote(
   leadId: string,
   body: string,
   authorId: string | null,
+  options: { private?: boolean } = {},
 ) {
   const found = await getLead(db, studioId, leadId);
   if (!found) return null;
   const [note] = await db
     .insert(leadNote)
-    .values({ studioId, leadId, body: body.trim(), authorId })
+    .values({ studioId, leadId, body: body.trim(), authorId, private: options.private ?? false })
     .returning();
   await db.update(lead).set({ updatedAt: new Date() }).where(eq(lead.id, leadId));
   return note;

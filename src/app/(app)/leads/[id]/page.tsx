@@ -37,6 +37,8 @@ import { fillTemplate } from "@/lib/email/template";
 import { sendLeadEmail } from "../../email-actions";
 import { EmailHistory } from "../../email-history";
 import { TaskForm } from "./task-form";
+import { ParkForm } from "./park-form";
+import { nextDay } from "@/lib/leads/park";
 
 export default async function LeadPage({
   params,
@@ -281,6 +283,7 @@ export default async function LeadPage({
             <StaggerItem>
             <Panel title={t("task.title")} id="tasks">
               <TaskForm leadId={lead.id} today={today} />
+              {stage.kind === "open" && <ParkForm leadId={lead.id} tomorrow={nextDay(today)} />}
               {taskLists.open.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t("task.noOpen")}</p>
               ) : (

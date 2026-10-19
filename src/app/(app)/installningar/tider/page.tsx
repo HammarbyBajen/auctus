@@ -11,7 +11,9 @@ import { Panel } from "@/components/app/surface";
 import { SubmitButton } from "@/components/app/submit-button";
 import { allWeekdays } from "@/lib/home/clock";
 import { getThresholds } from "@/lib/home/service";
-import type { ThresholdsError } from "@/lib/home/thresholds-form";
+import { stalledFieldPrefix, type ThresholdsError } from "@/lib/home/thresholds-form";
+import { initialStage } from "@/lib/leads/constants";
+import { listStages } from "@/lib/pipeline/service";
 import { requirePermission } from "@/lib/session";
 import { t, type MessageKey } from "@/lib/i18n";
 import { saveThresholds } from "./actions";
@@ -24,7 +26,9 @@ const errors: ThresholdsError[] = ["firstContact", "warn", "stalled", "daysOff"]
 export default async function TimesPage({ searchParams }: { searchParams: Promise<{ sparat?: string; fel?: string }> }) {
   const user = await requirePermission("settings", "manage");
   const { sparat, fel } = await searchParams;
-  const thresholds = await getThresholds(db, user.studioId);
+  const [thresholds, stages] = await Promise.all([getThresholds(db, user.studioId), listStages(db, user.studioId)]);
+  // The first stage has the first-contact deadline instead; won and cold leads are never stalled.
+  const stalledStages = stages.filter((s) => s.kind === "open" && s.key !== initialStage);
   const error = errors.find((e) => e === fel);
   const number = (name: keyof typeof thresholds, label: MessageKey, min: number, max: number) => (
     <div className="flex flex-col gap-2">
@@ -52,8 +56,30 @@ export default async function TimesPage({ searchParams }: { searchParams: Promis
           <div className="flex flex-col gap-4">
             {number("firstContactHours", "times.firstContact", 1, 168)}
             {number("warnHoursBeforeDeadline", "times.warn", 0, 167)}
-            {number("stalledDays", "times.stalled", 1, 90)}
           </div>
+        </Panel>
+
+        <Panel title={t("times.stalledTitle")} id="stalled">
+          <p className="text-sm text-muted-foreground">{t("times.stalledHint")}</p>
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(min(12rem,100%),1fr))] gap-4">
+            {stalledStages.map((s) => (
+              <div key={s.key} className="flex flex-col gap-2">
+                <Label htmlFor={`stalled-${s.key}`}>{s.name}</Label>
+                <Input
+                  id={`stalled-${s.key}`}
+                  name={`${stalledFieldPrefix}${s.key}`}
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={90}
+                  required
+                  defaultValue={String(thresholds.stalledDaysByStage[s.key] ?? thresholds.stalledDays)}
+                  className="w-28"
+                />
+              </div>
+            ))}
+          </div>
+          {number("stalledDays", "times.stalled", 1, 90)}
         </Panel>
 
         <Panel title={t("times.clockTitle")} id="clock">

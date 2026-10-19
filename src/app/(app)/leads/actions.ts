@@ -14,8 +14,11 @@ import { watchFirstContact } from "@/lib/notify/start";
 import { refreshPersonFromMana } from "@/lib/mana/leads";
 import { setWinBackReason, WinBackError } from "@/lib/mana/winback-service";
 import { assignLead, createTask, deleteTask, setTaskDone, TaskError } from "@/lib/tasks/service";
+import { isParkDay, parkDay, parkPresets, type ParkPreset } from "@/lib/leads/park";
+import { todayInStockholm } from "@/lib/tasks/dates";
+import { formatDay } from "@/lib/format";
 import { requirePermission } from "@/lib/session";
-import type { MessageKey } from "@/lib/i18n";
+import { t, type MessageKey } from "@/lib/i18n";
 
 export type LeadFormState = {
   error?: MessageKey;
@@ -127,6 +130,33 @@ export async function addTask(
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);
   return {};
+}
+
+export type ParkState = { error?: MessageKey; until?: string };
+
+/**
+ * "Vänta till" (ticket 29): parks a lead until a day, as a follow-up task with
+ * the why, and notes it in the history. The open task keeps the lead off Home
+ * until that day.
+ */
+export async function parkLead(leadId: string, _: ParkState, formData: FormData): Promise<ParkState> {
+  const user = await requirePermission("leads", "write");
+  const today = todayInStockholm();
+  const preset = String(formData.get("preset") ?? "");
+  const until = (parkPresets as readonly string[]).includes(preset) ? parkDay(today, preset as ParkPreset) : String(formData.get("until") ?? "");
+  if (!isParkDay(until, today)) return { error: "park.errorDate" };
+  const why = String(formData.get("why") ?? "").trim().slice(0, 200);
+  const date = formatDay(until);
+  try {
+    await createTask(db, user.studioId, leadId, { title: why ? t("park.taskTitleWhy", { why }) : t("park.taskTitle"), dueDate: until }, user.id);
+  } catch (error) {
+    if (error instanceof TaskError) notFound();
+    throw error;
+  }
+  await addNote(db, user.studioId, leadId, why ? t("park.noteWhy", { date, why }) : t("park.note", { date }), user.id);
+  revalidatePath("/");
+  revalidatePath(`/leads/${leadId}`);
+  return { until: date };
 }
 
 export async function finishTask(leadId: string, taskId: string, done: boolean) {

@@ -68,9 +68,12 @@ const reasonIcon = (r: Reason) =>
  * staff need a hero of their own (D2); until then theirs is the list of leads
  * that need action.
  */
-export default async function HomePage({ searchParams }: { searchParams: Promise<{ fel?: string; visa?: string; risk?: string; riskalla?: string }> }) {
+/** How many leads without a next step Home shows before "Visa alla" (ticket 29). */
+const laterRows = 5;
+
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ fel?: string; visa?: string; risk?: string; riskalla?: string; fler?: string }> }) {
   const user = await requireUser();
-  const { fel, visa, risk, riskalla } = await searchParams;
+  const { fel, visa, risk, riskalla, fler } = await searchParams;
   const scope = visa === "mina" ? "mine" : "all";
   const showKpi = can(user.role, "kpi", "read");
   const [{ items, counts }, stages, kpi, atRisk, [settings], people, emails, emailSettings] = await Promise.all([
@@ -84,6 +87,21 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
     getEmailSettings(db, user.studioId),
   ]);
   const stageOf = (key: string) => stages.find((s) => s.key === key);
+  // Deadlines first; leads without a next step below, quieter and capped (ticket 29).
+  const now = items.filter((i) => i.group === "now");
+  const later = items.filter((i) => i.group === "later");
+  const showAllLater = fler === "1";
+  const laterShown = showAllLater ? later : later.slice(0, laterRows);
+  const laterHref = (all: boolean) => {
+    const params = new URLSearchParams();
+    if (scope === "mine") params.set("visa", "mina");
+    if (all) params.set("fler", "1");
+    const query = params.toString();
+    return `/${query ? `?${query}` : ""}#utan-nasta-steg`;
+  };
+  const row = (item: AttentionItem) => (
+    <AttentionRow key={item.lead.id} item={item} viewerId={user.id} stageName={stageOf(item.lead.stage)?.name ?? ""} stageKind={stageOf(item.lead.stage)?.kind ?? "open"} />
+  );
 
   return (
     <Page
@@ -126,16 +144,28 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
         )}
         <StaggerItem className="flex min-w-0 flex-col gap-3">
           <MicroLabel as="h3">{t("home.attention")}</MicroLabel>
-          {items.length === 0 ? (
-            <EmptyState icon={CircleCheck} title={t("home.nothing")} />
+          {now.length === 0 ? (
+            <EmptyState icon={CircleCheck} title={later.length > 0 ? t("home.nothingUrgent") : t("home.nothing")} />
           ) : (
             <Surface as="div" className="overflow-hidden">
-              <ul className="divide-y divide-border">
-                {items.map((item) => (
-                  <AttentionRow key={item.lead.id} item={item} viewerId={user.id} stageName={stageOf(item.lead.stage)?.name ?? ""} stageKind={stageOf(item.lead.stage)?.kind ?? "open"} />
-                ))}
-              </ul>
+              <ul className="divide-y divide-border">{now.map(row)}</ul>
             </Surface>
+          )}
+          {later.length > 0 && (
+            <div id="utan-nasta-steg" className="mt-3 flex scroll-mt-20 flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <MicroLabel as="h3">{t("home.later", { n: formatNumber(later.length) })}</MicroLabel>
+                <p className="text-xs text-muted-foreground">{t("home.laterIntro")}</p>
+              </div>
+              <Surface as="div" className="overflow-hidden">
+                <ul className="divide-y divide-border">{laterShown.map(row)}</ul>
+              </Surface>
+              {later.length > laterRows && (
+                <Link href={laterHref(!showAllLater)} className="focus-ring self-start rounded-xs text-sm font-medium underline underline-offset-4">
+                  {showAllLater ? t("home.laterFewer") : t("home.laterAll", { n: formatNumber(later.length) })}
+                </Link>
+              )}
+            </div>
           )}
         </StaggerItem>
 

@@ -49,6 +49,7 @@ export async function getHomeData(
       phone: person.phone,
       stage: lead.stage,
       stageKind: pipelineStage.kind,
+      stagePosition: pipelineStage.position,
       createdAt: lead.createdAt,
       updatedAt: lead.updatedAt,
       assignedToId: lead.assignedToId,

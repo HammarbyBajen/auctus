@@ -10,9 +10,17 @@ const base = { firstContactHours: "24", warnHoursBeforeDeadline: "4", stalledDay
 
 describe("parseThresholdsForm", () => {
   it("reads the limits, the running weekdays and the days off, tidied", () => {
-    expect(parseThresholdsForm(form({ ...base, clockDays: ["5", "1", "3", "1"], daysOff: "2026-12-25\n2026-12-24, 2026-12-24" }))).toEqual({
+    const fields = { ...base, "stalled.contacted": "3", "stalled.price_info": "5", clockDays: ["5", "1", "3", "1"], daysOff: "2026-12-25\n2026-12-24, 2026-12-24" };
+    expect(parseThresholdsForm(form(fields))).toEqual({
       ok: true,
-      value: { firstContactHours: 24, warnHoursBeforeDeadline: 4, stalledDays: 7, clockDays: [1, 3, 5], daysOff: ["2026-12-24", "2026-12-25"] },
+      value: {
+        firstContactHours: 24,
+        warnHoursBeforeDeadline: 4,
+        stalledDays: 7,
+        stalledDaysByStage: { contacted: 3, price_info: 5 },
+        clockDays: [1, 3, 5],
+        daysOff: ["2026-12-24", "2026-12-25"],
+      },
     });
   });
 
@@ -25,6 +33,7 @@ describe("parseThresholdsForm", () => {
     expect(parseThresholdsForm(form({ ...base, firstContactHours: "2.5" }))).toEqual({ ok: false, error: "firstContact" });
     expect(parseThresholdsForm(form({ ...base, warnHoursBeforeDeadline: "24" }))).toEqual({ ok: false, error: "warn" });
     expect(parseThresholdsForm(form({ ...base, stalledDays: "200" }))).toEqual({ ok: false, error: "stalled" });
+    expect(parseThresholdsForm(form({ ...base, "stalled.contacted": "0" }))).toEqual({ ok: false, error: "stalled" });
     expect(parseThresholdsForm(form({ ...base, daysOff: "2026-02-30" }))).toEqual({ ok: false, error: "daysOff" });
     expect(parseThresholdsForm(form({ ...base, daysOff: "julafton" }))).toEqual({ ok: false, error: "daysOff" });
   });

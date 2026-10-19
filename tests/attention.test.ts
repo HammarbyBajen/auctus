@@ -134,7 +134,7 @@ describe("stalled leads", () => {
 });
 
 describe("ordering", () => {
-  it("puts overdue first contact first, then overdue tasks, amber, today, stalled, then the rest", () => {
+  it("puts overdue first contact first, then overdue tasks, amber, today, new leads with time left, then stalled", () => {
     const stalled = lead({ stage: "price_info", updatedAt: ago(10 * D) });
     const okNew = lead({ createdAt: ago(2 * H) });
     const taskToday = lead({ stage: "contacted" });
@@ -150,8 +150,8 @@ describe("ordering", () => {
       taskLate.id,
       amberNew.id,
       taskToday.id,
-      stalled.id,
       okNew.id,
+      stalled.id,
     ]);
   });
 
@@ -174,6 +174,44 @@ describe("ordering", () => {
     expect(items).toHaveLength(1);
     expect(items[0].reasons.map((r) => r.type).sort()).toEqual(["first_contact_overdue", "task_overdue"]);
     expect(items[0].severity).toBe("red");
+  });
+});
+
+describe("now and later (ticket 29)", () => {
+  it("puts deadlines in now, and leads without a next step in later", () => {
+    const fresh = lead({ createdAt: ago(2 * H) });
+    const withTask = lead({ stage: "contacted" });
+    const stalled = lead({ stage: "contacted", updatedAt: ago(10 * D) });
+    const items = run([fresh, withTask, stalled], [{ id: "t", leadId: withTask.id, title: "Ring", dueDate: "2026-10-09" }]);
+    expect(items.map((i) => [i.lead.id, i.group])).toEqual([
+      [withTask.id, "now"],
+      [fresh.id, "now"],
+      [stalled.id, "later"],
+    ]);
+  });
+
+  it("orders later by closeness to joining, then newest", () => {
+    const contactedOld = lead({ stage: "contacted", stagePosition: 1, createdAt: ago(60 * D), updatedAt: ago(20 * D) });
+    const contactedNew = lead({ stage: "contacted", stagePosition: 1, createdAt: ago(20 * D), updatedAt: ago(10 * D) });
+    const priceInfo = lead({ stage: "price_info", stagePosition: 6, createdAt: ago(90 * D), updatedAt: ago(30 * D) });
+    expect(run([contactedOld, priceInfo, contactedNew]).map((i) => i.lead.id)).toEqual([priceInfo.id, contactedNew.id, contactedOld.id]);
+  });
+
+  it("judges stalled by the stage's own limit", () => {
+    const byStage = { ...thresholds, stalledDaysByStage: { contacted: 3, price_info: 5 } };
+    const contacted = lead({ stage: "contacted", updatedAt: ago(4 * D) });
+    const priceInfo = lead({ stage: "price_info", updatedAt: ago(4 * D) });
+    const other = lead({ stage: "consultation_done", updatedAt: ago(6 * D) });
+    const items = buildAttention({ leads: [contacted, priceInfo, other], tasks: [], now, today, thresholds: byStage, viewerId: "me", scope: "all" });
+    expect(items.map((i) => i.lead.id)).toEqual([contacted.id]);
+  });
+
+  it("keeps a parked lead (a task due later) off the list until that day", () => {
+    const parked = lead({ stage: "contacted", updatedAt: ago(30 * D) });
+    const task = { id: "p", leadId: parked.id, title: "Hör av dig igen", dueDate: "2026-10-20" };
+    expect(run([parked], [task])).toEqual([]);
+    const onTheDay = buildAttention({ leads: [parked], tasks: [task], now: new Date("2026-10-20T08:00:00Z"), today: "2026-10-20", thresholds, viewerId: "me", scope: "all" });
+    expect(onTheDay.map((i) => [i.group, i.reasons[0].type])).toEqual([["now", "task_today"]]);
   });
 });
 

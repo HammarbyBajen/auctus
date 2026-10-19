@@ -41,8 +41,10 @@ export type Thresholds = {
   firstContactHours: number;
   /** Amber warning when this many hours remain before the deadline. */
   warnHoursBeforeDeadline: number;
-  /** A lead with no activity this many days in one stage counts as stalled. */
+  /** A lead with no activity this many days in one stage counts as stalled, unless its stage has its own limit. */
   stalledDays: number;
+  /** Each open stage's own stalled limit in days, by stage key (ticket 29). */
+  stalledDaysByStage: Record<string, number>;
   /** ISO weekdays (1 = Monday ... 7 = Sunday) the first-contact clock runs (ticket 06). */
   clockDays: number[];
   /** Single days off (YYYY-MM-DD) the clock skips, such as public holidays. */
@@ -54,6 +56,8 @@ export const defaultThresholds: Thresholds = {
   firstContactHours: 24,
   warnHoursBeforeDeadline: 4,
   stalledDays: 7,
+  // Suggested with Max (2026-10-19), to check with Fredrik and Timmy; owners change them under Tider.
+  stalledDaysByStage: { contacted: 3, booked_meeting: 3, booked_test_training: 3, consultation_done: 5, cancelled_meeting: 2, price_info: 5 },
   clockDays: [1, 2, 3, 4, 5, 6, 7],
   daysOff: [],
 };

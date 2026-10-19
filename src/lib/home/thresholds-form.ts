@@ -1,4 +1,7 @@
-import type { Thresholds } from "./attention";
+import type { Thresholds } from "@/db/schema";
+
+/** Each open stage's stalled limit is sent as `stalled.<stage key>`. */
+export const stalledFieldPrefix = "stalled.";
 
 export type ThresholdsError = "firstContact" | "warn" | "stalled" | "daysOff";
 
@@ -22,6 +25,13 @@ export function parseThresholdsForm(form: FormData): { ok: true; value: Threshol
   if (!(firstContactHours >= 1 && firstContactHours <= 168)) return { ok: false, error: "firstContact" };
   if (!(warnHoursBeforeDeadline >= 0 && warnHoursBeforeDeadline < firstContactHours)) return { ok: false, error: "warn" };
   if (!(stalledDays >= 1 && stalledDays <= 90)) return { ok: false, error: "stalled" };
+  const stalledDaysByStage: Record<string, number> = {};
+  for (const [name, value] of form.entries()) {
+    if (!name.startsWith(stalledFieldPrefix)) continue;
+    const days = int(value);
+    if (!(days >= 1 && days <= 90)) return { ok: false, error: "stalled" };
+    stalledDaysByStage[name.slice(stalledFieldPrefix.length)] = days;
+  }
   const clockDays = [...new Set(form.getAll("clockDays").map((d) => Number(d)))].filter((d) => d >= 1 && d <= 7).sort();
   const lines = String(form.get("daysOff") ?? "")
     .split(/[\s,]+/)
@@ -29,5 +39,5 @@ export function parseThresholdsForm(form: FormData): { ok: true; value: Threshol
     .filter(Boolean);
   if (lines.some((l) => !isDay(l))) return { ok: false, error: "daysOff" };
   const daysOff = [...new Set(lines)].sort();
-  return { ok: true, value: { firstContactHours, warnHoursBeforeDeadline, stalledDays, clockDays, daysOff } };
+  return { ok: true, value: { firstContactHours, warnHoursBeforeDeadline, stalledDays, stalledDaysByStage, clockDays, daysOff } };
 }

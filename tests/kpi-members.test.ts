@@ -200,11 +200,27 @@ describe("price periods (ticket 26)", () => {
     expect(monthlyRevenue([changed], "2026-12-01")).toBe(1495);
   });
 
-  it("counts a period at 0 that is no discount or freeze as already paid: the ordinary price", () => {
-    // The months paid in Wondr before the move.
-    const prepaid = m({ pricePeriods: [period({ fromDate: "2026-09-23", toDate: "2026-10-31", amount: 0, type: "unknown" })] });
-    expect(countsOn(prepaid, "2026-10-15")).toBe(true);
-    expect(priceOn(prepaid, "2026-10-15")).toBe(169500);
+  it("takes a period at 0 kr as 0 kr: nobody pays in advance (decided 2026-10-20)", () => {
+    const free = m({ pricePeriods: [period({ fromDate: "2026-09-23", toDate: "2026-10-31", amount: 0, type: "unknown" })] });
+    // Still a member: payments start when the period ends.
+    expect(countsOn(free, "2026-10-15")).toBe(true);
+    expect(priceOn(free, "2026-10-15")).toBe(0);
+    expect(priceOn(free, "2026-11-01")).toBe(169500);
+  });
+
+  it("does not count a membership that is 0 kr with no end as a paying one", () => {
+    const forGood = m({ pricePeriods: [period({ fromDate: "2026-09-23", toDate: null, amount: 0, type: "unknown" })] });
+    expect(countsOn(forGood, "2026-10-15")).toBe(false);
+    expect(payingMembersOn([forGood], "2026-10-15")).toBe(0);
+    expect(monthlyRevenue([forGood], "2026-10-15")).toBe(0);
+    // A 100 % discount with no end is still a member, as before.
+    const discounted = m({ pricePeriods: [period({ toDate: null, amount: 0, type: "percent_discount", discountPercent: 100 })] });
+    expect(countsOn(discounted, "2026-10-15")).toBe(true);
+  });
+
+  it("uses the ordinary price when a period gives no amount", () => {
+    const unpriced = m({ pricePeriods: [period({ amount: null, type: "unknown" })] });
+    expect(priceOn(unpriced, "2026-10-15")).toBe(169500);
   });
 
   it("lets a discount win over the period it sits in", () => {

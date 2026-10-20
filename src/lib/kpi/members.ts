@@ -71,10 +71,10 @@ export function frozenOn(m: KpiMembership, day: string): boolean {
  * - frozen: nothing;
  * - a discount: the discounted price (nothing for 100 %);
  * - another price for the period: that price;
- * - a period at 0 that is neither a discount nor a freeze: already paid
- *   (the months paid in Wondr before the move, a year paid up front), so
- *   the ordinary price, since the member still pays it;
- * - no period: the ordinary price.
+ * - a period at 0 that is neither a discount nor a freeze: nothing, as Mana
+ *   says (decided by Max 2026-10-20: nobody pays in advance; a 12-month
+ *   membership is paid month by month, so there are no prepaid months);
+ * - a period with no amount given, or no period: the ordinary price.
  * When periods overlap, a discount wins, then the one that started last.
  */
 export function priceOn(m: KpiMembership, day: string): number {
@@ -87,14 +87,25 @@ export function priceOn(m: KpiMembership, day: string): number {
   if (period.type === "percent_discount") {
     return period.amount ?? Math.round(base * (1 - (period.discountPercent ?? 0) / 100));
   }
-  if (period.amount === null || period.amount === 0) return base;
+  if (period.amount === null) return base;
   return period.amount;
+}
+
+/**
+ * Free with no end in sight: a 0 kr period that is neither a discount nor a
+ * freeze and has no last day. Such a membership is not a paying one (decided
+ * by Max 2026-10-20). A 0 kr period that ends still counts as a member, like
+ * a 100 % discount: payments start when it ends.
+ */
+function freeForGood(m: KpiMembership, day: string): boolean {
+  return (m.pricePeriods ?? []).some((p) => covers(p, day) && p.toDate === null && p.amount === 0 && p.type !== "percent_discount" && !p.disabled);
 }
 
 export function countsOn(m: KpiMembership, day: string): boolean {
   if ((m.priceAmount ?? 0) <= 0) return false;
   if (m.startDate > day) return false;
   if (frozenOn(m, day)) return false;
+  if (freeForGood(m, day)) return false;
   const last = lastDay(m);
   if (last !== undefined) return last !== null && day <= last;
   return true;

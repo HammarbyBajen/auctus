@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** built (2026-10-19), not yet seen in production: check the first partial night and the first Monday full pass
+**Status:** live; the first partial night looked right (2026-10-20); left: compare with the first Monday full pass (night to 2026-10-26)
 
 **Why now:** on 2026-10-17 the nightly sync failed with 429 after an extra full sync had run twelve hours earlier (2026-10-16, after the Pipedrive swap). Since 2026-10-18 a sync waits out the budget instead of failing (pauses of 15 minutes, up to two hours), which treats the symptom; this ticket is the cause.
 
@@ -35,3 +35,5 @@
 **Decided by Max (2026-10-19):** about 40% fewer requests with the same accuracy (not ~70% with cancellations up to 3 days late); the full pass on the night to Monday; a lead page asks Mana about a person at most once a day.
 
 **Built (2026-10-19):** a partial run reads memberships for everyone with a current membership, anyone new in Mana, and anyone who paid for anything or checked in or booked since the last run (visits and payments are now read before the member pass; if the payments cannot be read the run falls back to full). Each run records its mode and request count, shown under Inställningar → Mana. Expected: about 280 requests a night instead of 475.
+
+First partial night (2026-10-20): succeeded in 682 s (the full run on 2026-10-19 took 1,152 s), read 263 of 472 people, 374 requests to Mana in all, no pauses. 116 people were on the extra list (paid, visited or new; most also hold a current membership). Paying members 226, revenue 360 600 kr, the same per membership as the day before; 331 memberships, 313 active, 3 future, as before; 2 new people. About 100 of the 374 requests are the visits and payments steps, which earlier runs did not count, so a full night was really about 575: the saving is about 35%. The payments step reads 35 days back every night; reading only since the last run (with a margin) could save more, if needed.

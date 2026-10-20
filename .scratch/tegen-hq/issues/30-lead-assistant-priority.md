@@ -4,7 +4,7 @@
 
 **Blocked by:** 18 (go-live) for most of its value: until leads are worked in Tegen HQ there is little history to read. Phase A can start before.
 
-**Status:** phase A built (2026-10-19, migration 0028 to run in production before it is pushed); phases B to F not started
+**Status:** phase A live (switched off until a key is set); phase B built (2026-10-20), to be tried against the real model on demo leads; phases C to F not started
 
 **Decided by Max (2026-10-19):**
 - Built-in assistant first, on Max's API key. The MCP server comes after and reuses the same tools.
@@ -51,3 +51,5 @@ Phase A, built (2026-10-19):
 - `src/lib/ai/client.ts`: the only importer of `@anthropic-ai/sdk` (lint rule, test); `askAi` checks the monthly cap (default 20 USD) and logs every call in `ai_suggestion` with tokens and cost; structured output; server-side fallback on a refusal; `decideSuggestion` records accepted or rejected. Default model `claude-opus-5-5`, changeable with `AI_MODEL` (Max's call, to measure).
 - Inställningar → Assistent: on or off, this month's cost against the cap, the cap, and the studio's own words. The "Privat" box on a note shows only once a key is set.
 - To switch it on later: `vercel env add ANTHROPIC_API_KEY production --sensitive` (and optionally `AI_MODEL`), after the data processing agreement and the privacy policy line.
+
+Phase B, built (2026-10-20): "Inför samtalet" panel on an open lead with "Förbered samtalet" (summary, facts, an opening line, questions, the goal; stored in ai_suggestion as call_brief and shown again until the lead changes), and "Föreslå steg" by the note field (proposed steps to tick, saved as the person, all or nothing, from the stored suggestion; unusable steps dropped; private or health notes not sent). Instructions to the model in Swedish in src/lib/ai/assist.ts, effort low. Tested with a stand-in model; still to try against the real model locally with the demo leads (a key in .env.local), and tune the wording, before any production key.

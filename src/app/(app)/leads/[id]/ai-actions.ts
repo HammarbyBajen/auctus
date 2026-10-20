@@ -20,7 +20,7 @@ export type BriefState = { brief?: Brief; error?: Outcome } | null;
 /** A brief before a call. */
 export async function prepareCall(leadId: string): Promise<BriefState> {
   const user = await requirePermission("leads", "read");
-  const result = await callBrief(db, actorOf(user), leadId);
+  const result = await callBrief(db, actorOf(user), leadId, undefined, new Date(), user.name);
   return result.status === "ok" ? { brief: result.output } : { error: result.status };
 }
 

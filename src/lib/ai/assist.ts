@@ -6,7 +6,7 @@ import { contactOutcomes } from "@/lib/pipeline/defaults";
 import { listColdReasons, listStages } from "@/lib/pipeline/service";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { askAi, type AiResult, type AiTransport } from "./client";
-import { notesForAi } from "./privacy";
+import { firstNameOnly, notesForAi } from "./privacy";
 import { briefSchema, type Brief } from "./brief";
 import { leadContext, stepSchema, type Actor, type Step } from "./tools";
 
@@ -32,15 +32,16 @@ Skriv en kort förberedelse på svenska:
 - Skriv vardagligt och kort, som en kollega som snabbt sätter någon in i läget.
 - Nämn aldrig hälsa, skador eller sjukdom, även om något tyder på det.
 - Saknas något viktigt (till exempel att ingen kontakt tagits än), säg det rakt ut.
-- Målet med de flesta samtal är att boka en provträning eller ett möte.`;
+- Målet med de flesta samtal är att boka en provträning eller ett möte.
+- Öppningen säger vem som ringer: använd förnamnet i "caller" om det finns, annars ingen namnlucka.`;
 
-/** Asks for a brief before a call. */
-export async function callBrief(db: Db, actor: Actor, leadId: string, transport?: AiTransport, now: Date = new Date()): Promise<AiResult<Brief>> {
+/** Asks for a brief before a call. `callerName` is the staff member's, for the opening line. */
+export async function callBrief(db: Db, actor: Actor, leadId: string, transport?: AiTransport, now: Date = new Date(), callerName: string | null = null): Promise<AiResult<Brief>> {
   const context = await leadContext(db, actor, leadId, now);
   return askAi(
     db,
     { studioId: actor.studioId, userId: actor.id, kind: "call_brief", leadId },
-    { system: briefSystem, prompt: JSON.stringify({ today: todayInStockholm(now), lead: context }), schema: briefSchema, effort: "low" },
+    { system: briefSystem, prompt: JSON.stringify({ today: todayInStockholm(now), caller: firstNameOnly(callerName) || null, lead: context }), schema: briefSchema, effort: "low" },
     transport,
     now,
   );

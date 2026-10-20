@@ -207,7 +207,7 @@
   "kpi.tableMonth": "Månad",
   "kpi.tableCount": "Medlemmar",
   "kpi.revenue": "Månadsintäkt",
-  "kpi.revenueHint": "Aktiva medlemskap gånger pris per månad",
+  "kpi.revenueHint": "Det medlemmarna ska betala den här månaden, enligt Mana",
   "kpi.revenueValue": "{amount} kr",
   "span.minutes": "{n} min",
   "span.hours": "{n} tim",

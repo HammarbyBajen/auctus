@@ -47,8 +47,17 @@ describe("what may be sent to an AI (ticket 30)", () => {
 
   it("takes out phone numbers in their usual shapes and email addresses", () => {
     expect(withoutContactDetails("+46 70 123 45 67 / 0701234567 / 08-123 456 78 / a.b@c.se")).toBe("[telefon] / [telefon] / [telefon] / [e-post]");
-    // Dates and short numbers stay.
-    expect(withoutContactDetails("Kom 2026-11-03, 3 pass i veckan")).toBe("Kom 2026-11-03, 3 pass i veckan");
+    expect(withoutContactDetails("Nås på 070.123.45.67 eller (070) 123 45 67 eller +46 (0)70-123 45 67")).toBe("Nås på [telefon] eller [telefon] eller [telefon]");
+    // Dates, times, short numbers and amounts stay.
+    expect(withoutContactDetails("Kom 2026-11-03, 3 pass i veckan, helst 17.30-18.30, budget 1 500 kr")).toBe("Kom 2026-11-03, 3 pass i veckan, helst 17.30-18.30, budget 1 500 kr");
+  });
+
+  it("takes out personal identity numbers", () => {
+    expect(withoutContactDetails("Pnr 19900101-1234 och 9001011234")).toBe("Pnr [personnummer] och [personnummer]");
+  });
+
+  it("keeps a web address but drops its tracking", () => {
+    expect(withoutContactDetails("Sida: https://crossfittegen.se/prova?fbclid=IwAR3x&utm_source=fb#top")).toBe("Sida: https://crossfittegen.se/prova");
   });
 
   it("keeps the first name only", () => {

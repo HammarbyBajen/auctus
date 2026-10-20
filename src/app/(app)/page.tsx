@@ -95,6 +95,9 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const laterHref = (all: boolean) => {
     const params = new URLSearchParams();
     if (scope === "mine") params.set("visa", "mina");
+    // Keep the Hör av dig till list as it was filtered.
+    if (risk === "aldrig" || risk === "borta") params.set("risk", risk);
+    if (riskalla === "1") params.set("riskalla", "1");
     if (all) params.set("fler", "1");
     const query = params.toString();
     return `/${query ? `?${query}` : ""}#utan-nasta-steg`;
@@ -200,6 +203,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               filter={risk === "aldrig" ? "never" : risk === "borta" ? "away" : "all"}
               showAll={riskalla === "1"}
               scope={scope}
+              laterAll={showAllLater}
               viewerId={user.id}
               people={people.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name }))}
               emails={emails}

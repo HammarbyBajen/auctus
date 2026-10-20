@@ -47,6 +47,7 @@ export function AtRiskList({
   filter,
   showAll,
   scope,
+  laterAll = false,
   viewerId,
   people,
   emails,
@@ -57,6 +58,8 @@ export function AtRiskList({
   filter: AtRiskFilter;
   showAll: boolean;
   scope: "all" | "mine";
+  /** Whether Home shows every lead without a next step (ticket 29), kept when this list's links are followed. */
+  laterAll?: boolean;
   viewerId: string;
   people: { id: string; name: string }[];
   emails: AtRiskEmails;
@@ -76,6 +79,7 @@ export function AtRiskList({
     const f = next.filter ?? filter;
     if (f !== "all") params.set("risk", f === "never" ? "aldrig" : "borta");
     if (next.all ?? false) params.set("riskalla", "1");
+    if (laterAll) params.set("fler", "1");
     const query = params.toString();
     return `/${query ? `?${query}` : ""}#hor-av-dig`;
   };

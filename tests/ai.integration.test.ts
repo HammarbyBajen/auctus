@@ -19,7 +19,7 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
 
   const owner = () => ({ id: ownerId, studioId, role: "owner" });
   const request = { system: "Svara kort.", prompt: "Hej", schema: z.object({ answer: z.string() }) };
-  type Reply = { output: unknown; model?: string; refused?: boolean };
+  type Reply = { output: unknown; model?: string; refused?: boolean; parts?: { model: string; usage: { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheWriteTokens: number } }[] };
   const fake = (over: Reply = { output: { answer: "ok" } }): AiTransport & { calls: number } => {
     const t = {
       calls: 0,
@@ -29,7 +29,7 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
           output: over.output as T | null,
           model: over.model ?? "claude-haiku-5-5",
           refused: over.refused ?? false,
-          usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0 },
+          parts: over.parts ?? [{ model: over.model ?? "claude-haiku-5-5", usage: { inputTokens: 1000, outputTokens: 200, cacheReadTokens: 0, cacheWriteTokens: 0 } }],
         };
       },
     };
@@ -81,6 +81,31 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
     expect(decided.decision).toBe("accepted");
   });
 
+  it("prices each model that ran when a fallback rescued a declined request", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test-only";
+    const usage = (input: number, output: number) => ({ inputTokens: input, outputTokens: output, cacheReadTokens: 0, cacheWriteTokens: 0 });
+    const result = await ai.askAi(db, { studioId, userId: ownerId, kind: "test" }, request, fake({
+      output: { answer: "ok" },
+      model: "claude-sonnet-5-5",
+      parts: [{ model: "claude-opus-5-5", usage: usage(1000, 100) }, { model: "claude-sonnet-5-5", usage: usage(1000, 200) }],
+    }));
+    const [row] = await db.select().from(schema.aiSuggestion).where(eq(schema.aiSuggestion.id, (result as { suggestionId: string }).suggestionId));
+    // Opus 5.5: 1,000 x 4 + 100 x 20 = 6,000; Sonnet 5.5: 1,000 x 2 + 200 x 10 = 4,000.
+    expect([row.costMicroUsd, row.inputTokens, row.outputTokens]).toEqual([10_000, 2000, 300]);
+  });
+
+  it("does not send a call that could take the month over the cap, even when the cap is not reached yet", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test-only";
+    const { spentUsd } = await ai.aiBudget(db, studioId);
+    // Room for a cheap answer, but not for the most this call could cost (4,000 output tokens on the default model).
+    await db.update(schema.studioSettings).set({ aiSettings: { monthlyBudgetUsd: spentUsd + 0.01 } }).where(eq(schema.studioSettings.studioId, studioId));
+    delete process.env.AI_MODEL;
+    const transport = fake();
+    expect((await ai.askAi(db, { studioId, userId: ownerId, kind: "test" }, request, transport)).status).toBe("over_budget");
+    expect(transport.calls).toBe(0);
+    await db.update(schema.studioSettings).set({ aiSettings: null }).where(eq(schema.studioSettings.studioId, studioId));
+  });
+
   it("stops at the month's cap without calling the AI, and logs that", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test-only";
     await db.update(schema.studioSettings).set({ aiSettings: { monthlyBudgetUsd: 0.0001 } }).where(eq(schema.studioSettings.studioId, studioId));
@@ -107,6 +132,8 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
       payload: { answers: { mål: "Styrka", erfarenhet: "Nybörjare", hälsa: "Ont i ryggen" }, landingPage: "https://crossfittegen.se/prova?fbclid=abc" },
     });
     await leads.addNote(db, studioId, lead.id, "Ringde, nås på 070-111 22 33", ownerId);
+    // The website's own note carries the landing page with its click id.
+    await leads.addNote(db, studioId, lead.id, "Från webben (qualification): Vill bli starkare\nmål: Styrka\nSida: https://crossfittegen.se/prova?fbclid=abc", null);
     await leads.addNote(db, studioId, lead.id, "Har ont i knät, hör av sig om två veckor", ownerId);
     const [privateNote] = await db.insert(schema.leadNote).values({ studioId, leadId: lead.id, body: "Personlig sak", authorId: ownerId, private: true }).returning();
     expect(privateNote.private).toBe(true);
@@ -114,7 +141,10 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
     const seen = await tools.leadContext(db, owner(), lead.id);
     const text = JSON.stringify(seen);
     expect(seen).toMatchObject({ firstName: "Anna", stage: "Ny lead", notesHeldBack: 2, form: { route: "qualification", answers: { mål: "Styrka", erfarenhet: "Nybörjare" }, page: "/prova" } });
-    expect(seen.notes.map((n) => n.body)).toEqual(["Ringde, nås på [telefon]"]);
+    expect(seen.notes.map((n) => n.body).sort()).toEqual([
+      "Från webben (qualification): Vill bli starkare\nmål: Styrka\nSida: https://crossfittegen.se/prova",
+      "Ringde, nås på [telefon]",
+    ]);
     for (const secret of ["Andersson", "example.test", "111 22 33", "knät", "ryggen", "Personlig", "fbclid"]) expect(text).not.toContain(secret);
   });
 
@@ -133,6 +163,17 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
     expect(tasks.map((t) => [t.title, t.dueDate])).toEqual([["Boka provträning", "2026-10-23"]]);
 
     await expect(tools.applySteps(db, { ...owner(), role: null }, lead.id, [{ type: "add_note", body: "x" }])).rejects.toMatchObject({ code: "not_allowed" });
-    await expect(tools.applySteps(db, owner(), lead.id, [{ type: "move_stage", stage: "no_such_stage", coldReason: null }])).rejects.toThrow();
+    // All or nothing: a refused step leaves none of the others behind.
+    const before = await leads.getLead(db, studioId, lead.id);
+    await expect(
+      tools.applySteps(db, owner(), lead.id, [
+        { type: "log_contact", outcome: "no_answer" },
+        { type: "add_note", body: "Ska inte sparas" },
+        { type: "move_stage", stage: "no_such_stage", coldReason: null },
+      ]),
+    ).rejects.toThrow();
+    const after = await leads.getLead(db, studioId, lead.id);
+    expect(after?.history).toHaveLength(before!.history.length);
+    expect(after?.lead.stage).toBe("contacted");
   });
 });

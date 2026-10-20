@@ -467,6 +467,8 @@ export type SyncProgress = {
   lastRequestAt: number | null;
   /** While Mana has asked us to wait: when the run carries on (epoch ms). */
   pausedUntil?: number | null;
+  /** During a step that saves only when it ends (visits, payments): until when the run counts as busy (epoch ms). */
+  busyUntil?: number | null;
   /** How many times this run has paused for Mana's request budget. */
   pauses?: number;
   /** full reads everyone's memberships; partial only those who can have changed (ticket 28). Older runs were full. */
@@ -992,7 +994,7 @@ export const aiSuggestion = pgTable(
     leadId: uuid("lead_id").references(() => lead.id, { onDelete: "cascade" }),
     manaUserId: text("mana_user_id"),
     model: text("model").notNull(),
-    /** ok, failed or over_budget (not sent: the month's cap was reached). */
+    /** pending (sent, its worst-case cost reserved), ok, failed or over_budget (not sent: it could take the month over the cap). */
     status: text("status").notNull(),
     inputTokens: integer("input_tokens").notNull().default(0),
     outputTokens: integer("output_tokens").notNull().default(0),

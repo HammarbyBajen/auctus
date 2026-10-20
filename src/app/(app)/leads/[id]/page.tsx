@@ -31,7 +31,7 @@ import { assignAction, finishTask, moveStage, removeTask, saveLeadFieldsAction, 
 import { AssigneeSelect } from "./assignee-select";
 import { ManaRefresher } from "./mana-refresher";
 import { ActivityForm } from "./activity-form";
-import { hasAiKey } from "@/lib/ai/client";
+import { aiEnabled } from "@/lib/ai/enabled";
 import { EmailComposer } from "@/components/app/email-composer";
 import { getEmailSettings, listEmails } from "@/lib/email/service";
 import { fillTemplate } from "@/lib/email/template";
@@ -163,7 +163,7 @@ export default async function LeadPage({
           {/* What has happened comes first: write it down, then read back the history. */}
           <StaggerItem className="min-w-0">
             <Panel title={t("lead.notes")} id="history">
-              <ActivityForm leadId={lead.id} showPrivate={hasAiKey()} />
+              <ActivityForm leadId={lead.id} showPrivate={aiEnabled()} />
               {activity.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t("lead.noNotes")}</p>
               ) : (

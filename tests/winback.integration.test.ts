@@ -223,24 +223,46 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
     await db.insert(schema.manaPurchase).values({
       studioId: studioA, id: `${tag}-old`, manaUserId: "x", kind: "single_class", description: null, paidAt: new Date("2026-07-01T10:00:00Z"),
     });
-    const stored = await wb.syncPurchases(
-      db,
-      {
-        getPaidPayments: async () => [
-          { id: `${tag}-a`, user: { id: "u1" }, paidAt: "2026-10-01T10:00:00Z", kind: "class_credits_bundle", description: "Day Pass" },
-          { id: `${tag}-b`, user: { id: "u2" }, paidAt: "2026-10-02T10:00:00Z", kind: "membership", description: "Membership: Basic" },
-          { id: `${tag}-c`, user: { id: "u3" }, paidAt: "2026-10-03T10:00:00Z", kind: "course", description: "Kids" },
-          { id: `${tag}-d`, user: null, paidAt: "2026-10-03T10:00:00Z", kind: "single_class", description: "Class" },
-        ],
+    const paid = (id: string, user: string | null, kind: string, description: string) => ({
+      id: `${tag}-${id}`, user: user ? { id: user } : null, paidAt: "2026-10-02T10:00:00Z", status: "paid", kind, description,
+    });
+    const asked: string[] = [];
+    const source = {
+      getPaidPayments: async (fromAt: string) => {
+        asked.push(`paid ${fromAt.slice(0, 10)}`);
+        return [paid("a", "u1", "class_credits_bundle", "Day Pass"), paid("b", "u2", "membership", "Membership: Basic"), paid("c", "u3", "course", "Kids"), paid("d", null, "single_class", "Class")];
       },
-      studioA,
-      now,
-      new Date("2026-10-02T00:00:00Z"),
-    );
-    expect(stored.saved).toBe(1);
-    // Anyone who paid for anything since the last run, for a partial sync (ticket 28).
-    expect(stored.payers.sort()).toEqual(["u2", "u3"]);
+      getPayments: async () => [],
+    };
+    // A full night: the paid payments of the last 35 days; no signals needed.
+    const stored = await wb.syncPurchases(db, source, studioA, now);
+    expect([stored.saved, stored.payers]).toEqual([1, []]);
+    expect(asked).toEqual([`paid ${new Date(now.getTime() - 35 * 86_400_000).toISOString().slice(0, 10)}`]);
     const rows = await db.select().from(schema.manaPurchase).where(and(eq(schema.manaPurchase.studioId, studioA)));
     expect(rows.map((r) => r.id)).toEqual([`${tag}-a`]);
+  });
+
+  it("on a partial night, reads payments in any state since the last run and names everyone in them (ticket 28)", async () => {
+    let from = "";
+    const source = {
+      getPaidPayments: async () => {
+        throw new Error("a partial night reads every state since the last run instead");
+      },
+      getPayments: async (fromAt: string) => {
+        from = fromAt;
+        return [
+          // A new membership whose first payment is not paid yet: a signal all the same.
+          { id: `${tag}-p1`, user: { id: "u5" }, paidAt: null, status: "pending", kind: "membership", description: "Membership: Basic" },
+          { id: `${tag}-p2`, user: { id: "u6" }, paidAt: null, status: "draft", kind: "membership", description: "Membership: Basic" },
+          { id: `${tag}-p3`, user: { id: "u7" }, paidAt: "2026-10-12T09:00:00Z", status: "paid", kind: "single_class", description: "Drop-in" },
+        ];
+      },
+    };
+    const since = new Date("2026-10-12T03:00:00Z");
+    const stored = await wb.syncPurchases(db, source, studioA, now, since);
+    expect(stored.payers.sort()).toEqual(["u5", "u6", "u7"]);
+    // Only the paid drop-in is a purchase; two days of margin before the last run.
+    expect(stored.saved).toBe(1);
+    expect(from).toBe("2026-10-10T03:00:00.000Z");
   });
 });

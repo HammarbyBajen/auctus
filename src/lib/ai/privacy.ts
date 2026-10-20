@@ -43,15 +43,40 @@ export function mentionsHealth(text: string, extraTerms: readonly string[] = [])
 }
 
 const emailPattern = /[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]+/g;
-// Seven or more digits, allowing spaces, dashes and a leading +: Swedish mobile and landline numbers.
-const phonePattern = /\+?\d[\d\s-]{5,}\d/g;
+const urlPattern = /https?:\/\/[^\s<>"]+/g;
+// A Swedish personal identity number: (19|20)YYMMDD-NNNN, with or without the dash.
+const personalNumberPattern = /\b(?:19|20)?\d{6}[-+]?\d{4}\b/g;
+// Seven or more digits with spaces, dashes, dots or brackets between them.
+const phonePattern = /[+(]?\d[\d\s().-]{5,}\d/g;
 
-/** Takes email addresses and phone numbers out of a text. */
+/** A phone number starts with 0, + or a bracket (070..., +46..., (070)); "17.30-18.30" and amounts do not. */
+const looksLikePhone = (m: string) => {
+  const t = m.trim();
+  return (t.match(/\d/g) ?? []).length >= 7 && /^[0+(]/.test(t) && !/^\d{4}-\d{1,2}-\d{1,2}$/.test(t);
+};
+
+/** A web address without its query or fragment, where click ids and tracking live. */
+const withoutTracking = (url: string) => {
+  try {
+    const u = new URL(url);
+    return `${u.origin}${u.pathname}`;
+  } catch {
+    return "[länk]";
+  }
+};
+
+/**
+ * Takes email addresses, phone numbers and personal identity numbers out of a
+ * text, and tracking out of web addresses (the website's own lead note carries
+ * the landing page with its click ids).
+ */
 export function withoutContactDetails(text: string): string {
   return text
     .replace(emailPattern, "[e-post]")
-    // A date (2026-11-03) looks like a number with dashes; it stays.
-    .replace(phonePattern, (m) => (/^\d{4}-\d{1,2}-\d{1,2}$/.test(m.trim()) ? m : "[telefon]"));
+    .replace(urlPattern, withoutTracking)
+    // Phones first: 0701234567 also reads as an ID number from 2007, and is a phone.
+    .replace(phonePattern, (m) => (looksLikePhone(m) ? "[telefon]" : m))
+    .replace(personalNumberPattern, "[personnummer]");
 }
 
 export type NoteForAi = { body: string; private?: boolean | null };

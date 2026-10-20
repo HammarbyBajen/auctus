@@ -6,7 +6,7 @@ import { recordKpiSnapshot } from "@/lib/kpi/service";
 import { detectAtRisk, syncVisits } from "@/lib/mana/at-risk-service";
 import { afterSync } from "@/lib/mana/leads";
 import { todayInStockholm } from "@/lib/tasks/dates";
-import { addExtraIds, addRunRequests, failRun, pauseRun, runBatch, startRun } from "@/lib/mana/sync";
+import { addExtraIds, addRunRequests, failRun, holdRun, pauseRun, runBatch, startRun } from "@/lib/mana/sync";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { manaVisit, syncRun } from "@/db/schema";
 import { detectWinBacks, syncPurchases } from "@/lib/mana/winback-service";
@@ -47,7 +47,10 @@ async function purchasesStep(studioId: string, runId: string) {
   "use step";
   // Recent day passes, clip cards and drop-ins: a few requests. A failure here
   // only means no day-pass leads today, so it does not fail the sync. Anyone
-  // who paid since the last run is read in a partial run (ticket 28).
+  // with a payment in any state since the last run (a new membership makes a
+  // draft or pending one at once) is read in a partial run (ticket 28).
+  // This step saves only at its end: keep the run from looking dead meanwhile.
+  await holdRun(db, runId);
   let client: Awaited<ReturnType<typeof createManaClient>> | null = null;
   try {
     client = await createManaClient(db, studioId);
@@ -67,6 +70,8 @@ async function visitsStep(studioId: string, runId: string) {
   // one (ticket 13). A failure only means the at-risk list is a day older, so
   // it does not fail the sync. Anyone who visited since the last run is read
   // in a partial run (ticket 28).
+  // This step saves only at its end: keep the run from looking dead meanwhile.
+  await holdRun(db, runId);
   let client: Awaited<ReturnType<typeof createManaClient>> | null = null;
   try {
     client = await createManaClient(db, studioId);

@@ -18,10 +18,14 @@ describe("the AI goes through one guarded door (ticket 30)", () => {
     expect(importers).toEqual([client]);
   });
 
-  it("only the AI client reads the key, and it is server-only", () => {
+  it("only the AI client reads the key, and it is server-only; one light module may say whether it is set", () => {
+    const enabled = path.join("src", "lib", "ai", "enabled.ts");
     const readers = files("src").filter((f) => read(f).includes("process.env.ANTHROPIC_API_KEY"));
-    expect(readers).toEqual([client]);
+    expect(readers.sort()).toEqual([client, enabled].sort());
     expect(read(client)).toContain('import "server-only"');
+    // It answers yes or no, never the key itself.
+    expect(read(enabled)).toMatch(/Boolean\(process\.env\.ANTHROPIC_API_KEY\)/);
+    expect(read(enabled).match(/process\.env\.ANTHROPIC_API_KEY/g)).toHaveLength(1);
   });
 
   it("no client component reaches the AI client or the tools", () => {

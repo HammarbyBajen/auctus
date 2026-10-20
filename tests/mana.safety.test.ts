@@ -74,6 +74,7 @@ describe("the CRM never writes to Mana", () => {
       "getGymCheckIns",
       "getInstructors",
       "getPaidPayments",
+      "getPayments",
       "getServiceBookings",
       "getSpecialistServices",
       "getUserMemberships",

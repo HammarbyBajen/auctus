@@ -221,6 +221,23 @@ export class ManaClient {
     return items;
   }
 
+  /**
+   * Every payment at the studio created since `fromAt`, whatever its state
+   * (draft, pending, paid, failed...), following every page. A new membership
+   * usually makes a draft or pending payment at once, before anything is paid,
+   * so this is how a partial sync learns who may have a new membership (ticket 28).
+   */
+  async getPayments(fromAt: string) {
+    let url: string | null = this.studioUrl("/payment-transactions", { fromAt, pageSize: "100" });
+    const items: PaymentsPage["data"]["items"] = [];
+    while (url) {
+      const page: PaymentsPage = parseContract(paymentsPageSchema, await this.getJson(url), "betalningar");
+      items.push(...page.data.items);
+      url = page.links.next;
+    }
+    return items;
+  }
+
   /** Class bookings at the studio for classes starting between `fromAt` and `toAt`, following every page (ticket 13). */
   async getClassBookings(fromAt: string, toAt: string) {
     let url: string | null = this.studioUrl("/class-event-bookings", { fromAt, toAt, pageSize: "100" });

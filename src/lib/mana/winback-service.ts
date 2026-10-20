@@ -34,22 +34,33 @@ const sourceFor: Record<SignalKind, ManaSignalSource> = {
 /** A person dismissed (moved to a cold stage) this recently is not nagged about again. */
 export const recentlyDismissedDays = 90;
 
+type Payment = { id: string; user: { id: string } | null; paidAt: string | null; status: string; kind: string; description: string | null };
+
+/** How far before the last run a partial night looks for payments, so a slow or late night misses nothing. */
+const paymentsMarginMs = 2 * DAY;
+
 /**
- * Keeps recent day pass, clip card and drop-in purchases (35 days back). A
- * handful of requests. Also says who paid for anything at all since `since`,
+ * Keeps recent day pass, clip card and drop-in purchases (35 days back). Also
+ * says who has a payment in any state since `since` (draft, pending, paid...),
  * so a partial sync knows whose memberships may have changed (ticket 28).
+ *
+ * A full night (no `since`) reads the paid payments of the last 35 days. A
+ * partial night reads every payment created since the last run (with a
+ * margin) instead: far fewer requests, and the day passes in it are the new
+ * ones; older ones are already stored.
  */
 export async function syncPurchases(
   db: Db,
-  source: { getPaidPayments(fromAt: string): Promise<{ id: string; user: { id: string } | null; paidAt: string | null; kind: string; description: string | null }[]> },
+  source: { getPaidPayments(fromAt: string): Promise<Payment[]>; getPayments(fromAt: string): Promise<Payment[]> },
   studioId: string,
   now: Date = new Date(),
   since: Date | null = null,
 ): Promise<{ saved: number; payers: string[] }> {
-  const fromDay = new Date(now.getTime() - 35 * DAY);
-  const payments = await source.getPaidPayments(fromDay.toISOString());
+  const payments = since
+    ? await source.getPayments(new Date(since.getTime() - paymentsMarginMs).toISOString())
+    : await source.getPaidPayments(new Date(now.getTime() - 35 * DAY).toISOString());
   const rows = payments
-    .filter((p) => p.user && p.paidAt && (dayPassKinds as readonly string[]).includes(p.kind))
+    .filter((p) => p.user && p.paidAt && p.status === "paid" && (dayPassKinds as readonly string[]).includes(p.kind))
     .map((p) => ({
       studioId,
       id: p.id,
@@ -63,9 +74,7 @@ export async function syncPurchases(
   await db
     .delete(manaPurchase)
     .where(and(eq(manaPurchase.studioId, studioId), lt(manaPurchase.paidAt, new Date(now.getTime() - 60 * DAY))));
-  const payers = since
-    ? [...new Set(payments.filter((p) => p.user && p.paidAt && new Date(p.paidAt) >= since).map((p) => p.user!.id))]
-    : [];
+  const payers = since ? [...new Set(payments.filter((p) => p.user).map((p) => p.user!.id))] : [];
   return { saved: rows.length, payers };
 }
 

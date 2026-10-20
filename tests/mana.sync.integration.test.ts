@@ -71,6 +71,8 @@ describe.skipIf(!hasDb)("Mana sync", () => {
   });
 
   afterAll(async () => {
+    await db.delete(schema.lead).where(inArray(schema.lead.studioId, [studioA, studioB]));
+    await db.delete(schema.person).where(inArray(schema.person.studioId, [studioA, studioB]));
     await db.delete(schema.studio).where(inArray(schema.studio.id, [studioA, studioB]));
     await pool.end();
   });
@@ -241,15 +243,47 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     const partial = await run(new Date("2026-10-21T03:00:00Z"), second, ["user-e"]);
     expect(partial.mode).toBe("partial");
     expect(second.membershipCalls.sort()).toEqual(["user-a", "user-b", "user-c", "user-e", "user-f"]);
+
     expect(partial.requests).toBe(second.requestCount);
     // Everyone is still mirrored, user-f included.
     const people = await db.select({ id: schema.manaMember.manaUserId }).from(schema.manaMember).where(eq(schema.manaMember.studioId, studioA));
     expect(people.map((p) => p.id).sort()).toEqual(["user-a", "user-b", "user-c", "user-d", "user-e", "user-f"]);
 
+    // Thursday: user-d now has an open lead (matched by email), so is read even without a signal.
+    const { ensureDefaultPipeline } = await import("@/lib/pipeline/service");
+    await ensureDefaultPipeline(db, studioA);
+    const leads = await import("@/lib/leads/service");
+    await leads.createOrMatchLead(db, studioA, { name: "Lead D", email: "info@example.test", source: "manual" });
+    const withLead = new FakeMana();
+    await run(new Date("2026-10-22T03:00:00Z"), withLead);
+    expect(withLead.membershipCalls).toContain("user-d");
+
     // The night to Monday: full again.
     const third = new FakeMana();
     expect((await run(new Date("2026-10-26T03:00:00Z"), third)).mode).toBe("full");
     expect(third.membershipCalls).toHaveLength(5);
+  });
+
+  it("keeps a run busy during a step that saves only at its end", async () => {
+    await fresh();
+    const now = new Date();
+    const first = await sync.startRun(db, studioA, { now });
+    await sync.holdRun(db, first.runId, now);
+    // Past the 3-minute lease but inside the hold: busy.
+    expect(await sync.startRun(db, studioA, { now: new Date(now.getTime() + 5 * 60_000) })).toEqual({ status: "busy", runId: first.runId });
+    // Past the hold and the usual lease after it: taken for dead and replaced.
+    expect((await sync.startRun(db, studioA, { now: new Date(now.getTime() + sync.stepHoldMs + sync.defaultLeaseMs + 60_000) })).status).toBe("started");
+  });
+
+  it("counts the requests of a batch that ends in an error", async () => {
+    await fresh();
+    const started = await sync.startRun(db, studioA);
+    const mana = new FakeMana();
+    mana.failMembershipsFor = { id: "user-b", error: new ManaError("rate_limited", "429") };
+    await expect(sync.runBatch(db, mana, started.runId, { budgetMs: 60_000 })).rejects.toThrow();
+    const [run] = await db.select().from(schema.syncRun).where(eq(schema.syncRun.id, started.runId));
+    expect(run.progress.requests).toBe(mana.requestCount);
+    expect(mana.requestCount).toBeGreaterThan(2);
   });
 
   it("the database itself refuses two running runs for one studio", async () => {

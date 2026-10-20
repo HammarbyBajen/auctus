@@ -1,11 +1,12 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
-import { and, eq, gte, sum } from "drizzle-orm";
+import { and, eq, gte, sql, sum } from "drizzle-orm";
 import type { z } from "zod";
 import { db as defaultDb } from "@/db";
 import { aiSuggestion, studioSettings } from "@/db/schema";
 import { startOfMonthInStockholm } from "@/lib/home/time";
+import { aiEnabled } from "./enabled";
 
 /**
  * The only place in Tegen HQ that talks to the AI provider (ticket 30; a lint
@@ -42,7 +43,8 @@ export function costMicroUsd(model: string, usage: AiUsage): number {
   return Math.ceil(usage.inputTokens * input + usage.outputTokens * output + usage.cacheReadTokens * cacheRead + usage.cacheWriteTokens * cacheWrite);
 }
 
-export const hasAiKey = () => Boolean(process.env.ANTHROPIC_API_KEY);
+/** Whether a key is set (the light check lives in ./enabled, for pages that should not load this module). */
+export const hasAiKey = aiEnabled;
 export const aiModel = () => process.env.AI_MODEL?.trim() || defaultModel;
 
 export type AiRequest<T> = {
@@ -55,9 +57,15 @@ export type AiRequest<T> = {
   effort?: "low" | "medium" | "high";
 };
 
+/** One model's share of a call: a declined request and the fallback that rescued it are billed separately. */
+export type AiPart = { model: string; usage: AiUsage };
+
 export type AiTransport = {
-  complete<T>(model: string, request: AiRequest<T>): Promise<{ output: T | null; model: string; usage: AiUsage; refused: boolean }>;
+  complete<T>(model: string, request: AiRequest<T>): Promise<{ output: T | null; model: string; parts: AiPart[]; refused: boolean }>;
 };
+
+/** The most a request can produce. */
+const maxOutputTokens = 4000;
 
 /** Anthropic's API through the official SDK. A declined request is retried on Anthropic's own fallback model. */
 export function anthropicTransport(): AiTransport {
@@ -66,24 +74,26 @@ export function anthropicTransport(): AiTransport {
       const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
       const response = await client.beta.messages.parse({
         model,
-        max_tokens: 4000,
+        max_tokens: maxOutputTokens,
         betas: ["server-side-fallback-2026-07-01"],
         fallbacks: "default",
         system: [{ type: "text", text: request.system, cache_control: { type: "ephemeral" } }],
         messages: [{ role: "user", content: request.prompt }],
         output_config: { format: betaZodOutputFormat(request.schema), effort: request.effort ?? "medium" },
       });
-      return {
-        output: (response.parsed_output ?? null) as never,
-        model: response.model,
-        refused: response.stop_reason === "refusal",
-        usage: {
-          inputTokens: response.usage.input_tokens,
-          outputTokens: response.usage.output_tokens,
-          cacheReadTokens: response.usage.cache_read_input_tokens ?? 0,
-          cacheWriteTokens: response.usage.cache_creation_input_tokens ?? 0,
-        },
-      };
+      const usageOf = (u: { input_tokens: number; output_tokens: number; cache_read_input_tokens?: number | null; cache_creation_input_tokens?: number | null }): AiUsage => ({
+        inputTokens: u.input_tokens,
+        outputTokens: u.output_tokens,
+        cacheReadTokens: u.cache_read_input_tokens ?? 0,
+        cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+      });
+      // With a fallback, each model that ran reports its own usage; both are billed.
+      const iterations = (response.usage.iterations ?? []).filter((i): i is Extract<typeof i, { output_tokens: number }> => "output_tokens" in i);
+      const parts: AiPart[] =
+        iterations.length > 0
+          ? iterations.map((i) => ({ model: ("model" in i && i.model) || model, usage: usageOf(i) }))
+          : [{ model: response.model, usage: usageOf(response.usage) }];
+      return { output: (response.parsed_output ?? null) as never, model: response.model, refused: response.stop_reason === "refusal", parts };
     },
   };
 }
@@ -98,52 +108,68 @@ export type AiResult<T> =
 
 /** This calendar month's spend and the cap, in US dollars. */
 export async function aiBudget(db: Db, studioId: string, now: Date = new Date()) {
-  const [[spent], [settings]] = await Promise.all([
-    db
-      .select({ micro: sum(aiSuggestion.costMicroUsd) })
-      .from(aiSuggestion)
-      .where(and(eq(aiSuggestion.studioId, studioId), gte(aiSuggestion.createdAt, startOfMonthInStockholm(now)))),
-    db.select({ ai: studioSettings.aiSettings }).from(studioSettings).where(eq(studioSettings.studioId, studioId)).limit(1),
-  ]);
+  // One after the other: inside askAi's transaction they share one connection.
+  const [spent] = await db
+    .select({ micro: sum(aiSuggestion.costMicroUsd) })
+    .from(aiSuggestion)
+    .where(and(eq(aiSuggestion.studioId, studioId), gte(aiSuggestion.createdAt, startOfMonthInStockholm(now))));
+  const [settings] = await db.select({ ai: studioSettings.aiSettings }).from(studioSettings).where(eq(studioSettings.studioId, studioId)).limit(1);
   return { spentUsd: Number(spent?.micro ?? 0) / 1_000_000, budgetUsd: settings?.ai?.monthlyBudgetUsd ?? defaultMonthlyBudgetUsd };
 }
 
+/** What a call can cost at most: its text (about 3 characters a token) and the most it can write. */
+function worstCaseMicroUsd(model: string, request: AiRequest<unknown>): number {
+  const inputTokens = Math.ceil((request.system.length + request.prompt.length) / 3);
+  return costMicroUsd(model, { inputTokens, outputTokens: maxOutputTokens, cacheReadTokens: 0, cacheWriteTokens: 0 });
+}
+
 /**
- * Asks the AI for one suggestion. Not sent without a key, or once the month's
- * cap is reached. Every call that is sent, or stopped by the cap, is logged.
+ * Asks the AI for one suggestion. Not sent without a key, or when the call
+ * could take the month over its cap. Every call is logged: before it is sent
+ * it reserves what it can cost at most (under a per-studio lock, so two calls
+ * at once cannot both slip under the cap), and the real cost replaces that
+ * when the answer comes back.
  */
 export async function askAi<T>(db: Db, about: AiAbout, request: AiRequest<T>, transport: AiTransport = anthropicTransport(), now: Date = new Date()): Promise<AiResult<T>> {
   if (!hasAiKey()) return { status: "not_configured" };
   const model = aiModel();
   const row = { studioId: about.studioId, userId: about.userId, kind: about.kind, leadId: about.leadId ?? null, manaUserId: about.manaUserId ?? null, model };
+  const reserve = worstCaseMicroUsd(model, request);
 
-  const { spentUsd, budgetUsd } = await aiBudget(db, about.studioId, now);
-  if (spentUsd >= budgetUsd) {
-    await db.insert(aiSuggestion).values({ ...row, status: "over_budget" });
-    return { status: "over_budget", spentUsd, budgetUsd };
-  }
+  const booked = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`ai-budget:${about.studioId}`}))`);
+    const { spentUsd, budgetUsd } = await aiBudget(tx as unknown as Db, about.studioId, now);
+    if (spentUsd + reserve / 1_000_000 > budgetUsd) {
+      await tx.insert(aiSuggestion).values({ ...row, status: "over_budget" });
+      return { over: true as const, spentUsd, budgetUsd };
+    }
+    const [pending] = await tx.insert(aiSuggestion).values({ ...row, status: "pending", costMicroUsd: reserve }).returning({ id: aiSuggestion.id });
+    return { over: false as const, id: pending.id };
+  });
+  if (booked.over) return { status: "over_budget", spentUsd: booked.spentUsd, budgetUsd: booked.budgetUsd };
 
+  const finish = (values: Partial<typeof aiSuggestion.$inferInsert>) => db.update(aiSuggestion).set(values).where(eq(aiSuggestion.id, booked.id));
   try {
     const result = await transport.complete(model, request);
-    const cost = costMicroUsd(result.model, result.usage);
-    const usage = { inputTokens: result.usage.inputTokens + result.usage.cacheReadTokens + result.usage.cacheWriteTokens, outputTokens: result.usage.outputTokens, costMicroUsd: cost };
+    const cost = result.parts.reduce((total, part) => total + costMicroUsd(part.model, part.usage), 0);
+    const tokens = result.parts.reduce(
+      (total, { usage }) => ({
+        inputTokens: total.inputTokens + usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens,
+        outputTokens: total.outputTokens + usage.outputTokens,
+      }),
+      { inputTokens: 0, outputTokens: 0 },
+    );
     if (result.refused || result.output === null) {
-      const [failed] = await db
-        .insert(aiSuggestion)
-        .values({ ...row, model: result.model, status: "failed", ...usage, error: result.refused ? "Modellen avböjde." : "Svaret gick inte att läsa." })
-        .returning({ id: aiSuggestion.id });
-      return { status: "failed", suggestionId: failed.id };
+      await finish({ model: result.model, status: "failed", ...tokens, costMicroUsd: cost, error: result.refused ? "Modellen avböjde." : "Svaret gick inte att läsa." });
+      return { status: "failed", suggestionId: booked.id };
     }
-    const [saved] = await db
-      .insert(aiSuggestion)
-      .values({ ...row, model: result.model, status: "ok", ...usage, suggestion: result.output as object })
-      .returning({ id: aiSuggestion.id });
-    return { status: "ok", suggestionId: saved.id, output: result.output };
+    await finish({ model: result.model, status: "ok", ...tokens, costMicroUsd: cost, suggestion: result.output as object });
+    return { status: "ok", suggestionId: booked.id, output: result.output };
   } catch (error) {
-    // Only what went wrong: never the key, the prompt or the person.
+    // Only what went wrong: never the key, the prompt or the person. The reservation stays as the cost: it may have been billed.
     const reason = error instanceof Error ? error.message.slice(0, 300) : "okänt fel";
-    const [failed] = await db.insert(aiSuggestion).values({ ...row, status: "failed", error: reason }).returning({ id: aiSuggestion.id });
-    return { status: "failed", suggestionId: failed.id };
+    await finish({ status: "failed", error: reason });
+    return { status: "failed", suggestionId: booked.id };
   }
 }
 

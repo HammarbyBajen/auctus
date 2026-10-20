@@ -183,16 +183,21 @@ export type Step = z.infer<typeof stepSchema>;
 /**
  * Carries out the steps a person approved, as that person, through the same
  * services the pages use (so a stage that does not exist, or a Cold move
- * without a reason, is refused the same way).
+ * without a reason, is refused the same way). All or nothing: in one
+ * transaction, so a step that is refused leaves none of the others behind.
  */
 export async function applySteps(db: Db, actor: Actor, leadId: string, steps: Step[]) {
   allow(actor, "leads", "write");
   const parsed = z.array(stepSchema).parse(steps);
-  if (!(await getLead(db, actor.studioId, leadId))) throw new AiToolError("not_found");
-  for (const step of parsed) {
-    if (step.type === "log_contact") await logContact(db, actor.studioId, leadId, step.outcome, actor.id);
-    else if (step.type === "add_note") await addNote(db, actor.studioId, leadId, step.body, actor.id);
-    else if (step.type === "create_task") await createTask(db, actor.studioId, leadId, { title: step.title, dueDate: step.dueDate }, actor.id);
-    else await moveLeadStage(db, actor.studioId, leadId, step.stage, { coldReason: step.coldReason, authorId: actor.id });
-  }
+  await db.transaction(async (tx) => {
+    // The services take the database; a transaction answers the same calls (their own transactions become savepoints).
+    const t = tx as unknown as Db;
+    if (!(await getLead(t, actor.studioId, leadId))) throw new AiToolError("not_found");
+    for (const step of parsed) {
+      if (step.type === "log_contact") await logContact(t, actor.studioId, leadId, step.outcome, actor.id);
+      else if (step.type === "add_note") await addNote(t, actor.studioId, leadId, step.body, actor.id);
+      else if (step.type === "create_task") await createTask(t, actor.studioId, leadId, { title: step.title, dueDate: step.dueDate }, actor.id);
+      else await moveLeadStage(t, actor.studioId, leadId, step.stage, { coldReason: step.coldReason, authorId: actor.id });
+    }
+  });
 }

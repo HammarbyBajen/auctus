@@ -32,6 +32,8 @@ import { AssigneeSelect } from "./assignee-select";
 import { ManaRefresher } from "./mana-refresher";
 import { ActivityForm } from "./activity-form";
 import { aiEnabled } from "@/lib/ai/enabled";
+import { latestBrief } from "@/lib/ai/brief";
+import { CallBrief } from "./call-brief";
 import { EmailComposer } from "@/components/app/email-composer";
 import { getEmailSettings, listEmails } from "@/lib/email/service";
 import { fillTemplate } from "@/lib/email/template";
@@ -84,6 +86,13 @@ export default async function LeadPage({
   const phoneHref = person.phone ? `tel:${person.phone.replace(/[^\d+]/g, "")}` : null;
   const alreadyMember = Boolean(mana && mana.counting.length > 0 && stage.kind !== "won" && !winBack);
   const source = t(`source.${lead.source}` as MessageKey) || t("source.unknown");
+
+  // The assistant (ticket 30): only when a key is set; the last brief stands until something happens on the lead.
+  const assistantOn = aiEnabled();
+  const brief = assistantOn ? await latestBrief(db, user.studioId, lead.id, lead.updatedAt) : null;
+  const assistantNames = assistantOn
+    ? { stages: Object.fromEntries(allStages.map((s) => [s.key, s.name])), reasons: Object.fromEntries(allReasons.map((r) => [r.key, r.name])) }
+    : null;
 
   const activity = groupActivity(history);
   const lastContact = history.find((h) => h.kind === "contact_logged");
@@ -161,9 +170,14 @@ export default async function LeadPage({
       <div className="@container">
         <div className="grid items-start gap-6 @min-[52rem]:grid-cols-[minmax(0,1fr)_20rem]">
           {/* What has happened comes first: write it down, then read back the history. */}
-          <StaggerItem className="min-w-0">
+          <StaggerItem className="flex min-w-0 flex-col gap-6">
+            {assistantOn && stage.kind === "open" && (
+              <Panel title={t("ai.brief.title")} id="infor-samtalet">
+                <CallBrief leadId={lead.id} initial={brief?.brief ?? null} />
+              </Panel>
+            )}
             <Panel title={t("lead.notes")} id="history">
-              <ActivityForm leadId={lead.id} showPrivate={aiEnabled()} />
+              <ActivityForm leadId={lead.id} showPrivate={assistantOn} assistant={assistantNames} />
               {activity.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{t("lead.noNotes")}</p>
               ) : (

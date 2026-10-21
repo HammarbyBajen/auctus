@@ -24,6 +24,16 @@ const firstRows = 10;
 
 export type AtRiskFilter = "all" | AtRiskGroup;
 
+/** The members page (ticket 36) with a scope, a group and all rows or the first ten, as the address says it. */
+export function membersHref({ scope, filter, all }: { scope: "all" | "mine"; filter: AtRiskFilter; all: boolean }) {
+  const params = new URLSearchParams();
+  if (scope === "mine") params.set("visa", "mina");
+  if (filter !== "all") params.set("grupp", filter === "never" ? "aldrig" : "borta");
+  if (all) params.set("alla", "1");
+  const query = params.toString();
+  return `/medlemmar${query ? `?${query}` : ""}`;
+}
+
 const noteLabel = (n: AtRiskNoteRow) => t(`atRisk.kind.${n.kind}` as MessageKey);
 
 function NoteLine({ note }: { note: AtRiskNoteRow }) {
@@ -37,9 +47,9 @@ function NoteLine({ note }: { note: AtRiskNoteRow }) {
 }
 
 /**
- * Hör av dig till (ticket 13): paying members who have been away, on Home and
- * nowhere else, so members stay out of the sales pipeline. Staff can split
- * the list, share it out, and keep notes on every call.
+ * Hör av dig till (ticket 13): paying members who have been away, on the
+ * members page (ticket 36), so members stay out of the sales pipeline. Staff
+ * can split the list, share it out, and keep notes on every call.
  */
 export function AtRiskList({
   rows,
@@ -47,7 +57,6 @@ export function AtRiskList({
   filter,
   showAll,
   scope,
-  laterAll = false,
   viewerId,
   people,
   emails,
@@ -58,31 +67,21 @@ export function AtRiskList({
   filter: AtRiskFilter;
   showAll: boolean;
   scope: "all" | "mine";
-  /** Whether Home shows every lead without a next step (ticket 29), kept when this list's links are followed. */
-  laterAll?: boolean;
   viewerId: string;
   people: { id: string; name: string }[];
   emails: AtRiskEmails;
   emailMode: EmailMode;
 }) {
   const today = todayInStockholm();
-  // "Mina" on Home: mine and nobody's, as with leads.
+  // "Mina": mine and nobody's, as with leads.
   const inScope = scope === "mine" ? rows.filter((r) => !r.assignedToId || r.assignedToId === viewerId) : rows;
   const count = (group: AtRiskGroup) => inScope.filter((r) => r.group === group).length;
   const shown = filter === "all" ? inScope : inScope.filter((r) => r.group === filter);
   const visible = showAll ? shown : shown.slice(0, firstRows);
   const unassigned = rows.filter((r) => !r.assignedToId).length;
 
-  const href = (next: { filter?: AtRiskFilter; all?: boolean }) => {
-    const params = new URLSearchParams();
-    if (scope === "mine") params.set("visa", "mina");
-    const f = next.filter ?? filter;
-    if (f !== "all") params.set("risk", f === "never" ? "aldrig" : "borta");
-    if (next.all ?? false) params.set("riskalla", "1");
-    if (laterAll) params.set("fler", "1");
-    const query = params.toString();
-    return `/${query ? `?${query}` : ""}#hor-av-dig`;
-  };
+  const href = (next: { filter?: AtRiskFilter; all?: boolean }) =>
+    `${membersHref({ scope, filter: next.filter ?? filter, all: next.all ?? false })}#hor-av-dig`;
   const tabs: { key: AtRiskFilter; label: string; n: number }[] = [
     { key: "all", label: t("atRisk.filter.all"), n: inScope.length },
     { key: "never", label: t("atRisk.filter.never"), n: count("never") },

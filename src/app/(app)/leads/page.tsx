@@ -107,7 +107,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
               <span className="text-xs text-muted-foreground tabular-nums">{formatNumber(cold.cards.length)}</span>
             </ButtonLink>
           )}
-          <ButtonLink href="/leads/ny" className="hidden md:inline-flex">
+          <ButtonLink href="/leads/ny">
             <Plus aria-hidden="true" />
             {t("leads.new")}
           </ButtonLink>

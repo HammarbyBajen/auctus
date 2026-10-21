@@ -49,5 +49,6 @@ export async function sendMemberEmail(alertId: string, _: ComposeState, formData
     await logMemberContact(db, user.studioId, alertId, user.id, "messaged", `E-post: ${email.subject}`);
   }
   revalidatePath("/");
+  revalidatePath("/medlemmar");
   return { result: result.status, mode: result.mode };
 }

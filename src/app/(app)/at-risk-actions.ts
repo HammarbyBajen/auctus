@@ -24,6 +24,7 @@ export async function logAtRiskContact(alertId: string, formData: FormData) {
   if (!(contactOutcomes as readonly string[]).includes(outcome)) return;
   await logContact(db, user.studioId, alertId, user.id, outcome as ContactOutcome, note(formData));
   revalidatePath("/");
+  revalidatePath("/medlemmar");
 }
 
 /** The absence is explained (holiday, injury, other), maybe with a day they will be back. */
@@ -38,6 +39,7 @@ export async function dismissAtRisk(alertId: string, formData: FormData) {
     body: note(formData),
   });
   revalidatePath("/");
+  revalidatePath("/medlemmar");
 }
 
 /** Who gets in touch with this member. Only someone in the studio can be picked. */
@@ -47,6 +49,7 @@ export async function assignAtRisk(alertId: string, formData: FormData) {
   const people = await listUsers(db, user.studioId);
   await assignAlert(db, user.studioId, alertId, people.some((p) => p.id === assignee && p.active) ? assignee : null);
   revalidatePath("/");
+  revalidatePath("/medlemmar");
 }
 
 /** Shares the unassigned members among the staff ticked in the form. */
@@ -56,4 +59,5 @@ export async function distributeAtRisk(formData: FormData) {
   const chosen = formData.getAll("staff").map(String).filter((id) => people.some((p) => p.id === id && p.active));
   await distributeAlerts(db, user.studioId, chosen);
   revalidatePath("/");
+  revalidatePath("/medlemmar");
 }

@@ -1,8 +1,6 @@
 import Link from "next/link";
 import { AlertCircle, CircleCheck, Clock, Phone, RotateCcw, TimerReset } from "lucide-react";
-import { eq } from "drizzle-orm";
 import { db } from "@/db";
-import { studioSettings } from "@/db/schema";
 import { ButtonAnchor } from "@/components/ui/button";
 import { Chip } from "@/components/app/chip";
 import { EmptyState } from "@/components/app/empty-state";
@@ -15,15 +13,14 @@ import { formatDay, formatNumber } from "@/lib/format";
 import { formatSpan, type AttentionItem, type Reason } from "@/lib/home/attention";
 import { getHomeData } from "@/lib/home/service";
 import { getKpi } from "@/lib/kpi/service";
-import { getAtRiskEmails, listAtRisk } from "@/lib/mana/at-risk-service";
-import { listUsers } from "@/lib/users/service";
+import { listAtRisk } from "@/lib/mana/at-risk-service";
 import { can } from "@/lib/permissions";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { rowChip } from "@/lib/leads/row";
 import { listStages } from "@/lib/pipeline/service";
 import { isGreyedOut } from "@/lib/tasks/dates";
-import { AtRiskList } from "./at-risk-list";
-import { getEmailSettings } from "@/lib/email/service";
+import { ScopeToggle } from "@/components/app/scope-toggle";
+import { membersHref } from "./at-risk-list";
 import { MemberTrend } from "./member-trend";
 import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -71,21 +68,20 @@ const reasonIcon = (r: Reason) =>
 /** How many leads without a next step Home shows before "Visa alla" (ticket 29). */
 const laterRows = 5;
 
-export default async function HomePage({ searchParams }: { searchParams: Promise<{ fel?: string; visa?: string; risk?: string; riskalla?: string; fler?: string }> }) {
+export default async function HomePage({ searchParams }: { searchParams: Promise<{ fel?: string; visa?: string; fler?: string }> }) {
   const user = await requireUser();
-  const { fel, visa, risk, riskalla, fler } = await searchParams;
+  const { fel, visa, fler } = await searchParams;
   const scope = visa === "mina" ? "mine" : "all";
   const showKpi = can(user.role, "kpi", "read");
-  const [{ items, counts }, stages, kpi, atRisk, [settings], people, emails, emailSettings] = await Promise.all([
+  const [{ items, counts }, stages, kpi, atRisk] = await Promise.all([
     getHomeData(db, user.studioId, user.id, scope),
     listStages(db, user.studioId),
     showKpi ? getKpi(db, user.studioId, todayInStockholm()) : null,
     listAtRisk(db, user.studioId),
-    db.select({ atRiskDays: studioSettings.atRiskDays }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
-    listUsers(db, user.studioId),
-    getAtRiskEmails(db, user.studioId),
-    getEmailSettings(db, user.studioId),
   ]);
+  // Members who need a word: counted here, listed on the members page (ticket 36). "Mina" is mine and nobody's.
+  const atRiskInScope = scope === "mine" ? atRisk.filter((r) => !r.assignedToId || r.assignedToId === user.id) : atRisk;
+  const memberGroups = (["never", "away"] as const).map((group) => ({ group, n: atRiskInScope.filter((r) => r.group === group).length }));
   const stageOf = (key: string) => stages.find((s) => s.key === key);
   // Deadlines first; leads without a next step below, quieter and capped (ticket 29).
   const now = items.filter((i) => i.group === "now");
@@ -95,9 +91,6 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const laterHref = (all: boolean) => {
     const params = new URLSearchParams();
     if (scope === "mine") params.set("visa", "mina");
-    // Keep the Hör av dig till list as it was filtered.
-    if (risk === "aldrig" || risk === "borta") params.set("risk", risk);
-    if (riskalla === "1") params.set("riskalla", "1");
     if (all) params.set("fler", "1");
     const query = params.toString();
     return `/${query ? `?${query}` : ""}#utan-nasta-steg`;
@@ -109,23 +102,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   return (
     <Page
       title={t("home.greeting", { name: user.name })}
-      actions={
-        <nav aria-label={t("home.attention")} className="inline-flex rounded-md bg-well p-1">
-          {(["all", "mine"] as const).map((value) => (
-            <Link
-              key={value}
-              href={value === "all" ? "/?visa=alla" : "/?visa=mina"}
-              aria-current={scope === value ? "page" : undefined}
-              className={cn(
-                "focus-ring inline-flex min-h-9 items-center rounded-sm px-3 text-sm transition-[background-color]",
-                scope === value ? "bg-card font-medium elevation-1" : "text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {value === "all" ? t("home.scopeAll") : t("home.scopeMine")}
-            </Link>
-          ))}
-        </nav>
-      }
+      actions={<ScopeToggle scope={scope} label={t("home.attention")} href={(value) => (value === "all" ? "/?visa=alla" : "/?visa=mina")} />}
     >
       {fel === "behorighet" && <Notice tone="warning">{t("home.noAccess")}</Notice>}
       <Stagger className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_16rem]">
@@ -193,24 +170,32 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               ))}
             </dl>
           </Surface>
+          {atRiskInScope.length > 0 && (
+            <Surface as="div" className="flex flex-col gap-3 p-4" aria-labelledby="home-members">
+              <MicroLabel as="h3">
+                <span id="home-members">{t("atRisk.title")}</span>
+              </MicroLabel>
+              <ul className="flex flex-col gap-1">
+                {memberGroups
+                  .filter((g) => g.n > 0)
+                  .map(({ group, n }) => (
+                    <li key={group}>
+                      <Link
+                        href={membersHref({ scope, filter: group, all: false })}
+                        className="focus-ring -mx-2 flex min-h-9 items-center justify-between gap-3 rounded-md px-2 text-sm hover:bg-accent"
+                      >
+                        <span>{t(group === "never" ? "atRisk.filter.never" : "atRisk.filter.away")}</span>
+                        <span className="font-semibold tabular-nums">{formatNumber(n)}</span>
+                      </Link>
+                    </li>
+                  ))}
+              </ul>
+              <Link href={membersHref({ scope, filter: "all", all: false })} className="focus-ring self-start rounded-xs text-sm font-medium underline underline-offset-4">
+                {t("home.membersAll")}
+              </Link>
+            </Surface>
+          )}
         </StaggerItem>
-
-        {atRisk.length > 0 && (
-          <StaggerItem className="flex min-w-0 flex-col gap-3">
-            <AtRiskList
-              rows={atRisk}
-              days={settings?.atRiskDays ?? 30}
-              filter={risk === "aldrig" ? "never" : risk === "borta" ? "away" : "all"}
-              showAll={riskalla === "1"}
-              scope={scope}
-              laterAll={showAllLater}
-              viewerId={user.id}
-              people={people.filter((p) => p.active).map((p) => ({ id: p.id, name: p.name }))}
-              emails={emails}
-              emailMode={emailSettings.mode}
-            />
-          </StaggerItem>
-        )}
       </Stagger>
     </Page>
   );

@@ -25,7 +25,7 @@ export function Page({
           <h1 className="text-xl font-semibold tracking-tight break-words">{title}</h1>
           {description && <p className="text-sm text-muted-foreground">{description}</p>}
         </div>
-        {actions && <div className="flex shrink-0 flex-wrap gap-2">{actions}</div>}
+        {actions && <div className="flex max-w-full shrink-0 flex-wrap gap-2">{actions}</div>}
       </header>
       {children}
     </div>

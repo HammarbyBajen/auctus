@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, useReducedMotion } from "motion/react";
-import { BarChart3, Clock, Home, Plus, Settings, Users } from "lucide-react";
+import { BarChart3, Clock, HeartHandshake, Home, Settings, Users } from "lucide-react";
 import { press, springs } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -15,6 +15,7 @@ function items(showSettings: boolean, showSalary: boolean): Item[] {
   return [
     { href: "/", label: t("nav.home"), icon: Home },
     { href: "/leads", label: t("nav.leads"), icon: Users },
+    { href: "/medlemmar", label: t("nav.members"), icon: HeartHandshake },
     // On a phone the report is reached from the Leads page.
     { href: "/rapport", label: t("nav.report"), icon: BarChart3, phone: false },
     ...(showSalary ? [{ href: "/timmar", label: t("nav.salary"), icon: Clock }] : []),
@@ -63,8 +64,8 @@ export function SideNav({ showSettings, showSalary }: { showSettings: boolean; s
 export function BottomNav({ showSettings, showSalary }: { showSettings: boolean; showSalary: boolean }) {
   const pathname = usePathname();
   const reduce = useReducedMotion();
+  // Ny lead is on the Leads page; the bar has room for five.
   const all = items(showSettings, showSalary).filter((item) => item.phone !== false);
-  all.splice(2, 0, { href: "/leads/ny", label: t("nav.newLeadShort"), icon: Plus });
   return (
     <nav
       aria-label={t("nav.main")}
@@ -72,9 +73,8 @@ export function BottomNav({ showSettings, showSalary }: { showSettings: boolean;
     >
       <ul className="mx-auto flex max-w-md items-stretch justify-around">
         {all.map((item) => {
-          const active = item.href === "/leads/ny" ? pathname === "/leads/ny" : isActive(pathname, item.href) && pathname !== "/leads/ny";
+          const active = isActive(pathname, item.href);
           const Icon = item.icon;
-          const primary = item.href === "/leads/ny";
           return (
             <li key={item.href} className="flex-1">
               <MotionLink
@@ -87,13 +87,7 @@ export function BottomNav({ showSettings, showSalary }: { showSettings: boolean;
                   active && "font-medium text-sidebar-foreground",
                 )}
               >
-                <span
-                  className={cn(
-                    "flex size-8 items-center justify-center rounded-md",
-                    primary && "bg-primary text-primary-foreground",
-                    active && !primary && "bg-sidebar-accent",
-                  )}
-                >
+                <span className={cn("flex size-8 items-center justify-center rounded-md", active && "bg-sidebar-accent")}>
                   <Icon aria-hidden="true" className="size-4" />
                 </span>
                 {item.label}

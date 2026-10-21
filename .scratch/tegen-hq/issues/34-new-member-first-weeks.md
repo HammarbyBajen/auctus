@@ -13,3 +13,5 @@
 - [ ] A "how is it going?" row after 2 and 6 weeks for new members, with their visits so far
 - [ ] An early warning when a new member trains clearly less than in their first weeks
 - [ ] Tests
+
+Meeting with Erik (2026-10-21): shown as a group of its own ("Nya medlemmar") in the members module (ticket 36).

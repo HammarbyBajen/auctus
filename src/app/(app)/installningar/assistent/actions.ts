@@ -16,7 +16,8 @@ export async function saveAiSettings(formData: FormData) {
     ...new Set(
       String(formData.get("terms") ?? "")
         .split(/[\n,]+/)
-        .map((w) => w.trim().toLowerCase())
+        // A * at the end once meant "and longer words"; every word is caught inside longer ones now.
+        .map((w) => w.trim().toLowerCase().replace(/\*+$/, "").trim())
         .filter((w) => w.length >= 2 && w.length <= 40),
     ),
   ].slice(0, 200);

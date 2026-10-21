@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { firstNameOnly, mentionsHealth, notesForAi, withoutContactDetails } from "@/lib/ai/privacy";
+import { firstNameOnly, healthMatch, mentionsHealth, notesForAi, withoutContactDetails } from "@/lib/ai/privacy";
 
 describe("what may be sent to an AI (ticket 30)", () => {
   it("sees signs of health information in everyday Swedish notes", () => {
@@ -21,17 +21,40 @@ describe("what may be sent to an AI (ticket 30)", () => {
       "Frågade om pris för studentmedlemskap",
       "Inget svar, mejlade istället",
       "Kontakten gick bra, bokad provträning",
+      "Kommer på montering av riggen",
+      "Jobbar mycket, svårt att komma iväg",
+      "Har barn, tränar helst morgon",
+      "Bruttopris eller netto?",
     ]) expect(mentionsHealth(note), note).toBe(false);
   });
 
-  it("matches short terms as whole words only", () => {
-    expect(mentionsHealth("ont i ryggen")).toBe(true);
-    expect(mentionsHealth("Ontario-resan blev av")).toBe(false);
+  it("sees health words inside Swedish compounds, where they come last", () => {
+    for (const note of [
+      "Hon har en ryggskada",
+      "knäskada sedan i våras",
+      "skador i foten",
+      "huvudvärk efter passet",
+      "magsjuk förra veckan",
+      "nyopererad i axeln",
+      "har ryggont",
+      "Mår illa ibland",
+    ]) expect(mentionsHealth(note), note).toBe(true);
+    expect(healthMatch("Hon har en ryggskada")).toEqual({ term: "skad", word: "ryggskada" });
   });
 
-  it("takes the studio's own words too", () => {
+  it("catches short terms only as a whole word or at the end of one", () => {
+    expect(mentionsHealth("ont i ryggen")).toBe(true);
+    expect(mentionsHealth("har magont")).toBe(true);
+    expect(mentionsHealth("Ontario-resan blev av")).toBe(false);
+    expect(mentionsHealth("Kontakten gick bra, kontaktade via sms")).toBe(false);
+  });
+
+  it("takes the studio's own words too, anywhere in a word, with or without an old *", () => {
     expect(mentionsHealth("Har PCOS")).toBe(false);
     expect(mentionsHealth("Har PCOS", ["pcos"])).toBe(true);
+    expect(mentionsHealth("Ryggproblemen är tillbaka", ["problem"])).toBe(true);
+    expect(mentionsHealth("Ryggproblemen är tillbaka", ["problem*"])).toBe(true);
+    expect(mentionsHealth("Har ont i ryggen", ["ont i"])).toBe(true);
   });
 
   it("holds back private and health notes whole, and cleans the rest", () => {

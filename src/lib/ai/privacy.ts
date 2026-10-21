@@ -9,37 +9,57 @@
  */
 
 /**
- * Signs of health information. A term ending in `*` matches any word that
- * starts with it ("skad*" catches skada, skadad, skadan); the others match a
- * whole word only, so short words do not catch longer ones. Body parts are
- * left out on purpose: "axel" and "knä" are training words too ("axelpress",
- * "knäböj"); "ont" and the injury words catch "ont i knät".
+ * Signs of health information, as word stems. A stem is caught anywhere in a
+ * word, since Swedish puts the health word last in a compound ("skad" catches
+ * skada, ryggskada and knäskadan). A stem of three letters or fewer would
+ * catch too much that way ("ont" is in "kontakt"), so it is caught as a whole
+ * word or at the end of one (ont, ryggont, magont). Both fail on the safe
+ * side: "medicinboll" is held back too. A term of several words ("mår illa")
+ * is caught as written. Body parts are left out on purpose:
+ * "axel" and "knä" are training words ("axelpress", "knäböj").
  */
 export const healthTerms = [
-  "skad*", "ont", "värk*", "smärt*", "sjuk*", "förkyl*", "feber", "influensa", "covid", "corona",
-  "opererad*", "operation*", "opereras", "rehab*", "fysio*", "naprapat*", "kiropraktor*", "läkar*", "sjukhus*",
-  "vårdcentral*", "akuten", "medicin*", "diagnos*", "gravid*", "förlossning*", "missfall", "utbränd*",
-  "utmatt*", "depression*", "deprimerad*", "ångest*", "stress*", "cancer*", "diabetes", "astma*", "hjärt*",
-  "migrän*", "bruten", "brutit", "fraktur*", "stukat", "stukning*", "menisk*", "korsband*", "diskbråck*",
-  "ischias", "tennisarmbåge", "inflammation*", "inflammerad*", "allergi*", "epilepsi*", "graviditet*",
+  "skad", "ont", "värk", "smärt", "sjuk", "förkyl", "feber", "influensa", "covid", "corona", "smitt",
+  "operer", "operation", "rehab", "fysio", "naprapat", "kiropraktor", "läkar", "vårdcentral", "akuten",
+  "medicin", "diagnos", "terapi", "psyk", "gravid", "förlossning", "missfall", "utbränd", "utmatt",
+  "depression", "deprimer", "ångest", "stress", "cancer", "diabet", "astma", "hjärt", "blodtryck", "migrän",
+  "yrsel", "illamå", "kräk", "bruten", "brutit", "bröt", "fraktur", "stuk", "sträckning", "ryggskott",
+  "nackspärr", "hjärnskakning", "menisk", "korsband", "diskbråck", "ischias", "tennisarmbåge", "inflamm",
+  "allergi", "epilepsi", "mår illa", "mår dåligt",
 ] as const;
 
+/** Stems this short are caught only as a whole word or at the end of one. */
+const shortTermLength = 3;
+
+/** A word as typed into the list: lower case, without the * that terms once ended with. */
+const cleanTerm = (raw: string) => raw.trim().toLowerCase().replace(/\*+$/, "").trim();
+
+/** Which word of a text was caught, and by which term. */
+export type HealthMatch = { term: string; word: string };
+
 const matcher = (terms: readonly string[]) => {
-  const whole = new Set<string>();
-  const prefixes: string[] = [];
-  for (const raw of terms) {
-    const term = raw.trim().toLowerCase();
-    if (!term) continue;
-    if (term.endsWith("*")) prefixes.push(term.slice(0, -1));
-    else whole.add(term);
-  }
-  return (text: string) =>
-    (text.toLowerCase().match(/\p{L}+/gu) ?? []).some((word) => whole.has(word) || prefixes.some((p) => word.startsWith(p)));
+  const list = [...new Set(terms.map(cleanTerm).filter(Boolean))];
+  return (text: string): HealthMatch | null => {
+    const lower = text.toLowerCase();
+    // A term of several words ("ont i") is looked for as it is written.
+    for (const term of list) if (/\s/.test(term) && lower.includes(term)) return { term, word: term };
+    for (const word of lower.match(/\p{L}+/gu) ?? []) {
+      for (const term of list) {
+        if (term.length <= shortTermLength ? word === term || word.endsWith(term) : word.includes(term)) return { term, word };
+      }
+    }
+    return null;
+  };
 };
+
+/** The first sign of health information in a text, if any (the built-in terms plus the studio's own). */
+export function healthMatch(text: string, extraTerms: readonly string[] = []): HealthMatch | null {
+  return matcher([...healthTerms, ...extraTerms])(text);
+}
 
 /** Whether a text shows signs of health information (the built-in terms plus the studio's own). */
 export function mentionsHealth(text: string, extraTerms: readonly string[] = []): boolean {
-  return matcher([...healthTerms, ...extraTerms])(text);
+  return healthMatch(text, extraTerms) !== null;
 }
 
 const emailPattern = /[^\s@<>()]+@[^\s@<>()]+\.[^\s@<>()]+/g;
@@ -90,7 +110,7 @@ export function notesForAi<T extends NoteForAi>(notes: T[], extraTerms: readonly
   const sent: (T & { body: string })[] = [];
   let withheld = 0;
   for (const note of notes) {
-    if (note.private || health(note.body)) withheld += 1;
+    if (note.private || health(note.body) !== null) withheld += 1;
     else sent.push({ ...note, body: withoutContactDetails(note.body) });
   }
   return { sent, withheld };

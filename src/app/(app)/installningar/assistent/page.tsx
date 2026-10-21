@@ -5,7 +5,6 @@ import { studioSettings } from "@/db/schema";
 import { ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Notice } from "@/components/app/notice";
 import { Page } from "@/components/app/page";
 import { Panel } from "@/components/app/surface";
@@ -15,6 +14,7 @@ import { healthTerms } from "@/lib/ai/privacy";
 import { requirePermission } from "@/lib/session";
 import { t } from "@/lib/i18n";
 import { saveAiSettings } from "./actions";
+import { TermsField } from "./terms-field";
 
 export const dynamic = "force-dynamic";
 
@@ -60,13 +60,9 @@ export default async function AssistantSettingsPage({ searchParams }: { searchPa
           <p className="text-sm text-muted-foreground">{t("ai.privacyIntro")}</p>
           <details className="text-sm">
             <summary className="focus-ring cursor-pointer rounded-xs font-medium">{t("ai.builtInTerms", { n: String(healthTerms.length) })}</summary>
-            <p className="mt-2 text-xs break-words text-muted-foreground">{healthTerms.map((w) => w.replace("*", "…")).join(", ")}</p>
+            <p className="mt-2 text-xs break-words text-muted-foreground">{healthTerms.join(", ")}</p>
           </details>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="ai-terms">{t("ai.termsLabel")}</Label>
-            <Textarea id="ai-terms" name="terms" rows={4} defaultValue={(row?.ai?.healthTerms ?? []).join("\n")} aria-describedby="ai-terms-hint" className="max-w-md" />
-            <p id="ai-terms-hint" className="text-xs text-muted-foreground">{t("ai.termsHint")}</p>
-          </div>
+          <TermsField initial={(row?.ai?.healthTerms ?? []).map((w) => w.replace(/\*+$/, ""))} />
         </Panel>
 
         <SubmitButton className="self-start">{t("ai.save")}</SubmitButton>

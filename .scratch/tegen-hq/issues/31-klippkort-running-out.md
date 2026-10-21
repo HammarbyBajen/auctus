@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** built (2026-10-21); waiting on the migration and Max's look at the copy
+**Status:** live (2026-10-21); works once Max switches on leads from Mana
 
 **Why:** a klippkort buyer already trains at Tegen and pays for it; they are the warmest people there are for a membership. Raised by Max on 2026-10-21 from Mana's new vouchers endpoint.
 
@@ -31,4 +31,4 @@
 - [x] A nudge when the balance reaches the threshold, once per card bought
 - [x] A task on their open lead or a new Klippkort lead, with the balance, the product and when it was bought
 - [x] Tests with a balance going down over nights
-- [ ] Migration 0029 run in production (Max), copy approved (Max), then pushed
+- [x] Migration 0029 run in production (Max), copy approved (Max), then pushed

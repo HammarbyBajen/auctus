@@ -27,6 +27,9 @@ export const syncEndpoints = [
   "GET /api/v1/studios/{studioId}/specialist-services",
   "GET /api/v1/studios/{studioId}/courses",
   "GET /api/v1/studios/{studioId}/course-events",
+  // Klippkort running out (ticket 31).
+  "GET /api/v1/studios/{studioId}/class-credit-bundles",
+  "GET /api/v1/studios/{studioId}/class-credits",
 ];
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };

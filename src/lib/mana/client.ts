@@ -15,6 +15,8 @@ import {
   serviceBookingsPageSchema,
   namedListSchema,
   courseEventsSchema,
+  creditBundlesSchema,
+  classCreditsSchema,
 } from "./contracts";
 import type { z } from "zod";
 import { ManaError } from "./errors";
@@ -302,6 +304,16 @@ export class ManaClient {
   /** Every session of one course. */
   async getCourseEvents(courseId: string) {
     return this.allPages(this.studioUrl("/course-events", { courseId }), courseEventsSchema, "kurstillfällen");
+  }
+
+  /** The studio's class credit bundles (Klippkort, Day Pass...), ticket 31. */
+  async getCreditBundles() {
+    return this.allPages(this.studioUrl("/class-credit-bundles", {}), creditBundlesSchema, "klippkort");
+  }
+
+  /** What one person has left on their class credits, and when it expires (ticket 31). */
+  async getClassCredits(manaUserId: string) {
+    return this.allPages(this.studioUrl("/class-credits", { userId: manaUserId }), classCreditsSchema, "klipp kvar");
   }
 
   /** Every membership one person has, past, current and future. */

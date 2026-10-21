@@ -1,8 +1,8 @@
 import type { MirroredMembership } from "./membership";
 
-export type SignalKind = "cancelled" | "freeze" | "ended" | "day_pass";
+export type SignalKind = "cancelled" | "freeze" | "ended" | "day_pass" | "klippkort";
 
-export type MembershipSignal = { kind: Exclude<SignalKind, "day_pass">; membership: MirroredMembership; date: string | null };
+export type MembershipSignal = { kind: "cancelled" | "freeze" | "ended"; membership: MirroredMembership; date: string | null };
 
 const DAY = 86_400_000;
 

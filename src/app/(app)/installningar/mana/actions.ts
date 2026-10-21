@@ -42,6 +42,17 @@ export async function saveWinBackSetting(formData: FormData) {
   redirect("/installningar/mana?vinnsparat=1");
 }
 
+/** Saves which of Mana's class credit bundles are klippkort, watched for running out (ticket 31). */
+export async function saveKlippkortBundles(formData: FormData) {
+  const user = await requirePermission("settings", "manage");
+  const [settings] = await db.select({ bundles: studioSettings.manaCreditBundles }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1);
+  const picked = new Set(formData.getAll("bundle").map(String));
+  const ids = (settings?.bundles ?? []).map((b) => b.id).filter((id) => picked.has(id));
+  await db.update(studioSettings).set({ klippkortBundleIds: ids, updatedAt: new Date() }).where(eq(studioSettings.studioId, user.studioId));
+  revalidatePath("/installningar/mana");
+  redirect("/installningar/mana?klippsparat=1#klippkort");
+}
+
 /** Marks Mana's API changes as checked, which clears the notice. */
 export async function acknowledgeApi() {
   const user = await requirePermission("settings", "manage");

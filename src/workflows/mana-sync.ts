@@ -9,6 +9,7 @@ import { todayInStockholm } from "@/lib/tasks/dates";
 import { addExtraIds, addRunRequests, failRun, holdRun, pauseRun, runBatch, startRun } from "@/lib/mana/sync";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { manaVisit, syncRun } from "@/db/schema";
+import { syncKlippkort } from "@/lib/mana/klippkort-service";
 import { detectWinBacks, syncPurchases } from "@/lib/mana/winback-service";
 
 /** How long one step may start new requests. Hobby allows 5 minutes per step, so stay well inside it. */
@@ -91,6 +92,23 @@ async function visitsStep(studioId: string, runId: string) {
   }
 }
 
+async function klippkortStep(studioId: string, runId: string) {
+  "use step";
+  // The studio's klippkort products, and what each holder without a membership
+  // has left (ticket 31): a request plus one per holder. After the member pass,
+  // so someone who just joined is not read. A failure only means no klippkort
+  // tasks today, so it does not fail the sync. Its requests count on the run.
+  let client: Awaited<ReturnType<typeof createManaClient>> | null = null;
+  try {
+    client = await createManaClient(db, studioId);
+    await syncKlippkort(db, client, studioId);
+  } catch {
+    // Tomorrow's night reads them again.
+  } finally {
+    if (client) await addRunRequests(db, runId, client.requestCount);
+  }
+}
+
 async function afterSyncStep(studioId: string) {
   "use step";
   // Link CRM people to Mana, move leads whose person has just joined to Won,
@@ -126,6 +144,7 @@ export async function manaSyncWorkflow(studioId: string) {
     // A paused run costs nothing while it sleeps; it wakes and continues where it stopped.
     if (batch.pausedUntil) await sleep(new Date(batch.pausedUntil));
   }
+  await klippkortStep(studioId, runId);
   const after = await afterSyncStep(studioId);
   return { runId, skipped: false, ...after };
 }

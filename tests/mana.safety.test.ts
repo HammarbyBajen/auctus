@@ -68,9 +68,11 @@ describe("the CRM never writes to Mana", () => {
     const publicMethods = [...source.matchAll(/^\s{2}async (\w+)\(/gm)].map((m) => m[1]);
     expect(publicMethods.sort()).toEqual([
       "getClassBookings",
+      "getClassCredits",
       "getClassEvents",
       "getCourseEvents",
       "getCourses",
+      "getCreditBundles",
       "getGymCheckIns",
       "getInstructors",
       "getPaidPayments",

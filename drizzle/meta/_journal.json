@@ -204,6 +204,13 @@
       "when": 1792431644695,
       "tag": "0028_light_ego",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1792573156379,
+      "tag": "0029_magenta_steel_serpent",
+      "breakpoints": true
     }
   ]
 }

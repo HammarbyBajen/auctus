@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lt, or } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lt, ne, or } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import {
   lead,
@@ -11,6 +11,7 @@ import {
   person,
   pipelineStage,
   studioSettings,
+  task,
   winBackReason,
 } from "@/db/schema";
 import { formatDay } from "@/lib/format";
@@ -19,6 +20,8 @@ import { t } from "@/lib/i18n";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { getIgnoredMembershipIds } from "./leads";
 import { customerRole } from "./membership";
+import { keepBundlePurchasesDays } from "./klippkort";
+import { klippkortSignals } from "./klippkort-service";
 import { dayPassKinds, isDayPassProspect, membershipSignals, type SignalKind } from "./winback";
 
 type Db = typeof defaultDb;
@@ -29,6 +32,7 @@ const sourceFor: Record<SignalKind, ManaSignalSource> = {
   freeze: "mana_freeze",
   ended: "mana_ended",
   day_pass: "mana_day_pass",
+  klippkort: "mana_klippkort",
 };
 
 /** A person dismissed (moved to a cold stage) this recently is not nagged about again. */
@@ -70,10 +74,18 @@ export async function syncPurchases(
       paidAt: new Date(p.paidAt!),
     }));
   if (rows.length > 0) await db.insert(manaPurchase).values(rows).onConflictDoNothing();
-  // Older purchases are no longer needed.
+  // Older purchases are no longer needed; a bundle (a klippkort) is kept while it can still be in use (ticket 31).
   await db
     .delete(manaPurchase)
-    .where(and(eq(manaPurchase.studioId, studioId), lt(manaPurchase.paidAt, new Date(now.getTime() - 60 * DAY))));
+    .where(
+      and(
+        eq(manaPurchase.studioId, studioId),
+        or(
+          and(ne(manaPurchase.kind, "class_credits_bundle"), lt(manaPurchase.paidAt, new Date(now.getTime() - 60 * DAY))),
+          lt(manaPurchase.paidAt, new Date(now.getTime() - keepBundlePurchasesDays * DAY)),
+        ),
+      ),
+    );
   const payers = since ? [...new Set(payments.filter((p) => p.user).map((p) => p.user!.id))] : [];
   return { saved: rows.length, payers };
 }
@@ -153,7 +165,7 @@ async function reasonToSkip(db: Db, studioId: string, personId: string, now: Dat
   return null;
 }
 
-function describeSignal(kind: SignalKind, name: string, date: string | null): string {
+function describeSignal(kind: Exclude<SignalKind, "klippkort">, name: string, date: string | null): string {
   const when = date ? formatDay(date) : "";
   switch (kind) {
     case "cancelled":
@@ -167,13 +179,10 @@ function describeSignal(kind: SignalKind, name: string, date: string | null): st
   }
 }
 
+type Signal = { kind: SignalKind; manaRef: string; manaUserId: string; detail: string; /** A task for today, as well as the note (ticket 31). */ task?: string };
+
 /** Turns one signal into a lead (or a note on an open lead), and records it so it never happens twice. */
-async function handleSignal(
-  db: Db,
-  studioId: string,
-  signal: { kind: SignalKind; manaRef: string; manaUserId: string; detail: string },
-  now: Date,
-): Promise<"created" | "skipped" | "seen"> {
+async function handleSignal(db: Db, studioId: string, signal: Signal, now: Date): Promise<"created" | "skipped" | "seen"> {
   const [seen] = await db
     .select({ ref: manaSignal.manaRef })
     .from(manaSignal)
@@ -184,10 +193,13 @@ async function handleSignal(
   const p = await personForMember(db, studioId, signal.manaUserId);
   if (!p) return "seen";
 
+  const today = todayInStockholm(now);
   const skip = await reasonToSkip(db, studioId, p.id, now);
-  if (skip) {
+  // A klippkort running out is news even about someone dismissed lately: they still train, and still pay.
+  if (skip && !(signal.kind === "klippkort" && skip.skip === "recently_dismissed")) {
     if (skip.openLeadId) {
       await db.insert(leadNote).values({ studioId, leadId: skip.openLeadId, body: signal.detail });
+      if (signal.task) await db.insert(task).values({ studioId, leadId: skip.openLeadId, title: signal.task, dueDate: today });
       await db.update(lead).set({ updatedAt: now }).where(eq(lead.id, skip.openLeadId));
     }
     await db
@@ -203,6 +215,7 @@ async function handleSignal(
       .values({ studioId, personId: p.id, source: sourceFor[signal.kind], stage: initialStage })
       .returning();
     await tx.insert(leadNote).values({ studioId, leadId: created.id, body: signal.detail });
+    if (signal.task) await tx.insert(task).values({ studioId, leadId: created.id, title: signal.task, dueDate: today });
     await tx
       .insert(manaSignal)
       .values({ studioId, kind: signal.kind, manaRef: signal.manaRef, manaUserId: signal.manaUserId, leadId: created.id });
@@ -213,7 +226,9 @@ async function handleSignal(
 /**
  * Looks through the Mana mirror for people leaving, pausing or only buying
  * day passes, and makes a win-back lead for each (see `membershipSignals` and
- * `isDayPassProspect`). Does nothing until an owner has switched it on.
+ * `isDayPassProspect`); and for klippkort holders whose card is nearly used
+ * up, a task to offer a membership (ticket 31). Does nothing until an owner
+ * has switched it on.
  * A signal is handled once: it never makes a second lead, even after the first
  * is closed. A person who is already an open lead gets a note instead, and one
  * dismissed in the last 90 days is left alone.
@@ -243,7 +258,7 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
   const byUser = new Map<string, typeof memberships>();
   for (const m of memberships) byUser.set(m.manaUserId, [...(byUser.get(m.manaUserId) ?? []), m]);
 
-  const signals: { kind: SignalKind; manaRef: string; manaUserId: string; detail: string }[] = [];
+  const signals: Signal[] = [];
   for (const [manaUserId, list] of byUser) {
     for (const s of membershipSignals(list, ignored, today)) {
       signals.push({
@@ -276,6 +291,9 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
       });
     }
   }
+
+  // Klippkort nearly used up or about to expire: a task to offer a membership (ticket 31).
+  for (const k of await klippkortSignals(db, studioId, now)) signals.push({ kind: "klippkort", ...k });
 
   for (const s of signals) {
     const outcome = await handleSignal(db, studioId, s, now);

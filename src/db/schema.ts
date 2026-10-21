@@ -2,6 +2,7 @@ import {
   bigint,
   boolean,
   date,
+  doublePrecision,
   foreignKey,
   index,
   integer,
@@ -78,6 +79,10 @@ export const studioSettings = pgTable("studio_settings", {
    * someone cancels their gym membership, so a win-back lead is still made.
    */
   addOnMembershipIds: jsonb("add_on_membership_ids").$type<string[]>().notNull().default([]),
+  /** Mana's class credit bundles (Klippkort, Day Pass...), refreshed each night, so owners can pick which are klippkort (ticket 31). */
+  manaCreditBundles: jsonb("mana_credit_bundles").$type<{ id: string; name: string; credits: number }[]>().notNull().default([]),
+  /** The bundles watched for running out, by Mana id. Empty until owners pick: then the ones with several classes. */
+  klippkortBundleIds: jsonb("klippkort_bundle_ids").$type<string[]>(),
   /** Mana memberships that are not real memberships (for example a locker), by Mana membership id. */
   ignoredMembershipIds: jsonb("ignored_membership_ids").$type<string[]>().notNull().default([]),
   /** A paying member with no visit for this many days is at risk (ticket 13). */
@@ -795,6 +800,26 @@ export const manaPurchase = pgTable(
     primaryKey({ columns: [table.studioId, table.id] }),
     index("mana_purchase_user_idx").on(table.studioId, table.manaUserId),
   ],
+);
+
+/**
+ * What a klippkort holder without a membership has left, read from Mana each
+ * night (ticket 31). Only people who bought a watched bundle are read.
+ */
+export const manaCreditBalance = pgTable(
+  "mana_credit_balance",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    manaUserId: text("mana_user_id").notNull(),
+    /** Classes left on their own cards (not credits that come with a membership). */
+    credits: doublePrecision("credits").notNull(),
+    /** The soonest expiry among cards with classes left. */
+    expireDate: date("expire_date", { mode: "string" }),
+    readAt: timestamp("read_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.manaUserId] })],
 );
 
 // ---- Salary (WFM) module (tickets 20-23): coach hours from Mana, names and hours only, no money ----

@@ -1,7 +1,7 @@
 export const leadSources = ["manual", "contact_form", "chat_bot", "mana_win_back"] as const;
 
 /** Sources the CRM sets by itself when Mana shows someone leaving, pausing or only buying day passes. */
-export const manaSignalSources = ["mana_cancelled", "mana_freeze", "mana_ended", "mana_day_pass"] as const;
+export const manaSignalSources = ["mana_cancelled", "mana_freeze", "mana_ended", "mana_day_pass", "mana_klippkort"] as const;
 export type ManaSignalSource = (typeof manaSignalSources)[number];
 
 /**

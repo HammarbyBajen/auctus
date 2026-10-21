@@ -20,25 +20,37 @@ import { getSyncStatus } from "@/lib/mana/status";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
-import { acknowledgeApi, saveAtRiskDays, saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
+import { watchedBundles } from "@/lib/mana/klippkort";
+import { acknowledgeApi, saveAtRiskDays, saveKlippkortBundles, saveMembershipRules, saveWinBackSetting, syncNow } from "./actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function ManaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ startad?: string; sparat?: string; vinnsparat?: string; risksparat?: string; riskfel?: string}>;
+  searchParams: Promise<{ startad?: string; sparat?: string; vinnsparat?: string; klippsparat?: string; risksparat?: string; riskfel?: string }>;
 }) {
   const user = await requirePermission("settings", "manage");
-  const { startad, sparat, vinnsparat, risksparat, riskfel } = await searchParams;
+  const { startad, sparat, vinnsparat, klippsparat, risksparat, riskfel } = await searchParams;
   const [status, kinds, ignored, addOns, [settings], api] = await Promise.all([
     getSyncStatus(db, user.studioId),
     listMembershipKinds(db, user.studioId),
     getIgnoredMembershipIds(db, user.studioId),
     getAddOnMembershipIds(db, user.studioId),
-    db.select({ winBackEnabled: studioSettings.winBackEnabled, atRiskDays: studioSettings.atRiskDays }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
+    db
+      .select({
+        winBackEnabled: studioSettings.winBackEnabled,
+        atRiskDays: studioSettings.atRiskDays,
+        bundles: studioSettings.manaCreditBundles,
+        klippkortIds: studioSettings.klippkortBundleIds,
+      })
+      .from(studioSettings)
+      .where(eq(studioSettings.studioId, user.studioId))
+      .limit(1),
     getApiWatchStatus(db),
   ]);
+  const bundles = settings?.bundles ?? [];
+  const watched = new Set(watchedBundles(bundles, settings?.klippkortIds ?? null).map((b) => b.id));
 
   return (
     <Page
@@ -90,6 +102,33 @@ export default async function ManaPage({
             {t("mana.winbackSave")}
           </SubmitButton>
         </form>
+      </Panel>
+
+      <Panel title={t("klippkort.settingsTitle")} id="klippkort">
+        <p className="text-sm text-muted-foreground">{t("klippkort.settingsIntro")}</p>
+        {klippsparat === "1" && <Notice tone="success">{t("klippkort.settingsSaved")}</Notice>}
+        {bundles.length === 0 ? (
+          <p className="text-sm text-muted-foreground">{t("klippkort.settingsEmpty")}</p>
+        ) : (
+          <form action={saveKlippkortBundles} className="flex flex-col gap-3">
+            <ul className="flex flex-col gap-1">
+              {bundles.map((b) => (
+                <li key={b.id}>
+                  <Label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md bg-well px-3 text-sm font-normal">
+                    <Checkbox name="bundle" value={b.id} defaultChecked={watched.has(b.id)} />
+                    <span>
+                      <span className="font-medium">{b.name}</span>{" "}
+                      <span className="text-muted-foreground tabular-nums">({t("klippkort.settingsCredits", { n: formatNumber(b.credits) })})</span>
+                    </span>
+                  </Label>
+                </li>
+              ))}
+            </ul>
+            <SubmitButton variant="outline" className="self-start">
+              {t("klippkort.settingsSave")}
+            </SubmitButton>
+          </form>
+        )}
       </Panel>
 
       <Panel title={t("atRisk.settingsTitle")} id="at-risk">

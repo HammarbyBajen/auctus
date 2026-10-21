@@ -196,3 +196,21 @@ export const courseEventsSchema = z.object({
   links: maybeLinks,
 });
 export type CourseEventsPage = z.infer<typeof courseEventsSchema>;
+
+// ---- Klippkort (ticket 31) ----
+
+/** The studio's class credit bundles: Klippkort, Day Pass and the like. */
+export const creditBundlesSchema = z.object({
+  data: z.object({ items: z.array(z.object({ id: z.string().min(1), name: z.string(), credits: z.number() })) }),
+  links: maybeLinks,
+});
+export type CreditBundlesPage = z.infer<typeof creditBundlesSchema>;
+
+/** One person's class credits, one pool per kind, with when they expire. */
+export const classCreditsSchema = z.object({
+  data: z.object({
+    items: z.array(z.object({ credits: z.number(), type: z.string(), expireDate: dateString.nullish() })),
+  }),
+  links: maybeLinks,
+});
+export type ClassCreditsPage = z.infer<typeof classCreditsSchema>;

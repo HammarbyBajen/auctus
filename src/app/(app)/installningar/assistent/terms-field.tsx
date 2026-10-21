@@ -36,7 +36,18 @@ export function TermsField({ initial }: { initial: string[] }) {
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="ai-test">{t("ai.testLabel")}</Label>
-        <Textarea id="ai-test" rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("ai.testPlaceholder")} className="max-w-md" />
+        <p id="ai-test-hint" className="max-w-md text-xs text-muted-foreground">
+          {t("ai.testHint")}
+        </p>
+        <Textarea
+          id="ai-test"
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={t("ai.testPlaceholder")}
+          aria-describedby="ai-test-hint"
+          className="max-w-md"
+        />
         <div aria-live="polite" className="max-w-md text-sm">
           {note.trim() &&
             (match ? (

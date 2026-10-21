@@ -109,6 +109,7 @@
   "ai.termsLabel": "Egna ord som håller tillbaka en anteckning",
   "ai.termsHint": "Ett ord per rad. Ordet fångas även inuti längre ord: skada fångar också ryggskada och knäskadan. Ord på tre bokstäver eller färre fångas bara som hela ord eller i slutet av ett ord.",
   "ai.testLabel": "Testa en anteckning",
+  "ai.testHint": "Prova hur filtret fungerar. Skriv en anteckning så ser du om den skulle skickas till assistenten, och i så fall hur. Inget sparas eller skickas.",
   "ai.testPlaceholder": "Skriv eller klistra in en anteckning",
   "ai.testHeld": "Skickas inte: ”{word}” fångas av {term}.",
   "ai.testSent": "Skickas, så här:",

@@ -183,6 +183,11 @@
     outline: none;
     &:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
   }
+  /* The same ring around a box whose inside has focus, such as Handbok's editor; the editable area itself shows none. */
+  .focus-ring-within {
+    &:focus-within { outline: 2px solid var(--ring); outline-offset: 2px; }
+    & [contenteditable] { outline: none; }
+  }
 }
 
 /*
@@ -222,6 +227,38 @@
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+}
+
+/*
+ * A routine in Handbok (ticket 37), read or being written: the editor and the
+ * reader share these, so what is written looks the same when it is read.
+ */
+@layer components {
+  .handbook-doc {
+    @apply text-base leading-7 text-foreground;
+    overflow-wrap: anywhere;
+    & > * + * { @apply mt-3; }
+    & h2 { @apply mt-8 text-lg font-semibold tracking-tight first:mt-0; }
+    & h3 { @apply mt-6 text-base font-semibold first:mt-0; }
+    & ul { @apply list-disc pl-6; }
+    & ol { @apply list-decimal pl-6; }
+    & li > p { @apply my-1; }
+    & li::marker { @apply text-muted-foreground; }
+    & ul[data-type="taskList"] { @apply list-none pl-0; }
+    & ul[data-type="taskList"] li { @apply flex items-start gap-3; }
+    & ul[data-type="taskList"] li > label { @apply mt-1.5 flex shrink-0; }
+    & ul[data-type="taskList"] li > label input { @apply size-4 accent-primary; }
+    & ul[data-type="taskList"] li > div { @apply min-w-0 flex-1; }
+    & blockquote { @apply border-l-2 border-border pl-4 text-muted-foreground; }
+    & hr { @apply my-6 border-border; }
+    & a { @apply font-medium underline underline-offset-4; }
+    & strong { @apply font-semibold; }
+  }
+  /* The editor's empty first line shows its hint. */
+  .handbook-doc p.is-editor-empty:first-child::before {
+    @apply pointer-events-none float-left h-0 text-muted-foreground;
+    content: attr(data-placeholder);
   }
 }
 

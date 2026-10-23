@@ -10,7 +10,7 @@ export function Surface({
   className,
   as: Tag = "section",
   ...props
-}: { children: React.ReactNode; className?: string; as?: "section" | "div" | "article" | "li" } & React.HTMLAttributes<HTMLElement>) {
+}: { children: React.ReactNode; className?: string; as?: "section" | "div" | "article" | "li" | "nav" } & React.HTMLAttributes<HTMLElement>) {
   return (
     <Tag className={cn("rounded-lg bg-card text-card-foreground elevation-1", className)} {...props}>
       {children}

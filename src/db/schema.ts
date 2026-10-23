@@ -99,6 +99,8 @@ export const studioSettings = pgTable("studio_settings", {
    * review with Erik both stay off, so every email goes to Resend's test address.
    */
   emailLive: boolean("email_live").notNull().default(false),
+  /** Staff besides the owners who may write in Handbok (ticket 37), by user id. */
+  handbookEditorIds: jsonb("handbook_editor_ids").$type<string[]>().notNull().default([]),
   /** The assistant's settings (ticket 30): its monthly cost cap and the studio's own words that mark a note as health-related. */
   aiSettings: jsonb("ai_settings").$type<AiSettings>(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -1037,4 +1039,65 @@ export const aiSuggestion = pgTable(
     index("ai_suggestion_studio_idx").on(table.studioId, table.createdAt),
     index("ai_suggestion_lead_idx").on(table.leadId),
   ],
+);
+
+// ---- Handbok (ticket 37): the studio's routines (SOPs) ----
+
+/** A shelf in Handbok, such as Försäljning or Öppna och stänga. Owners keep the list. */
+export const handbookCategory = pgTable(
+  "handbook_category",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    position: integer("position").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("handbook_category_studio_idx").on(table.studioId, table.position)],
+);
+
+/** One routine. Its text is the editor's document; `text` is the same as plain text, for search. */
+export const handbookPage = pgTable(
+  "handbook_page",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => handbookCategory.id),
+    title: text("title").notNull(),
+    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    text: text("text").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    updatedById: text("updated_by_id").references(() => user.id, { onDelete: "set null" }),
+    /** Removed from Handbok; kept with its history, so a removal can be undone. */
+    deletedAt: timestamp("deleted_at"),
+  },
+  (table) => [index("handbook_page_studio_idx").on(table.studioId, table.categoryId)],
+);
+
+/** Every saved version of a routine, newest last: who changed it, when, and what it said. */
+export const handbookVersion = pgTable(
+  "handbook_version",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    pageId: uuid("page_id")
+      .notNull()
+      .references(() => handbookPage.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    content: jsonb("content").$type<Record<string, unknown>>().notNull(),
+    text: text("text").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
+  },
+  (table) => [index("handbook_version_page_idx").on(table.pageId, table.createdAt)],
 );

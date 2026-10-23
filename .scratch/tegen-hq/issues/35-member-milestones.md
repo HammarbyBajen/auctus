@@ -4,7 +4,7 @@
 
 **Blocked by:** 27 (sending email), 36 (where it shows)
 
-**Status:** built (2026-10-23); waiting on migration 0031 in production and Max's look at the copy. Real sending waits for ticket 27 (test mode until then)
+**Status:** live (2026-10-23); real sending waits for ticket 27 (test mode until then)
 
 **What we know:**
 - Mana's `GET /user-stats?userId=` gives classesTotal, classesThisYear, streakWeeks and lastBookingAt, one request per person (about 470 a night for everyone: too many for the budget, see 28). Our own visits mirror starts with the move to Mana (23 September), so it cannot count a 100th class on its own; read user-stats once, then count on from our visits.
@@ -18,7 +18,8 @@
 - [x] A member who reaches a milestone shows up in the Milstolpar group (ticket 36) with the message ready; one click sends it, and it is logged
 - [x] One message per milestone per member, never twice
 - [x] Tests
-- [ ] Migration 0031 in production (Max), copy approved, pushed; real sending with ticket 27
+- [x] Migration 0031 in production (Max), copy approved, pushed
+- [ ] Real sending with ticket 27
 
 **Decided by Max (2026-10-23):** classes in total and weeks in a row; defaults 100, 250, 500, 1000 classes and 10, 26, 52 weeks; a row on Medlemmar until handled (gone after 30 days); the owners' message plus "Föreslå mejl" when the assistant is on.
 

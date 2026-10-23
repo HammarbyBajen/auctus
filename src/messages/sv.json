@@ -610,6 +610,7 @@
   "chip.soon": "Snart",
   "chip.won": "Medlem",
   "nav.salary": "Timmar",
+  "salary.hiddenLabel": "{name} (dold)",
   "salary.title": "Timmar",
   "salary.intro": "Hur många timmar varje coach har hållit pass och kurser under månaden, per kategori, från Mana.",
   "salary.month": "Månad",

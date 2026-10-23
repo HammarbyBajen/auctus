@@ -281,9 +281,13 @@ export class ManaClient {
     return this.allPages(this.studioUrl("/instructors", { pageSize: "100" }), instructorsPageSchema, "instructörer");
   }
 
-  /** Group classes starting in a window. Mana refuses windows of more than 200 classes, so callers keep windows short. */
+  /**
+   * Group classes starting in a window, hidden ones too (Tegenbutik, NSI and the
+   * like, which coaches are paid for; ticket 23). Mana refuses windows of more
+   * than 200 classes, so callers keep windows short.
+   */
   async getClassEvents(fromAt: string, toAt: string) {
-    return this.allPages(this.studioUrl("/class-events", { fromAt, toAt }), classEventsSchema, "pass");
+    return this.allPages(this.studioUrl("/class-events", { fromAt, toAt, includeHidden: "true" }), classEventsSchema, "pass");
   }
 
   /** PT and Onramp bookings starting in a window, with their status. */

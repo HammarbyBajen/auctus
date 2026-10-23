@@ -2,6 +2,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { salaryInstructor, salaryLog, salaryMonth, salaryTypeRule, salaryWork, user } from "@/db/schema";
 import { ManaError } from "@/lib/mana/errors";
+import { t } from "@/lib/i18n";
 import { calculateMonth, pullWindow, type MonthResult, type Work } from "./calc";
 
 type Db = typeof defaultDb;
@@ -9,7 +10,7 @@ type Db = typeof defaultDb;
 /** What the pull needs from Mana (the read-only client has all of it). */
 export type SalarySource = {
   getInstructors(): Promise<{ id: string; name: string }[]>;
-  getClassEvents(fromAt: string, toAt: string): Promise<{ id: string; class: { id: string; title: string }; startsAt: string; endsAt: string; instructorId: string | null }[]>;
+  getClassEvents(fromAt: string, toAt: string): Promise<{ id: string; class: { id: string; title: string }; startsAt: string; endsAt: string; instructorId: string | null; isHidden?: boolean }[]>;
   getServiceBookings(fromAt: string, toAt: string): Promise<{ id: string; specialistServiceId: string; instructorId: string | null; startsAt: string; endsAt: string; status: string }[]>;
   getSpecialistServices(): Promise<{ id: string; name: string }[]>;
   getCourses(fromAt: string, toAt: string): Promise<{ id: string; name: string }[]>;
@@ -43,8 +44,9 @@ async function classEventsIn(source: SalarySource, from: Date, to: Date, depth =
  * Pulls a month's coach work from Mana (ticket 20): group classes, PT and
  * Onramp bookings and Kids course sessions, in the month (Tegen's time).
  * Replaces what was pulled before, so a class removed in Mana goes
- * away here too. A new category counts until an owner leaves it out. A
- * locked month is never pulled.
+ * away here too. A new category counts until an owner leaves it out, except
+ * a hidden class (Tegenbutik, NSI, PT60...), which waits until an owner ticks
+ * it. A locked month is never pulled.
  */
 export async function pullMonth(db: Db, source: SalarySource, studioId: string, month: string, userId: string | null, now: Date = new Date()) {
   const [current] = await db.select().from(salaryMonth).where(and(eq(salaryMonth.studioId, studioId), eq(salaryMonth.month, month))).limit(1);
@@ -67,12 +69,15 @@ export async function pullMonth(db: Db, source: SalarySource, studioId: string, 
   }
 
   const work = new Map<string, Work>();
+  // Hidden classes (ticket 23) start as categories that do not count: some, such as PT60, may be the same sessions as PT bookings.
+  const hiddenTypes = new Set<string>();
   for (const e of classEvents) {
+    if (e.isHidden) hiddenTypes.add(`class:${e.class.id}`);
     work.set(`class:${e.id}`, {
       id: `class:${e.id}`,
       source: "class",
       typeKey: `class:${e.class.id}`,
-      typeLabel: e.class.title,
+      typeLabel: e.isHidden ? t("salary.hiddenLabel", { name: e.class.title }) : e.class.title,
       instructorId: e.instructorId,
       startsAt: new Date(e.startsAt),
       endsAt: new Date(e.endsAt),
@@ -118,10 +123,10 @@ export async function pullMonth(db: Db, source: SalarySource, studioId: string, 
         .onConflictDoUpdate({ target: [salaryInstructor.studioId, salaryInstructor.id], set: { name: sql`excluded.name`, seenAt: now } });
     }
     if (types.size > 0) {
-      // A new category counts; a known one keeps its choice and only gets its current name.
+      // A new category counts (unless it is a hidden class); a known one keeps its choice and only gets its current name.
       await tx
         .insert(salaryTypeRule)
-        .values([...types.values()].map((t) => ({ studioId, ...t })))
+        .values([...types.values()].map((type) => ({ studioId, ...type, counted: !hiddenTypes.has(type.typeKey) })))
         .onConflictDoUpdate({ target: [salaryTypeRule.studioId, salaryTypeRule.typeKey], set: { label: sql`excluded.label` } });
     }
     await tx

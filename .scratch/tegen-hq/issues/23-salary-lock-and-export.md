@@ -4,7 +4,7 @@
 
 **Blocked by:** 22
 
-**Status:** built (2026-10-14), waiting for Fredrik's October hand count and Mana's hidden classes
+**Status:** built (2026-10-14); hidden classes fetched since 2026-10-23; waiting for Fredrik's October hand count and his word on hidden PT
 
 - [x] Locking prompts a refresh from Mana first if the last pull is old
 - [x] Locking freezes the month's figures and records who locked it and when
@@ -12,7 +12,8 @@
 - [x] Export gives names and hours (hours per class type, free hours, hours to pay) as a file the accountant can open
 - [x] A locked month can be unlocked only by an Owner, and that is recorded
 - [ ] The October 2026 list matches what Fredrik counted by hand
-- [ ] Hidden classes (Tegenbutik, NSI, Tegenmöte, Goalreview/Inbody) are counted once Mana adds `includeHidden=true` to `class-events`
+- [x] Hidden classes (Tegenbutik, NSI, Tegenmöte, Goalreview/Inbody) are fetched now that Mana has `includeHidden=true` on `class-events` (2026-10-23); owners tick which count
+- [ ] Fredrik says whether the hidden PT60/PT30 classes are paid hours, and whether they double the PT bookings
 - [x] Month data from September 2026 is marked as migration test data
 
 Decided by Max (2026-10-14):
@@ -24,3 +25,5 @@ Decided by Max (2026-10-14):
 6. The check against Fredrik's October hand count waits.
 
 Changed later (2026-10-14/15): ticket 22 was dropped, so there are no free classes or hours to pay; every hour counts and owners tick which categories count. The export has one column per counted category and "Timmar totalt". Decision 1 above changed too: hidden classes such as Tegenbutik do have scheduled sessions in Mana, but the public API leaves hidden classes out. Erik has asked Mana for `GET class-events?includeHidden=true` with an `isHidden` field; the API watch will show when it lands, and then `getClassEvents` is updated.
+
+Hidden classes (2026-10-23): Mana added `includeHidden` and `isHidden` to `class-events` on 2026-10-23 (API watch). One week (13 to 19 October) had 14 hidden classes besides the 33 visible ones: Tegenbutik 5, NSI 1, PT60 5, PT30 3, all with an instructor. Of the 8 hidden PT classes, 2 start at the same time with the same coach as a PT booking (which Timmar already counts) and 6 match no booking, so PT may be entered both ways. Decided by Max: Timmar now fetches hidden classes; each hidden class type is its own category marked "(dold)" and starts unticked, so nothing is counted twice until an owner ticks it. Fredrik ticks Tegenbutik and NSI under Timmar; PT stays unticked until he has said how PT is entered in Mana.

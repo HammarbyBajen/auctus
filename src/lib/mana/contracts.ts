@@ -159,6 +159,8 @@ export const classEventsSchema = z.object({
         startsAt: z.string().min(1),
         endsAt: z.string().min(1),
         instructorId: z.string().nullable(),
+        /** A class hidden from members' schedule, such as Tegenbutik (only with includeHidden). */
+        isHidden: z.boolean().optional(),
       }),
     ),
   }),

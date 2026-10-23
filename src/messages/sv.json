@@ -568,6 +568,7 @@
   "handbook.settingsTitle": "Handbok",
   "handbook.settingsIntro": "Kategorierna i handboken, och vilka som får skriva utöver ägarna.",
   "handbook.categoriesTitle": "Kategorier",
+  "handbook.navLabel": "Handbokens kategorier",
   "handbook.categoriesIntro": "Varje rutin ligger i en kategori. En kategori kan tas bort när den är tom.",
   "handbook.settingsSaved": "Sparat.",
   "handbook.errorName": "Skriv ett namn.",

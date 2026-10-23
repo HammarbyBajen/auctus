@@ -1101,3 +1101,73 @@ export const handbookVersion = pgTable(
   },
   (table) => [index("handbook_version_page_idx").on(table.pageId, table.createdAt)],
 );
+
+// ---- Milstolpar (ticket 35): members reaching a number of classes or weeks in a row ----
+
+/** A milestone owners want to mark: a kind, a number, and the message to send. */
+export const milestoneRule = pgTable(
+  "milestone_rule",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    /** classes_total or weeks_in_a_row */
+    kind: text("kind").notNull(),
+    threshold: integer("threshold").notNull(),
+    subject: text("subject").notNull().default(""),
+    body: text("body").notNull().default(""),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("milestone_rule_unique_idx").on(table.studioId, table.kind, table.threshold)],
+);
+
+/**
+ * A member's class count and weeks in a row: Mana's own figures (their whole
+ * history) when last read, and what Tegen HQ worked out at the last check, so
+ * a milestone counts only when it is crossed after that.
+ */
+export const memberStats = pgTable(
+  "member_stats",
+  {
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    manaUserId: text("mana_user_id").notNull(),
+    /** Mana's classes in total and weeks in a row, as read at readAt. */
+    baseClasses: integer("base_classes").notNull(),
+    baseStreak: integer("base_streak").notNull(),
+    readAt: timestamp("read_at").notNull(),
+    /** The figures at the last check (null before the first). */
+    lastClasses: integer("last_classes"),
+    lastStreak: integer("last_streak"),
+    checkedAt: timestamp("checked_at"),
+  },
+  (table) => [primaryKey({ columns: [table.studioId, table.manaUserId] })],
+);
+
+/** A member reaching a milestone, once per member and milestone, until staff handle it. */
+export const milestoneHit = pgTable(
+  "milestone_hit",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    studioId: uuid("studio_id")
+      .notNull()
+      .references(() => studio.id, { onDelete: "cascade" }),
+    manaUserId: text("mana_user_id").notNull(),
+    kind: text("kind").notNull(),
+    threshold: integer("threshold").notNull(),
+    reachedOn: date("reached_on", { mode: "string" }).notNull(),
+    /** open, done, skipped or expired (30 days with nobody acting) */
+    status: text("status").notNull().default("open"),
+    handledAt: timestamp("handled_at"),
+    handledById: text("handled_by_id").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("milestone_hit_unique_idx").on(table.studioId, table.manaUserId, table.kind, table.threshold),
+    index("milestone_hit_open_idx").on(table.studioId, table.status),
+  ],
+);
+

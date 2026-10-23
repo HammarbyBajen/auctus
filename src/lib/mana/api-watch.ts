@@ -30,6 +30,8 @@ export const syncEndpoints = [
   // Klippkort running out (ticket 31).
   "GET /api/v1/studios/{studioId}/class-credit-bundles",
   "GET /api/v1/studios/{studioId}/class-credits",
+  // Milstolpar (ticket 35).
+  "GET /api/v1/studios/{studioId}/user-stats",
 ];
 
 type Json = null | boolean | number | string | Json[] | { [key: string]: Json };

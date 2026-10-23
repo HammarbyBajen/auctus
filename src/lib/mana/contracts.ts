@@ -216,3 +216,15 @@ export const classCreditsSchema = z.object({
   links: maybeLinks,
 });
 export type ClassCreditsPage = z.infer<typeof classCreditsSchema>;
+
+// ---- Milstolpar (ticket 35) ----
+
+/** One member's figures over their whole history in Mana: classes in total, and weeks in a row with a class. */
+export const userStatsSchema = z.object({
+  data: z.object({
+    classesTotal: z.object({ count: z.number().int() }),
+    streakWeeks: z.number().int(),
+  }),
+});
+export type UserStats = z.infer<typeof userStatsSchema>;
+

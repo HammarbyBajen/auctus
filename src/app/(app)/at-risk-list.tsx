@@ -26,22 +26,56 @@ import { AtRiskPanels } from "./at-risk-panels";
 const firstRows = 10;
 
 export type AtRiskFilter = "all" | AtRiskGroup;
+/** What Medlemmar shows: the at-risk list (all, or a group), or the milestones (ticket 35). */
+export type MembersFilter = AtRiskFilter | "milestones";
 
 /** How a group is written in the address. */
-export const groupParam: Record<AtRiskGroup, string> = { never: "aldrig", away: "borta", new: "nya" };
-export const groupFromParam = (value: string | undefined): AtRiskFilter =>
-  (Object.entries(groupParam).find(([, p]) => p === value)?.[0] as AtRiskGroup | undefined) ?? "all";
+export const groupParam: Record<AtRiskGroup | "milestones", string> = { never: "aldrig", away: "borta", new: "nya", milestones: "milstolpar" };
+export const groupFromParam = (value: string | undefined): MembersFilter =>
+  (Object.entries(groupParam).find(([, p]) => p === value)?.[0] as AtRiskGroup | "milestones" | undefined) ?? "all";
 /** The groups in the order they are shown. */
 export const atRiskGroups: AtRiskGroup[] = ["new", "never", "away"];
 
 /** The members page (ticket 36) with a scope, a group and all rows or the first ten, as the address says it. */
-export function membersHref({ scope, filter, all }: { scope: "all" | "mine"; filter: AtRiskFilter; all: boolean }) {
+export function membersHref({ scope, filter, all }: { scope: "all" | "mine"; filter: MembersFilter; all: boolean }) {
   const params = new URLSearchParams();
   if (scope === "mine") params.set("visa", "mina");
   if (filter !== "all") params.set("grupp", groupParam[filter]);
   if (all) params.set("alla", "1");
   const query = params.toString();
   return `/medlemmar${query ? `?${query}` : ""}`;
+}
+
+export type MembersCounts = Record<AtRiskGroup, number> & { all: number; milestones: number };
+
+/**
+ * Medlemmar's tabs: everyone who has been away, each group of them, and the
+ * milestones. A group shows when someone is in it, or when it is the one chosen.
+ */
+export function MembersTabs({ scope, filter, counts }: { scope: "all" | "mine"; filter: MembersFilter; counts: MembersCounts }) {
+  const tabs: { key: MembersFilter; label: string; n: number }[] = [
+    { key: "all", label: t("atRisk.filter.all"), n: counts.all },
+    ...atRiskGroups.filter((g) => counts[g] > 0 || filter === g).map((g) => ({ key: g, label: t(`atRisk.filter.${g}` as MessageKey), n: counts[g] })),
+    ...(counts.milestones > 0 || filter === "milestones" ? [{ key: "milestones" as const, label: t("milestones.tab"), n: counts.milestones }] : []),
+  ];
+  return (
+    <nav aria-label={t("atRisk.filter.label")} className="inline-flex flex-wrap rounded-md bg-well p-1">
+      {tabs.map((tab) => (
+        <Link
+          key={tab.key}
+          href={`${membersHref({ scope, filter: tab.key, all: false })}#hor-av-dig`}
+          aria-current={filter === tab.key ? "page" : undefined}
+          className={cn(
+            "focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-sm px-3 text-sm transition-[background-color]",
+            filter === tab.key ? "bg-card font-medium elevation-1" : "text-muted-foreground hover:bg-accent",
+          )}
+        >
+          {tab.label}
+          <span className="tabular-nums text-muted-foreground">{formatNumber(tab.n)}</span>
+        </Link>
+      ))}
+    </nav>
+  );
 }
 
 const noteLabel = (n: AtRiskNoteRow) => t(`atRisk.kind.${n.kind}` as MessageKey);
@@ -71,6 +105,7 @@ export function AtRiskList({
   people,
   emails,
   emailMode,
+  milestones = 0,
 }: {
   rows: AtRiskRow[];
   days: number;
@@ -81,6 +116,8 @@ export function AtRiskList({
   people: { id: string; name: string }[];
   emails: AtRiskEmails;
   emailMode: EmailMode;
+  /** How many open milestones there are, for Medlemmar's tabs (ticket 35). */
+  milestones?: number;
 }) {
   const today = todayInStockholm();
   const assistantOn = aiEnabled();
@@ -93,13 +130,7 @@ export function AtRiskList({
 
   const href = (next: { filter?: AtRiskFilter; all?: boolean }) =>
     `${membersHref({ scope, filter: next.filter ?? filter, all: next.all ?? false })}#hor-av-dig`;
-  const tabs: { key: AtRiskFilter; label: string; n: number }[] = [
-    { key: "all", label: t("atRisk.filter.all"), n: inScope.length },
-    // A group shows when someone is in it, or when it is the one chosen.
-    ...atRiskGroups
-      .filter((g) => count(g) > 0 || filter === g)
-      .map((g) => ({ key: g, label: t(`atRisk.filter.${g}` as MessageKey), n: count(g) })),
-  ];
+  const counts: MembersCounts = { all: inScope.length, new: count("new"), never: count("never"), away: count("away"), milestones };
 
   return (
     <div id="hor-av-dig" className="flex min-w-0 scroll-mt-20 flex-col gap-3">
@@ -111,22 +142,7 @@ export function AtRiskList({
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <nav aria-label={t("atRisk.filter.label")} className="inline-flex flex-wrap rounded-md bg-well p-1">
-          {tabs.map((tab) => (
-            <Link
-              key={tab.key}
-              href={href({ filter: tab.key })}
-              aria-current={filter === tab.key ? "page" : undefined}
-              className={cn(
-                "focus-ring inline-flex min-h-9 items-center gap-1.5 rounded-sm px-3 text-sm transition-[background-color]",
-                filter === tab.key ? "bg-card font-medium elevation-1" : "text-muted-foreground hover:bg-accent",
-              )}
-            >
-              {tab.label}
-              <span className="tabular-nums text-muted-foreground">{formatNumber(tab.n)}</span>
-            </Link>
-          ))}
-        </nav>
+        <MembersTabs scope={scope} filter={filter} counts={counts} />
 
         {unassigned > 0 && people.length > 0 && (
           <details className="group relative">

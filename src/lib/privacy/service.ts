@@ -1,5 +1,6 @@
 import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
+import { forgetMemberMilestones } from "@/lib/mana/milestones-service";
 import { aiSuggestion, atRiskAlert, atRiskNote, deletionLog, emailMessage, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
 
 type Db = typeof defaultDb;
@@ -51,6 +52,8 @@ export async function deletePerson(db: Db, studioId: string, personId: string, d
       // What the assistant suggested about them (a lead's suggestions go with the lead).
       await tx.delete(aiSuggestion).where(and(eq(aiSuggestion.studioId, studioId), eq(aiSuggestion.manaUserId, preview.person.manaUserId)));
       await tx.delete(atRiskAlert).where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.manaUserId, preview.person.manaUserId)));
+      // Their milestones and the figures behind them (ticket 35).
+      await forgetMemberMilestones(tx as unknown as Db, studioId, preview.person.manaUserId);
     }
     // The raw web submissions hold the same personal data, so they go too (ticket 09).
     const ids = (await tx.select({ id: lead.id }).from(lead).where(eq(lead.personId, personId))).map((l) => l.id);

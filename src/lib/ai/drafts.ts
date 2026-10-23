@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db as defaultDb } from "@/db";
 import { emailMessage, lead, manaMember, person } from "@/db/schema";
 import { alertMember } from "@/lib/mana/at-risk-service";
+import { milestoneMember } from "@/lib/mana/milestones-service";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { askAi, type AiResult, type AiTransport } from "./client";
 import { firstNameOnly, mentionsHealth, withoutContactDetails } from "./privacy";
@@ -95,7 +96,8 @@ export const draftSystem = systemPrompt({
     "Härma tonen i exemplen om det finns några: hälsning, längd, ordval och avslutning. Kopiera inte deras innehåll. [namn] i exemplen står för en annan person.",
     'Börja med "Hej" och förnamnet. Avsluta med avsändarens förnamn om det finns.',
     "Till en lead: målet är att boka en provträning eller ett möte. Föreslå inga tider; be dem svara med vad som passar.",
-    "Till en medlem: hör hur det är och säg att ni saknar dem. Ingen press och inget säljande.",
+    "Till en medlem som inte varit på gymmet: hör hur det är och säg att ni saknar dem. Ingen press och inget säljande.",
+    "Till en medlem som nått en milstolpe: gratulera kort och glatt och nämn milstolpen (antal pass eller veckor i rad). Inget säljande.",
     "Finns ett påbörjat utkast, utgå från det och behåll det personalen redan skrivit.",
     "Ämnesraden kort, utan utropstecken.",
   ],
@@ -110,12 +112,12 @@ function startingPoint(current: Current, terms: readonly string[]) {
   return { subject: withoutContactDetails(current.subject), body: withoutContactDetails(current.body) };
 }
 
-async function draft(db: Db, actor: Actor, kind: DraftKind, about: { leadId?: string; manaUserId?: string }, recipient: unknown, current: Current, sender: string | null, transport?: AiTransport, now: Date = new Date()) {
+async function draft(db: Db, actor: Actor, kind: DraftKind, about: { leadId?: string; manaUserId?: string }, recipient: unknown, current: Current, sender: string | null, transport?: AiTransport, now: Date = new Date(), to: string = kind) {
   const terms = await studioHealthTerms(db, actor.studioId);
   const examples = await toneExamples(db, actor.studioId, kind, terms);
   const prompt = JSON.stringify({
     today: todayInStockholm(now),
-    to: kind,
+    to,
     recipient,
     sender: firstNameOnly(sender) || null,
     examples,
@@ -141,3 +143,12 @@ export async function draftMemberEmail(db: Db, actor: Actor, alertId: string, cu
   // Logged under the member, so a privacy deletion takes the draft too.
   return draft(db, actor, "member", { manaUserId: member.manaUserId }, recipient, current, sender, transport, now);
 }
+
+/** A congratulation to a member who reached a milestone (ticket 35), starting from the owners' message. */
+export async function draftMilestoneEmail(db: Db, actor: Actor, hitId: string, current: Current, sender: string | null, transport?: AiTransport, now: Date = new Date()): Promise<AiResult<EmailDraft> | { status: "not_found" }> {
+  const member = await milestoneMember(db, actor.studioId, hitId);
+  if (!member) return { status: "not_found" };
+  const recipient = { firstName: firstNameOnly(member.name), milestone: { kind: member.kind === "weeks_in_a_row" ? "veckor i rad" : "pass totalt", number: member.threshold } };
+  return draft(db, actor, "member", { manaUserId: member.manaUserId }, recipient, current, sender, transport, now, "milestone");
+}
+

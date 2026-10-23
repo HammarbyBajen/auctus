@@ -10,6 +10,7 @@ import { addExtraIds, addRunRequests, failRun, holdRun, pauseRun, runBatch, star
 import { and, eq, gte, sql } from "drizzle-orm";
 import { manaVisit, syncRun } from "@/db/schema";
 import { syncKlippkort } from "@/lib/mana/klippkort-service";
+import { detectMilestones, syncMemberStats } from "@/lib/mana/milestones-service";
 import { detectWinBacks, syncPurchases } from "@/lib/mana/winback-service";
 
 /** How long one step may start new requests. Hobby allows 5 minutes per step, so stay well inside it. */
@@ -109,16 +110,34 @@ async function klippkortStep(studioId: string, runId: string) {
   }
 }
 
+async function memberStatsStep(studioId: string, runId: string) {
+  "use step";
+  // Mana's figures for milestones (ticket 35): classes in total and weeks in a
+  // row over each member's whole history, for up to 60 paying members a night
+  // (one request each) until all are read, then again after a month. A
+  // failure only means milestones wait a night. Its requests count on the run.
+  let client: Awaited<ReturnType<typeof createManaClient>> | null = null;
+  try {
+    client = await createManaClient(db, studioId);
+    await syncMemberStats(db, client, studioId);
+  } catch {
+    // The next night reads them.
+  } finally {
+    if (client) await addRunRequests(db, runId, client.requestCount);
+  }
+}
+
 async function afterSyncStep(studioId: string) {
   "use step";
   // Link CRM people to Mana, move leads whose person has just joined to Won,
-  // then make win-back leads (if switched on), flag members who are away, and
-  // save today's key numbers.
+  // then make win-back leads (if switched on), flag members who are away,
+  // note milestones reached, and save today's key numbers.
   const won = await afterSync(db, studioId);
   const winBack = await detectWinBacks(db, studioId);
   const atRisk = await detectAtRisk(db, studioId);
+  const milestones = await detectMilestones(db, studioId);
   const snapshot = await recordKpiSnapshot(db, studioId, todayInStockholm());
-  return { won, winBack, atRisk, snapshot: snapshot !== null };
+  return { won, winBack, atRisk, milestones, snapshot: snapshot !== null };
 }
 
 /**
@@ -145,6 +164,7 @@ export async function manaSyncWorkflow(studioId: string) {
     if (batch.pausedUntil) await sleep(new Date(batch.pausedUntil));
   }
   await klippkortStep(studioId, runId);
+  await memberStatsStep(studioId, runId);
   const after = await afterSyncStep(studioId);
   return { runId, skipped: false, ...after };
 }

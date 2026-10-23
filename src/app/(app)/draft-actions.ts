@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { draftLeadEmail, draftMemberEmail } from "@/lib/ai/drafts";
+import { draftLeadEmail, draftMemberEmail, draftMilestoneEmail } from "@/lib/ai/drafts";
 import { requirePermission } from "@/lib/session";
 
 /** Email drafts from the assistant (ticket 30, phase D). Every one starts from a person pressing a button. */
@@ -31,3 +31,13 @@ export async function draftForMember(alertId: string, state: DraftState, formDat
   if (result.status !== "ok") return { error: result.status, version: state.version };
   return { ...result.output, suggestionId: result.suggestionId, version: state.version + 1 };
 }
+
+/** A congratulation to a member who reached a milestone (ticket 35). */
+export async function draftForMilestone(hitId: string, state: DraftState, formData: FormData): Promise<DraftState> {
+  const user = await requirePermission("leads", "write");
+  const result = await draftMilestoneEmail(db, actorOf(user), hitId, current(formData), user.name);
+  if (result.status === "not_found") return { error: "failed", version: state.version };
+  if (result.status !== "ok") return { error: result.status, version: state.version };
+  return { ...result.output, suggestionId: result.suggestionId, version: state.version + 1 };
+}
+

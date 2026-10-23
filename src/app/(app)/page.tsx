@@ -20,7 +20,8 @@ import { rowChip } from "@/lib/leads/row";
 import { listStages } from "@/lib/pipeline/service";
 import { isGreyedOut } from "@/lib/tasks/dates";
 import { ScopeToggle } from "@/components/app/scope-toggle";
-import { atRiskGroups, membersHref } from "./at-risk-list";
+import { atRiskGroups, membersHref, type MembersFilter } from "./at-risk-list";
+import { countOpenMilestones } from "@/lib/mana/milestones-service";
 import { MemberTrend } from "./member-trend";
 import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -73,15 +74,20 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   const { fel, visa, fler } = await searchParams;
   const scope = visa === "mina" ? "mine" : "all";
   const showKpi = can(user.role, "kpi", "read");
-  const [{ items, counts }, stages, kpi, atRisk] = await Promise.all([
+  const [{ items, counts }, stages, kpi, atRisk, milestones] = await Promise.all([
     getHomeData(db, user.studioId, user.id, scope),
     listStages(db, user.studioId),
     showKpi ? getKpi(db, user.studioId, todayInStockholm()) : null,
     listAtRisk(db, user.studioId),
+    countOpenMilestones(db, user.studioId),
   ]);
   // Members who need a word: counted here, listed on the members page (ticket 36). "Mina" is mine and nobody's.
   const atRiskInScope = scope === "mine" ? atRisk.filter((r) => !r.assignedToId || r.assignedToId === user.id) : atRisk;
-  const memberGroups = atRiskGroups.map((group) => ({ group, n: atRiskInScope.filter((r) => r.group === group).length }));
+  const memberGroups: { group: MembersFilter; label: string; n: number }[] = [
+    ...atRiskGroups.map((group) => ({ group, label: t(`atRisk.filter.${group}` as MessageKey), n: atRiskInScope.filter((r) => r.group === group).length })),
+    // Members who reached a milestone (ticket 35): a reason to get in touch too.
+    { group: "milestones", label: t("milestones.tab"), n: milestones },
+  ];
   const stageOf = (key: string) => stages.find((s) => s.key === key);
   // Deadlines first; leads without a next step below, quieter and capped (ticket 29).
   const now = items.filter((i) => i.group === "now");
@@ -170,7 +176,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               ))}
             </dl>
           </Surface>
-          {atRiskInScope.length > 0 && (
+          {memberGroups.some((g) => g.n > 0) && (
             <Surface as="div" className="flex flex-col gap-3 p-4" aria-labelledby="home-members">
               <MicroLabel as="h3">
                 <span id="home-members">{t("atRisk.title")}</span>
@@ -178,13 +184,13 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
               <ul className="flex flex-col gap-1">
                 {memberGroups
                   .filter((g) => g.n > 0)
-                  .map(({ group, n }) => (
+                  .map(({ group, label, n }) => (
                     <li key={group}>
                       <Link
                         href={membersHref({ scope, filter: group, all: false })}
                         className="focus-ring -mx-2 flex min-h-9 items-center justify-between gap-3 rounded-md px-2 text-sm hover:bg-accent"
                       >
-                        <span>{t(`atRisk.filter.${group}` as MessageKey)}</span>
+                        <span>{label}</span>
                         <span className="font-semibold tabular-nums">{formatNumber(n)}</span>
                       </Link>
                     </li>

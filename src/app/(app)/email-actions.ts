@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { sendEmail, type SendResult } from "@/lib/email/service";
 import { addNote, getLead, logContact as logLeadContact } from "@/lib/leads/service";
 import { alertMember, logContact as logMemberContact } from "@/lib/mana/at-risk-service";
+import { handleMilestone, milestoneMember } from "@/lib/mana/milestones-service";
 import { decideSuggestion } from "@/lib/ai/client";
 import { requirePermission } from "@/lib/session";
 
@@ -61,3 +62,20 @@ export async function sendMemberEmail(alertId: string, _: ComposeState, formData
   revalidatePath("/medlemmar");
   return { result: result.status, mode: result.mode };
 }
+
+/** Congratulates a member on a milestone (ticket 35). When it really went to them, the milestone is done. */
+export async function sendMilestoneEmail(hitId: string, _: ComposeState, formData: FormData): Promise<ComposeState> {
+  const user = await requirePermission("leads", "write");
+  const email = draft(formData);
+  if (!email) return { error: "empty" };
+  const member = await milestoneMember(db, user.studioId, hitId);
+  if (!member) return { error: "gone" };
+  if (!member.email) return { error: "no_address" };
+  const result = await sendEmail(db, { studioId: user.studioId, to: member.email, ...email, replyTo: user.email, manaUserId: member.manaUserId, sentById: user.id });
+  if (result.status === "sent" && result.mode === "live") await handleMilestone(db, user.studioId, hitId, "done", user.id);
+  await acceptDraft(user.studioId, user.id, formData, result.status === "sent");
+  revalidatePath("/");
+  revalidatePath("/medlemmar");
+  return { result: result.status, mode: result.mode };
+}
+

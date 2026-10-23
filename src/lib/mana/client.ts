@@ -17,6 +17,7 @@ import {
   courseEventsSchema,
   creditBundlesSchema,
   classCreditsSchema,
+  userStatsSchema,
 } from "./contracts";
 import type { z } from "zod";
 import { ManaError } from "./errors";
@@ -318,6 +319,12 @@ export class ManaClient {
   /** What one person has left on their class credits, and when it expires (ticket 31). */
   async getClassCredits(manaUserId: string) {
     return this.allPages(this.studioUrl("/class-credits", { userId: manaUserId }), classCreditsSchema, "klipp kvar");
+  }
+
+  /** One member's classes in total and weeks in a row, over their whole history in Mana (ticket 35). */
+  async getUserStats(manaUserId: string) {
+    const page = parseContract(userStatsSchema, await this.getJson(this.studioUrl("/user-stats", { userId: manaUserId })), "medlemsstatistik");
+    return { classesTotal: page.data.classesTotal.count, streakWeeks: page.data.streakWeeks };
   }
 
   /** Every membership one person has, past, current and future. */

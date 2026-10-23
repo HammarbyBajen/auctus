@@ -5,6 +5,9 @@ import { Panel, Surface } from "@/components/app/surface";
 import { formatMonth, formatNumber, formatPercent } from "@/lib/format";
 import { getLeadReport } from "@/lib/reports/service";
 import { requirePermission } from "@/lib/session";
+import { aiEnabled } from "@/lib/ai/enabled";
+import { can } from "@/lib/permissions";
+import { AskBox } from "./ask-box";
 import { t, type MessageKey } from "@/lib/i18n";
 
 export const dynamic = "force-dynamic";
@@ -51,6 +54,13 @@ export default async function ReportPage() {
           </Surface>
         ))}
       </dl>
+
+      {/* The assistant answers owners' questions from these figures and more (ticket 30, phase E). */}
+      {aiEnabled() && can(user.role, "kpi", "read") && (
+        <Panel title={t("ai.ask.title")} id="fraga">
+          <AskBox />
+        </Panel>
+      )}
 
       <Panel title={t("report.perMonth")} id="per-manad">
         <p className="text-sm text-muted-foreground">{t("report.perMonthHint")}</p>

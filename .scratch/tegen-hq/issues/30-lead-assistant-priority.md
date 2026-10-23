@@ -4,7 +4,7 @@
 
 **Blocked by:** 18 (go-live) for most of its value: until leads are worked in Tegen HQ there is little history to read. Phase A can start before.
 
-**Status:** phase A live (switched off until a key is set); phase B built (2026-10-20), to be tried against the real model on demo leads; phases C to F not started
+**Status:** phases A, B, D and E built (switched off in production until a key is set); C waits for go-live data; F not started
 
 **Decided by Max (2026-10-19):**
 - Built-in assistant first, on Max's API key. The MCP server comes after and reuses the same tools.
@@ -42,7 +42,7 @@ F. **MCP server.** The same tools exposed over MCP at a Tegen HQ address, signed
 - [ ] Phase B: brief before a call; note to proposed steps after a call
 - [ ] Phase C: weights with reasons, checked against outcomes before they change Home's order
 - [x] Phase D: email drafts (built 2026-10-23, off in production until the key)
-- [ ] Phase E: questions and a weekly summary for owners
+- [x] Phase E: questions and a weekly summary for owners (built 2026-10-23, off in production until the key)
 - [ ] Phase F: MCP server with per-person sign-in
 
 Phase A, built (2026-10-19):
@@ -57,3 +57,5 @@ Phase B, built (2026-10-20): "Inför samtalet" panel on an open lead with "Förb
 Note filter fixed (2026-10-21): the filter only matched the start of a word, so Swedish compounds slipped through ("ryggskada", "huvudvärk", "magsjuk", "nyopererad", "ryggont" were sent). Every word is now caught anywhere in a longer word; words of three letters or fewer ("ont") as a whole word or at the end of one; a phrase ("mår illa") as written. Fails on the safe side ("medicinboll" is held back). Inställningar → Assistent no longer asks for a * and has a "Testa en anteckning" box that shows whether a note would be held back and by which word, or what would be sent (decided by Max). Nothing had leaked: no key in production, and locally only the made-up demo lead was sent.
 
 Phase D, built (2026-10-23): "Föreslå mejl" in the email form on a lead and on a member in Medlemmar, shown only when a key is set. The assistant writes a short draft in Swedish from the same filtered view as the brief (for a member: how long away, memberships, what staff tried, filtered notes), starting from what is already in the form unless that shows health words. Tegen's tone is learnt from up to five emails staff sent from Tegen HQ before (decided by Max): each is about someone else, so their name becomes [namn], contact details are removed, and one with health words is left out whole. Never an email address. The draft fills the fields; the person edits and sends; a sent draft is logged as accepted in ai_suggestion (kind email_draft, under the lead or the member, so privacy deletion removes it). Tried against the real model on the demo lead: a good short draft that used the trial date from the notes and left the student price for staff to fill in, about 10 seconds.
+
+Phase E, built (2026-10-23), decided by Max: a "Fråga assistenten" box on Rapport, for owners; answers about leads and sales, members and revenue, Timmar and Handbok; the weekly summary to the owners' Discord channel on Monday mornings (in the morning job, after the daily summary; once per week; only with a key); first names are fine. The AI never queries the database: Tegen HQ works out a bundle of figures (src/lib/ai/facts.ts: leads per month, source and campaign with outcomes, cold and win-back reasons as counts, open leads per stage, who joined in 30 days and last week by first name, paying members per month, revenue, cancellations and freezes in the next 60 days, who is away, coach hours for three months, and Handbok's routines with contact details taken out) and the AI answers from it, with the figures and what it rests on. No notes, no reasons next to a name. Tried against the real model locally: exact counts per source and month, a summary of the week with what to do, and a routine quoted from Handbok; about 11 seconds each.

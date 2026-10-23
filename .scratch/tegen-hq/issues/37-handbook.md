@@ -4,7 +4,7 @@
 
 **Blocked by:** none
 
-**Status:** built (2026-10-23); waiting on migration 0030 in production and Max's look at the copy
+**Status:** live (2026-10-23)
 
 **Decided by Max (2026-10-23):**
 - Called **Handbok**.
@@ -32,4 +32,4 @@
 - [x] Change history with restore
 - [x] Phone: Mer menu
 - [x] Tests (document checks, permissions, versions, search, categories)
-- [ ] Migration 0030 in production (Max), copy approved (Max), then pushed
+- [x] Migration 0030 in production (Max), copy approved (Max), then pushed

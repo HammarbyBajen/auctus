@@ -20,7 +20,7 @@ import { rowChip } from "@/lib/leads/row";
 import { listStages } from "@/lib/pipeline/service";
 import { isGreyedOut } from "@/lib/tasks/dates";
 import { ScopeToggle } from "@/components/app/scope-toggle";
-import { membersHref } from "./at-risk-list";
+import { atRiskGroups, membersHref } from "./at-risk-list";
 import { MemberTrend } from "./member-trend";
 import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
@@ -81,7 +81,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
   ]);
   // Members who need a word: counted here, listed on the members page (ticket 36). "Mina" is mine and nobody's.
   const atRiskInScope = scope === "mine" ? atRisk.filter((r) => !r.assignedToId || r.assignedToId === user.id) : atRisk;
-  const memberGroups = (["never", "away"] as const).map((group) => ({ group, n: atRiskInScope.filter((r) => r.group === group).length }));
+  const memberGroups = atRiskGroups.map((group) => ({ group, n: atRiskInScope.filter((r) => r.group === group).length }));
   const stageOf = (key: string) => stages.find((s) => s.key === key);
   // Deadlines first; leads without a next step below, quieter and capped (ticket 29).
   const now = items.filter((i) => i.group === "now");
@@ -184,7 +184,7 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
                         href={membersHref({ scope, filter: group, all: false })}
                         className="focus-ring -mx-2 flex min-h-9 items-center justify-between gap-3 rounded-md px-2 text-sm hover:bg-accent"
                       >
-                        <span>{t(group === "never" ? "atRisk.filter.never" : "atRisk.filter.away")}</span>
+                        <span>{t(`atRisk.filter.${group}` as MessageKey)}</span>
                         <span className="font-semibold tabular-nums">{formatNumber(n)}</span>
                       </Link>
                     </li>

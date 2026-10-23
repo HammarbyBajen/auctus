@@ -10,6 +10,7 @@ import { formatDay, formatNumber } from "@/lib/format";
 import { daysAgo } from "@/lib/leads/activity";
 import { contactOutcomes, dismissReasons, type AtRiskNoteRow, type AtRiskRow } from "@/lib/mana/at-risk-service";
 import { atRiskDraft, type AtRiskGroup } from "@/lib/mana/at-risk-work";
+import { newMemberDays } from "@/lib/mana/at-risk";
 import type { EmailMode } from "@/lib/email/mode";
 import { sendMemberEmail } from "./email-actions";
 import { todayInStockholm } from "@/lib/tasks/dates";
@@ -24,11 +25,18 @@ const firstRows = 10;
 
 export type AtRiskFilter = "all" | AtRiskGroup;
 
+/** How a group is written in the address. */
+export const groupParam: Record<AtRiskGroup, string> = { never: "aldrig", away: "borta", new: "nya" };
+export const groupFromParam = (value: string | undefined): AtRiskFilter =>
+  (Object.entries(groupParam).find(([, p]) => p === value)?.[0] as AtRiskGroup | undefined) ?? "all";
+/** The groups in the order they are shown. */
+export const atRiskGroups: AtRiskGroup[] = ["new", "never", "away"];
+
 /** The members page (ticket 36) with a scope, a group and all rows or the first ten, as the address says it. */
 export function membersHref({ scope, filter, all }: { scope: "all" | "mine"; filter: AtRiskFilter; all: boolean }) {
   const params = new URLSearchParams();
   if (scope === "mine") params.set("visa", "mina");
-  if (filter !== "all") params.set("grupp", filter === "never" ? "aldrig" : "borta");
+  if (filter !== "all") params.set("grupp", groupParam[filter]);
   if (all) params.set("alla", "1");
   const query = params.toString();
   return `/medlemmar${query ? `?${query}` : ""}`;
@@ -84,8 +92,10 @@ export function AtRiskList({
     `${membersHref({ scope, filter: next.filter ?? filter, all: next.all ?? false })}#hor-av-dig`;
   const tabs: { key: AtRiskFilter; label: string; n: number }[] = [
     { key: "all", label: t("atRisk.filter.all"), n: inScope.length },
-    { key: "never", label: t("atRisk.filter.never"), n: count("never") },
-    { key: "away", label: t("atRisk.filter.away"), n: count("away") },
+    // A group shows when someone is in it, or when it is the one chosen.
+    ...atRiskGroups
+      .filter((g) => count(g) > 0 || filter === g)
+      .map((g) => ({ key: g, label: t(`atRisk.filter.${g}` as MessageKey), n: count(g) })),
   ];
 
   return (
@@ -94,7 +104,7 @@ export function AtRiskList({
         <MicroLabel as="h3">
           <span id="at-risk">{t("atRisk.title")}</span>
         </MicroLabel>
-        <p className="text-xs text-muted-foreground">{t("atRisk.intro", { days: String(days) })}</p>
+        <p className="text-xs text-muted-foreground">{t("atRisk.intro", { days: String(days), newDays: String(newMemberDays) })}</p>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -156,6 +166,7 @@ export function AtRiskList({
                         <p className="text-sm font-medium break-words">{name}</p>
                         {/* No visit at all in Mana: they may have stopped, or get in some other way and need help with Mana. */}
                         {row.group === "never" && <Chip tone="neutral">{t("atRisk.neverChip")}</Chip>}
+                        {row.group === "new" && <Chip tone="neutral">{t("atRisk.newChip")}</Chip>}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {last

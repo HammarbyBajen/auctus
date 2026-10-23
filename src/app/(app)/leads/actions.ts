@@ -15,6 +15,7 @@ import { refreshPersonFromMana } from "@/lib/mana/leads";
 import { setWinBackReason, WinBackError } from "@/lib/mana/winback-service";
 import { assignLead, createTask, deleteTask, setTaskDone, TaskError } from "@/lib/tasks/service";
 import { isParkDay, parkDay, parkPresets, type ParkPreset } from "@/lib/leads/park";
+import { isTrialDay, trialFollowUpDay } from "@/lib/leads/trial";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { formatDay } from "@/lib/format";
 import { requirePermission } from "@/lib/session";
@@ -158,6 +159,30 @@ export async function parkLead(leadId: string, _: ParkState, formData: FormData)
   revalidatePath("/");
   revalidatePath(`/leads/${leadId}`);
   return { until: date };
+}
+
+export type TrialState = { error?: MessageKey };
+
+/**
+ * The trial's date (ticket 33): trials are booked outside Mana, so a note of
+ * the day and a task the day after to hear how it went.
+ */
+export async function saveTrialDate(leadId: string, _: TrialState, formData: FormData): Promise<TrialState> {
+  const user = await requirePermission("leads", "write");
+  const today = todayInStockholm();
+  const day = String(formData.get("trial") ?? "");
+  if (!isTrialDay(day, today)) return { error: "trial.errorDate" };
+  const date = formatDay(day);
+  try {
+    await createTask(db, user.studioId, leadId, { title: t("trial.taskTitle"), dueDate: trialFollowUpDay(day, today) }, user.id);
+  } catch (error) {
+    if (error instanceof TaskError) notFound();
+    throw error;
+  }
+  await addNote(db, user.studioId, leadId, t("trial.note", { date }), user.id);
+  revalidatePath("/");
+  revalidatePath(`/leads/${leadId}`);
+  return {};
 }
 
 export async function finishTask(leadId: string, taskId: string, done: boolean) {

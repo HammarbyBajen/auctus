@@ -4,7 +4,7 @@
 
 **Blocked by:** none (shares the nightly payments read with 12 and 28)
 
-**Status:** idea (2026-10-21)
+**Status:** parked (2026-10-23): Tegen sells no trial offers in Mana
 
 **What we know:**
 - The payments step already reads every payment since the last run; today only class_credits_bundle and single_class are kept (`dayPassKinds`), so trial offers are dropped.
@@ -14,3 +14,5 @@
 - [ ] A trial offer purchase makes a lead (or a note on an open lead), once per person
 - [ ] Not tied to the win-back switch, unless Max decides otherwise
 - [ ] Tests
+
+Checked 2026-10-23: no trial offer has been paid since the move to Mana (paid since 15 Sep: 637 memberships, 5 credit bundles, 3 drop-ins, 3 courses, 1 voucher, 4 PT). Parked by Max until Tegen starts selling trial offers in Mana.

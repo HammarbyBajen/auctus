@@ -144,4 +144,22 @@ describe.skipIf(!hasDb)("at-risk members", () => {
     await risk.assignAlert(db, studioId, row.id, null);
     expect((await risk.listAtRisk(db, studioId, now))[0].assignedToId).toBeNull();
   });
+  it("puts a new member who has not come for 10 days in a group of their own (ticket 34)", async () => {
+    await db.insert(schema.manaMember).values([person("rookie"), person("keen")] as never);
+    await db.insert(schema.manaMembership).values([
+      membership("5", "rookie", { startDate: "2026-11-20" }),
+      membership("6", "keen", { startDate: "2026-11-20" }),
+    ]);
+    await db.insert(schema.manaVisit).values({ studioId, id: `${tag}-b9`, manaUserId: "keen", at: day("2026-11-28"), kind: "class", status: "booked" });
+    // Nine days after starting: not yet.
+    await risk.detectAtRisk(db, studioId, day("2026-11-29", 9));
+    expect((await risk.listAtRisk(db, studioId, day("2026-11-29", 9))).some((r) => r.name === "Namn rookie")).toBe(false);
+    // Ten days without a visit: on the list as a new member; keen came in and is not.
+    await risk.detectAtRisk(db, studioId, day("2026-11-30", 9));
+    const rows = await risk.listAtRisk(db, studioId, day("2026-11-30", 9));
+    expect(rows.find((r) => r.name === "Namn rookie")).toMatchObject({ group: "new", lastVisitAt: null });
+    expect(rows.some((r) => r.name === "Namn keen")).toBe(false);
+    // Members moved in on the first day are never "new".
+    expect(rows.filter((r) => r.name !== "Namn rookie").every((r) => r.group !== "new")).toBe(true);
+  });
 });

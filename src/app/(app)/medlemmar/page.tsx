@@ -10,7 +10,7 @@ import { getAtRiskEmails, listAtRisk } from "@/lib/mana/at-risk-service";
 import { listUsers } from "@/lib/users/service";
 import { requireUser } from "@/lib/session";
 import { t } from "@/lib/i18n";
-import { AtRiskList, membersHref } from "../at-risk-list";
+import { AtRiskList, groupFromParam, membersHref } from "../at-risk-list";
 
 /**
  * Members who need a word from staff (ticket 36): today the Hör av dig till
@@ -22,7 +22,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   const user = await requireUser();
   const { visa, grupp, alla } = await searchParams;
   const scope = visa === "mina" ? "mine" : "all";
-  const filter = grupp === "aldrig" ? "never" : grupp === "borta" ? "away" : "all";
+  const filter = groupFromParam(grupp);
   const [rows, [settings], people, emails, emailSettings] = await Promise.all([
     listAtRisk(db, user.studioId),
     db.select({ atRiskDays: studioSettings.atRiskDays }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),

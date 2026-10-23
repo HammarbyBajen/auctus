@@ -1,10 +1,10 @@
-import { and, desc, eq, inArray, lte, max, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, lte, max, min, or, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { alias } from "drizzle-orm/pg-core";
 import { atRiskAlert, atRiskNote, manaMember, manaMembership, manaVisit, studioSettings, user, type AtRiskEmails } from "@/db/schema";
 import type { KpiMembership } from "@/lib/kpi/members";
 import { todayInStockholm } from "@/lib/tasks/dates";
-import { atRiskMembers, visitStatuses } from "./at-risk";
+import { atRiskMembers, isNewMember, visitStatuses } from "./at-risk";
 import { distribute, emptyEmails, groupOf, type AtRiskGroup } from "./at-risk-work";
 import { customerRole } from "./membership";
 
@@ -136,7 +136,7 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
     .where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.status, "open")));
   if (open.length === 0) return [];
   const ids = open.map((o) => o.alert.manaUserId);
-  const [visits, memberships, notes] = await Promise.all([
+  const [visits, memberships, notes, firstStarts, [dataStart]] = await Promise.all([
     lastVisits(db, studioId, now),
     db
       .select({ manaUserId: manaMembership.manaUserId, name: manaMembership.name, startDate: manaMembership.startDate })
@@ -148,7 +148,16 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
       .leftJoin(user, eq(user.id, atRiskNote.createdById))
       .where(and(eq(atRiskNote.studioId, studioId), inArray(atRiskNote.manaUserId, ids)))
       .orderBy(desc(atRiskNote.createdAt)),
+    // Whether someone is a new member (ticket 34): their first membership of any kind, and the studio's first day of data.
+    db
+      .select({ manaUserId: manaMembership.manaUserId, first: min(manaMembership.startDate) })
+      .from(manaMembership)
+      .where(and(eq(manaMembership.studioId, studioId), inArray(manaMembership.manaUserId, ids)))
+      .groupBy(manaMembership.manaUserId),
+    db.select({ first: min(manaMembership.startDate) }).from(manaMembership).where(eq(manaMembership.studioId, studioId)),
   ]);
+  const firstStartOf = new Map(firstStarts.map((f) => [f.manaUserId, f.first]));
+  const today = todayInStockholm(now);
   const rows = open.map((o) => {
     const own = memberships.filter((m) => m.manaUserId === o.alert.manaUserId);
     const firstStart = own.map((m) => m.startDate).sort()[0];
@@ -162,7 +171,10 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
       lastVisitAt,
       since: firstStart ? new Date(`${firstStart}T12:00:00Z`) : o.alert.createdAt,
       memberships: [...new Set(own.map((m) => m.name))],
-      group: groupOf({ lastVisitAt }),
+      group: ((): AtRiskGroup => {
+        const first = firstStartOf.get(o.alert.manaUserId);
+        return first && dataStart?.first && isNewMember(first, dataStart.first, today) ? "new" : groupOf({ lastVisitAt });
+      })(),
       assignedToId: o.alert.assignedToId,
       assigneeName: o.assigneeName,
       notes: theirs.map(({ kind, body, at, by, private: isPrivate }) => ({ kind, body, at, by, private: isPrivate })),

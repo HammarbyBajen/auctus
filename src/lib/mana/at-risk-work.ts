@@ -9,10 +9,14 @@ export { firstName };
  * Pure, so every rule is tested on its own.
  */
 
-/** never: no visit at all in Mana (they may have stopped, or get in some other way). away: came, then stopped. */
-export type AtRiskGroup = "never" | "away";
+/**
+ * never: no visit at all in Mana (they may have stopped, or get in some other way). away: came, then stopped.
+ * new: a new member who has not been in for 10 days (ticket 34), whether they came at first or not.
+ */
+export type AtRiskGroup = "never" | "away" | "new";
 
-export const groupOf = (row: { lastVisitAt: Date | null }): AtRiskGroup => (row.lastVisitAt ? "away" : "never");
+/** never or away, by visits alone; the list puts new members in their own group. Also picks the email template. */
+export const groupOf = (row: { lastVisitAt: Date | null }): "never" | "away" => (row.lastVisitAt ? "away" : "never");
 
 export const emptyEmails: AtRiskEmails = { never: { subject: "", body: "" }, away: { subject: "", body: "" } };
 

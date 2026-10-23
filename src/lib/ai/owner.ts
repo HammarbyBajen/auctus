@@ -9,6 +9,7 @@ import { todayInStockholm } from "@/lib/tasks/dates";
 import { askAi, hasAiKey, type AiResult, type AiTransport } from "./client";
 import { buildFacts, weekStart } from "./facts";
 import { withoutContactDetails } from "./privacy";
+import { systemPrompt, tegen } from "./prompts";
 import { AiToolError, type Actor } from "./tools";
 
 /**
@@ -30,15 +31,18 @@ export const answerSchema = z.object({
 });
 export type OwnerAnswer = z.infer<typeof answerSchema>;
 
-const answerSystem = `Du svarar på frågor från ägarna till CrossFit Tegen, ett CrossFit-gym i Stockholm, om deras verksamhet.
-
-Du får Tegen HQ:s egna siffror som JSON: leads per månad, källa och kampanj, hur många som blev medlemmar, varför leads blev kalla, medlemmar och intäkter, uppsägningar och frysningar som är på gång, medlemmar som inte varit på gymmet, coachernas timmar och Tegens rutiner (Handbok). Personer anges bara med förnamn. Siffrorna är räknade i Tegen HQ; räkna inte om dem på egen hand om du inte måste, och visa i så fall hur.
-
-Svara så här:
-- På svenska, kort och rakt, med siffrorna.
-- Bara utifrån underlaget. Står svaret inte där, säg det och säg vilken siffra som saknas. Gissa aldrig.
-- Gäller frågan en rutin, svara utifrån Handbok och nämn rutinens rubrik.
-- Nämn aldrig hälsa, skador eller sjukdom hos en namngiven person.`;
+export const answerSystem = systemPrompt({
+  role: `Du svarar på frågor från ägarna till ${tegen} om deras verksamhet.`,
+  input:
+    "Du får Tegen HQ:s egna siffror som JSON: leads per månad, källa och kampanj, hur många som blev medlemmar, varför leads blev kalla, medlemmar och intäkter, uppsägningar och frysningar som är på gång, medlemmar som inte varit på gymmet, coachernas timmar och Tegens rutiner (Handbok). Siffrorna är räknade i Tegen HQ; räkna inte om dem på egen hand om du inte måste, och visa i så fall hur.",
+  task: "Svara så här:",
+  rules: [
+    "Kort och rakt, med siffrorna.",
+    "Står svaret inte i underlaget, säg det och säg vilken siffra som saknas.",
+    "Gäller frågan en rutin, svara utifrån Handbok och nämn rutinens rubrik.",
+  ],
+  health: "not_about_a_person",
+});
 
 /** An owner's question, answered from the figures. Owners only. */
 export async function askOwnerQuestion(db: Db, actor: Actor, question: string, transport?: AiTransport, now: Date = new Date()): Promise<AiResult<OwnerAnswer>> {
@@ -57,16 +61,16 @@ export const summarySchema = z.object({
 });
 export type WeeklySummary = z.infer<typeof summarySchema>;
 
-const summarySystem = `Du skriver en kort veckosammanfattning till ägarna till CrossFit Tegen, ett CrossFit-gym i Stockholm. Den läses i Discord på måndagsmorgonen.
-
-Du får Tegen HQ:s egna siffror som JSON. "leads.lastWeek" är förra veckan (måndag till söndag). Personer anges bara med förnamn.
-
-Skriv så här:
-- Svenska, kort, sakligt och vänligt. Inga utropstecken.
-- Bara utifrån siffrorna. Hitta inte på orsaker.
-- Ta med: nya leads och varifrån, vilka som blev medlemmar, uppsägningar och frysningar som är på gång, medlemmar som inte varit på gymmet.
-- Förnamn går bra. Nämn aldrig hälsa, skador eller sjukdom.
-- Under "watch": det som är värt att göra den här veckan, till exempel att ringa de som säger upp.`;
+export const summarySystem = systemPrompt({
+  role: `Du skriver en kort veckosammanfattning till ägarna till ${tegen}. Den läses i Discord på måndagsmorgonen.`,
+  input: 'Du får Tegen HQ:s egna siffror som JSON. "leads.lastWeek" är förra veckan (måndag till söndag).',
+  task: "Skriv så här:",
+  rules: [
+    "Kort, sakligt och vänligt. Inga utropstecken.",
+    "Ta med: nya leads och varifrån, vilka som blev medlemmar, uppsägningar och frysningar som är på gång, medlemmar som inte varit på gymmet.",
+    'Under "watch": det som är värt att göra den här veckan, till exempel att ringa de som säger upp.',
+  ],
+});
 
 /** Discord's text for the summary: a heading, the points, what to do, and a link. Under Discord's 2 000 characters. */
 export function summaryMessage(summary: WeeklySummary, week: string): string {

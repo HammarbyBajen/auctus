@@ -7,6 +7,7 @@ import { listColdReasons, listStages } from "@/lib/pipeline/service";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { askAi, type AiResult, type AiTransport } from "./client";
 import { firstNameOnly, notesForAi } from "./privacy";
+import { systemPrompt, tegen } from "./prompts";
 import { briefSchema, type Brief } from "./brief";
 import { leadContext, stepSchema, type Actor, type Step } from "./tools";
 
@@ -23,17 +24,18 @@ type Db = typeof defaultDb;
 
 // ---- Before the call ----
 
-const briefSystem = `Du hjälper personalen på CrossFit Tegen, ett CrossFit-gym i Stockholm, inför ett samtal med en lead: någon som visat intresse för att börja träna.
-
-Du får en sammanfattning av leaden som JSON: förnamn, steg i säljprocessen, när och varifrån leaden kom, svar från formuläret på webben, vad som hänt (kontakter, stegbyten och anteckningar) och öppna uppgifter. Anteckningar som innehåller känsliga uppgifter har hållits tillbaka och räknas bara.
-
-Skriv en kort förberedelse på svenska:
-- Använd bara det som står i underlaget. Hitta inte på fakta, priser, erbjudanden eller tider.
-- Skriv vardagligt och kort, som en kollega som snabbt sätter någon in i läget.
-- Nämn aldrig hälsa, skador eller sjukdom, även om något tyder på det.
-- Saknas något viktigt (till exempel att ingen kontakt tagits än), säg det rakt ut.
-- Målet med de flesta samtal är att boka en provträning eller ett möte.
-- Öppningen säger vem som ringer: använd förnamnet i "caller" om det finns, annars ingen namnlucka.`;
+export const briefSystem = systemPrompt({
+  role: `Du hjälper personalen på ${tegen} inför ett samtal med en lead: någon som visat intresse för att börja träna.`,
+  input:
+    "Du får en sammanfattning av leaden som JSON: förnamn, steg i säljprocessen, när och varifrån leaden kom, svar från formuläret på webben, vad som hänt (kontakter, stegbyten och anteckningar) och öppna uppgifter. Anteckningar som innehåller känsliga uppgifter har hållits tillbaka och räknas bara.",
+  task: "Skriv en kort förberedelse:",
+  rules: [
+    "Vardagligt och kort, som en kollega som snabbt sätter någon in i läget.",
+    "Saknas något viktigt (till exempel att ingen kontakt tagits än), säg det rakt ut.",
+    "Målet med de flesta samtal är att boka en provträning eller ett möte.",
+    'Öppningen säger vem som ringer: använd förnamnet i "caller" om det finns, annars ingen namnlucka.',
+  ],
+});
 
 /** Asks for a brief before a call. `callerName` is the staff member's, for the opening line. */
 export async function callBrief(db: Db, actor: Actor, leadId: string, transport?: AiTransport, now: Date = new Date(), callerName: string | null = null): Promise<AiResult<Brief>> {
@@ -55,16 +57,18 @@ const proposalSchema = z.object({
 });
 export type StepProposal = { steps: Step[]; explanation: string };
 
-const stepsSystem = `Du hjälper personalen på CrossFit Tegen att föra in vad som hände efter ett samtal eller en kontakt med en lead.
-
-Du får leadens läge som JSON, listan med steg i säljprocessen (key och namn), skälen för att markera en lead som kall, vilka kontaktutfall som finns, dagens datum, och anteckningen personalen just skrev.
-
-Föreslå de steg som anteckningen faktiskt ger stöd för:
-- log_contact: om anteckningen visar att en kontakt togs. Välj utfall bland de givna (called = pratade med dem, no_answer = svarade inte, emailed = mejlade eller sms:ade, booked = bokade en tid).
-- add_note: anteckningen, renskriven kort och sakligt på svenska. Ta med det viktiga, inget nytt. Utelämna hälsouppgifter.
-- create_task: om något ska göras ett visst datum (ring tillbaka, påminn, följ upp). dueDate i formatet ÅÅÅÅ-MM-DD, räknat från dagens datum; "torsdag" betyder närmaste torsdag efter i dag.
-- move_stage: bara om anteckningen tydligt visar att leaden kommit till ett annat steg. Använd key från listan. Kall kräver ett skäl (coldReason, key från listan); annars är coldReason null.
-Föreslå inget du måste gissa. Hellre färre steg än fel steg.`;
+export const stepsSystem = systemPrompt({
+  role: `Du hjälper personalen på ${tegen} att föra in vad som hände efter ett samtal eller en kontakt med en lead.`,
+  input:
+    "Du får leadens läge som JSON, listan med steg i säljprocessen (key och namn), skälen för att markera en lead som kall, vilka kontaktutfall som finns, dagens datum, och anteckningen personalen just skrev.",
+  task: "Föreslå de steg som anteckningen faktiskt ger stöd för. Hellre färre steg än fel steg:",
+  rules: [
+    "log_contact: om anteckningen visar att en kontakt togs. Välj utfall bland de givna (called = pratade med dem, no_answer = svarade inte, emailed = mejlade eller sms:ade, booked = bokade en tid).",
+    "add_note: anteckningen, renskriven kort och sakligt. Ta med det viktiga, inget nytt.",
+    'create_task: om något ska göras ett visst datum (ring tillbaka, påminn, följ upp). dueDate i formatet ÅÅÅÅ-MM-DD, räknat från dagens datum; "torsdag" betyder närmaste torsdag efter i dag.',
+    "move_stage: bara om anteckningen tydligt visar att leaden kommit till ett annat steg. Använd key från listan. Kall kräver ett skäl (coldReason, key från listan); annars är coldReason null.",
+  ],
+});
 
 export type StepsResult = AiResult<StepProposal> | { status: "held_back" };
 

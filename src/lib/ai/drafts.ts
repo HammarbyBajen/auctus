@@ -6,6 +6,7 @@ import { alertMember } from "@/lib/mana/at-risk-service";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { askAi, type AiResult, type AiTransport } from "./client";
 import { firstNameOnly, mentionsHealth, withoutContactDetails } from "./privacy";
+import { systemPrompt, tegen } from "./prompts";
 import { atRiskList, leadContext, studioHealthTerms, type Actor } from "./tools";
 
 /**
@@ -84,20 +85,21 @@ export async function toneExamples(db: Db, studioId: string, kind: DraftKind, te
   return out;
 }
 
-const draftSystem = `Du skriver utkast till e-post från personalen på CrossFit Tegen, ett CrossFit-gym i Stockholm. En person läser utkastet, ändrar det och skickar det själv.
-
-Du får som JSON: vem mejlet är till (en lead som visat intresse för att börja träna, eller en medlem som inte varit på gymmet på ett tag), deras läge, avsändarens förnamn, tidigare mejl från Tegen som exempel på tonen, och ibland ett påbörjat utkast.
-
-Skriv så här:
-- Svenska, kort och personligt, som en människa på gymmet skriver, inte som reklam.
-- Härma tonen i exemplen om det finns några: hälsning, längd, ordval och avslutning. Kopiera inte deras innehåll. [namn] i exemplen står för en annan person.
-- Använd bara fakta i underlaget. Hitta aldrig på priser, erbjudanden, tider eller datum.
-- Nämn aldrig hälsa, skador eller sjukdom.
-- Börja med "Hej" och förnamnet. Avsluta med avsändarens förnamn om det finns.
-- Till en lead: målet är att boka en provträning eller ett möte. Föreslå inga tider; be dem svara med vad som passar.
-- Till en medlem: hör hur det är och säg att ni saknar dem. Ingen press och inget säljande.
-- Finns ett påbörjat utkast, utgå från det och behåll det personalen redan skrivit.
-- Ämnesraden kort, utan utropstecken.`;
+export const draftSystem = systemPrompt({
+  role: `Du skriver utkast till e-post från personalen på ${tegen}. En person läser utkastet, ändrar det och skickar det själv.`,
+  input:
+    "Du får som JSON: vem mejlet är till (en lead som visat intresse för att börja träna, eller en medlem som inte varit på gymmet på ett tag), deras läge, avsändarens förnamn, tidigare mejl från Tegen som exempel på tonen, och ibland ett påbörjat utkast.",
+  task: "Skriv så här:",
+  rules: [
+    "Kort och personligt, som en människa på gymmet skriver, inte som reklam.",
+    "Härma tonen i exemplen om det finns några: hälsning, längd, ordval och avslutning. Kopiera inte deras innehåll. [namn] i exemplen står för en annan person.",
+    'Börja med "Hej" och förnamnet. Avsluta med avsändarens förnamn om det finns.',
+    "Till en lead: målet är att boka en provträning eller ett möte. Föreslå inga tider; be dem svara med vad som passar.",
+    "Till en medlem: hör hur det är och säg att ni saknar dem. Ingen press och inget säljande.",
+    "Finns ett påbörjat utkast, utgå från det och behåll det personalen redan skrivit.",
+    "Ämnesraden kort, utan utropstecken.",
+  ],
+});
 
 type Current = { subject: string; body: string };
 

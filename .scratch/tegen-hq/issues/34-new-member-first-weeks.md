@@ -4,7 +4,7 @@
 
 **Blocked by:** 13 (visits), related to 19 (a big drop in visits)
 
-**Status:** built (2026-10-23); waiting on Max's look at the copy
+**Status:** done (2026-10-23)
 
 **What we know:**
 - A membership's start date and every visit are in the Mana mirror; a lead that becomes a member is already marked won (ticket 11).

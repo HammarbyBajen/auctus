@@ -4,7 +4,7 @@
 
 **Blocked by:** none. Most useful from go-live (18).
 
-**Status:** built (2026-10-23); waiting on Max's look at the copy
+**Status:** done (2026-10-23)
 
 **What we know:**
 - Class bookings are synced nightly (ticket 13): who, which class, and how it went (booked, checked in, no-show, cancelled).

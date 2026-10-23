@@ -6,6 +6,10 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [{ source: "/lon/:path*", destination: "/timmar", permanent: false }];
   },
+  experimental: {
+    // Coding agents are reminded when a Next.js security update is out (set by `next upgrade --agent=security`).
+    agentUpgrade: "security",
+  },
   turbopack: {
     rules: {
       "*.css": {

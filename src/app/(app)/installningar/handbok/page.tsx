@@ -57,7 +57,7 @@ export default async function HandbookSettingsPage({ searchParams }: { searchPar
                     </SubmitButton>
                   </form>
                   <div className="flex items-center gap-1">
-                    <span className="px-2 text-xs text-muted-foreground tabular-nums">{t("handbook.pagesCount", { n: formatNumber(n) })}</span>
+                    <span className="px-2 text-xs text-muted-foreground tabular-nums">{t(n === 1 ? "handbook.pagesOne" : "handbook.pagesCount", { n: formatNumber(n) })}</span>
                     <form action={moveCategoryAction.bind(null, c.id, "up")}>
                       <SubmitButton variant="ghost" size="icon" disabled={i === 0} aria-label={t("handbook.moveUp", { name: c.name })} keepLabel>
                         <ArrowUp aria-hidden="true" />

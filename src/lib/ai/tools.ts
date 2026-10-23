@@ -39,7 +39,7 @@ function allow(actor: Actor, resource: Resource, action: string) {
   if (!can(actor.role, resource, action)) throw new AiToolError("not_allowed");
 }
 
-async function studioHealthTerms(db: Db, studioId: string): Promise<string[]> {
+export async function studioHealthTerms(db: Db, studioId: string): Promise<string[]> {
   const [row] = await db.select({ ai: studioSettings.aiSettings }).from(studioSettings).where(eq(studioSettings.studioId, studioId)).limit(1);
   return row?.ai?.healthTerms ?? [];
 }

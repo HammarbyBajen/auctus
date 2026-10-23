@@ -5,9 +5,16 @@ import { db } from "@/db";
 import { sendEmail, type SendResult } from "@/lib/email/service";
 import { addNote, getLead, logContact as logLeadContact } from "@/lib/leads/service";
 import { alertMember, logContact as logMemberContact } from "@/lib/mana/at-risk-service";
+import { decideSuggestion } from "@/lib/ai/client";
 import { requirePermission } from "@/lib/session";
 
 export type ComposeState = { result?: SendResult["status"]; mode?: SendResult["mode"]; error?: "empty" | "no_address" | "gone" } | null;
+
+/** A draft from the assistant that was sent (ticket 30, phase D): noted as accepted, by whom. */
+async function acceptDraft(studioId: string, userId: string, formData: FormData, sent: boolean) {
+  const suggestionId = String(formData.get("suggestion") ?? "");
+  if (sent && /^[0-9a-f-]{36}$/i.test(suggestionId)) await decideSuggestion(db, studioId, suggestionId, "accepted", userId);
+}
 
 function draft(formData: FormData) {
   const subject = String(formData.get("subject") ?? "").trim().slice(0, 200);
@@ -32,6 +39,7 @@ export async function sendLeadEmail(leadId: string, _: ComposeState, formData: F
     await logLeadContact(db, user.studioId, leadId, "emailed", user.id);
     await addNote(db, user.studioId, leadId, `E-post: ${email.subject}`, user.id);
   }
+  await acceptDraft(user.studioId, user.id, formData, result.status === "sent");
   revalidatePath(`/leads/${leadId}`);
   return { result: result.status, mode: result.mode };
 }
@@ -48,6 +56,7 @@ export async function sendMemberEmail(alertId: string, _: ComposeState, formData
   if (result.status === "sent" && result.mode === "live") {
     await logMemberContact(db, user.studioId, alertId, user.id, "messaged", `E-post: ${email.subject}`);
   }
+  await acceptDraft(user.studioId, user.id, formData, result.status === "sent");
   revalidatePath("/");
   revalidatePath("/medlemmar");
   return { result: result.status, mode: result.mode };

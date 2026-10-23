@@ -13,6 +13,8 @@ import { atRiskDraft, type AtRiskGroup } from "@/lib/mana/at-risk-work";
 import { newMemberDays } from "@/lib/mana/at-risk";
 import type { EmailMode } from "@/lib/email/mode";
 import { sendMemberEmail } from "./email-actions";
+import { draftForMember } from "./draft-actions";
+import { aiEnabled } from "@/lib/ai/enabled";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -81,6 +83,7 @@ export function AtRiskList({
   emailMode: EmailMode;
 }) {
   const today = todayInStockholm();
+  const assistantOn = aiEnabled();
   // "Mina": mine and nobody's, as with leads.
   const inScope = scope === "mine" ? rows.filter((r) => !r.assignedToId || r.assignedToId === viewerId) : rows;
   const count = (group: AtRiskGroup) => inScope.filter((r) => r.group === group).length;
@@ -189,7 +192,17 @@ export function AtRiskList({
                     id={`risk-${row.id}`}
                     name={name}
                     phone={row.phone}
-                    email={row.email ? { to: row.email, ...atRiskDraft(row, emails), mode: emailMode, action: sendMemberEmail.bind(null, row.id) } : null}
+                    email={
+                      row.email
+                        ? {
+                            to: row.email,
+                            ...atRiskDraft(row, emails),
+                            mode: emailMode,
+                            action: sendMemberEmail.bind(null, row.id),
+                            draft: assistantOn ? draftForMember.bind(null, row.id) : undefined,
+                          }
+                        : null
+                    }
                     logAction={logAtRiskContact.bind(null, row.id)}
                     dismissAction={dismissAtRisk.bind(null, row.id)}
                     outcomes={contactOutcomes}

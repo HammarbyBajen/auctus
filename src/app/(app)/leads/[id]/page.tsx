@@ -38,6 +38,7 @@ import { EmailComposer } from "@/components/app/email-composer";
 import { getEmailSettings, listEmails } from "@/lib/email/service";
 import { fillTemplate } from "@/lib/email/template";
 import { sendLeadEmail } from "../../email-actions";
+import { draftForLead } from "../../draft-actions";
 import { EmailHistory } from "../../email-history";
 import { TaskForm } from "./task-form";
 import { ParkForm } from "./park-form";
@@ -209,6 +210,7 @@ export default async function LeadPage({
                   subject={fillTemplate(emailSettings.leadEmail.subject, person.name)}
                   body={fillTemplate(emailSettings.leadEmail.body, person.name)}
                   mode={emailSettings.mode}
+                  draft={assistantOn ? draftForLead.bind(null, lead.id) : undefined}
                 />
                 <EmailHistory emails={emails} />
               </Panel>

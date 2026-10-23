@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { EmailComposer } from "@/components/app/email-composer";
 import { SubmitButton } from "@/components/app/submit-button";
 import type { ComposeState } from "./email-actions";
+import type { DraftState } from "./draft-actions";
 import type { EmailMode } from "@/lib/email/mode";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
@@ -36,7 +37,15 @@ export function AtRiskPanels({
   name: string;
   phone: string | null;
   /** Writing to them from Tegen HQ, with Tegen's template for their group (M8 phase 1). */
-  email: { to: string; subject: string; body: string; mode: EmailMode; action: (state: ComposeState, formData: FormData) => Promise<ComposeState> } | null;
+  email: {
+    to: string;
+    subject: string;
+    body: string;
+    mode: EmailMode;
+    action: (state: ComposeState, formData: FormData) => Promise<ComposeState>;
+    /** The assistant's draft, when it is on (ticket 30, phase D). */
+    draft?: (state: DraftState, formData: FormData) => Promise<DraftState>;
+  } | null;
   history: React.ReactNode | null;
   logAction: (formData: FormData) => Promise<void>;
   dismissAction: (formData: FormData) => Promise<void>;
@@ -84,7 +93,7 @@ export function AtRiskPanels({
 
       {open === "email" && email && (
         <div id={panelId("email")} className="rounded-md bg-well p-3">
-          <EmailComposer id={panelId("compose")} action={email.action} to={email.to} subject={email.subject} body={email.body} mode={email.mode} />
+          <EmailComposer id={panelId("compose")} action={email.action} to={email.to} subject={email.subject} body={email.body} mode={email.mode} draft={email.draft} />
         </div>
       )}
 

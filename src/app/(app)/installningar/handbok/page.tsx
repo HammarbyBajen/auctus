@@ -8,7 +8,7 @@ import { Notice } from "@/components/app/notice";
 import { Page } from "@/components/app/page";
 import { Panel } from "@/components/app/surface";
 import { SubmitButton } from "@/components/app/submit-button";
-import { getHandbookEditors, listCategories, listPages } from "@/lib/handbook/service";
+import { countByCategory, getHandbookEditors, listCategories } from "@/lib/handbook/service";
 import { listUsers } from "@/lib/users/service";
 import { requirePermission } from "@/lib/session";
 import { formatNumber } from "@/lib/format";
@@ -19,9 +19,9 @@ import { addCategory, deleteCategoryAction, moveCategoryAction, renameCategoryAc
 export default async function HandbookSettingsPage({ searchParams }: { searchParams: Promise<{ sparat?: string; fel?: string; redaktorer?: string }> }) {
   const user = await requirePermission("settings", "manage");
   const { sparat, fel, redaktorer } = await searchParams;
-  const [categories, pages, people, editors] = await Promise.all([
+  const [categories, counts, people, editors] = await Promise.all([
     listCategories(db, user.studioId),
-    listPages(db, user.studioId),
+    countByCategory(db, user.studioId),
     listUsers(db, user.studioId),
     getHandbookEditors(db, user.studioId),
   ]);
@@ -47,7 +47,7 @@ export default async function HandbookSettingsPage({ searchParams }: { searchPar
         {categories.length > 0 && (
           <ul className="flex flex-col gap-2">
             {categories.map((c, i) => {
-              const n = pages.filter((p) => p.categoryId === c.id).length;
+              const { active: n, archived } = counts.get(c.id) ?? { active: 0, archived: 0 };
               return (
                 <li key={c.id} className="flex flex-col gap-2 rounded-md bg-well p-2 sm:flex-row sm:items-center">
                   <form action={renameCategoryAction.bind(null, c.id)} className="flex min-w-0 flex-1 gap-2">
@@ -57,7 +57,9 @@ export default async function HandbookSettingsPage({ searchParams }: { searchPar
                     </SubmitButton>
                   </form>
                   <div className="flex items-center gap-1">
-                    <span className="px-2 text-xs text-muted-foreground tabular-nums">{t(n === 1 ? "handbook.pagesOne" : "handbook.pagesCount", { n: formatNumber(n) })}</span>
+                    <span className="px-2 text-xs text-muted-foreground tabular-nums">{t(n === 1 ? "handbook.pagesOne" : "handbook.pagesCount", { n: formatNumber(n) })}
+                      {archived > 0 ? ` · ${t("handbook.archivedCount", { n: formatNumber(archived) })}` : ""}
+                    </span>
                     <form action={moveCategoryAction.bind(null, c.id, "up")}>
                       <SubmitButton variant="ghost" size="icon" disabled={i === 0} aria-label={t("handbook.moveUp", { name: c.name })} keepLabel>
                         <ArrowUp aria-hidden="true" />
@@ -69,7 +71,7 @@ export default async function HandbookSettingsPage({ searchParams }: { searchPar
                       </SubmitButton>
                     </form>
                     <form action={deleteCategoryAction.bind(null, c.id)}>
-                      <SubmitButton variant="ghost" size="icon" disabled={n > 0} aria-label={t("handbook.deleteCategory", { name: c.name })} title={n > 0 ? t("handbook.errorInUse") : undefined} keepLabel>
+                      <SubmitButton variant="ghost" size="icon" disabled={n + archived > 0} aria-label={t("handbook.deleteCategory", { name: c.name })} title={n + archived > 0 ? t("handbook.errorInUse") : undefined} keepLabel>
                         <Trash2 aria-hidden="true" />
                       </SubmitButton>
                     </form>

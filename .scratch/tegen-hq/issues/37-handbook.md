@@ -33,3 +33,6 @@
 - [x] Phone: Mer menu
 - [x] Tests (document checks, permissions, versions, search, categories)
 - [x] Migration 0030 in production (Max), copy approved (Max), then pushed
+
+Review and archive (2026-10-23, decided by Max): the front page lists every category, to open and see its routines, with "Senast uppdaterade" beside it; a routine's own page keeps the category sidebar. **Arkivera** takes a routine out of use: hidden from Handbok, kept with its history, seen only by editors (an "Arkiv" section at the bottom of the front page, and a note on the routine), back with "Återställ". **Ta bort** now deletes a routine for good, with its history, after a clear warning. A category can be removed only when it holds no routines, archived ones included (migration 0032 turns routines removed before this into archived ones). From the code review: a save is refused if someone else saved the routine after it was opened (no silent overwrite); a refused save keeps the title and category typed; ids that are not ids give "not found" instead of a server error; versions are stamped with one clock; lists read at most 400 characters of each routine's text; one grouping helper for the front page and the sidebar.
+

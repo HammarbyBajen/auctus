@@ -59,3 +59,13 @@ describe("a routine's text (ticket 37)", () => {
     expect(text).toBe("Stänga\nSläck i omklädningsrummet\nLås dörren");
   });
 });
+
+describe("routines by category", () => {
+  it("follows the categories' order, and leaves out empty ones unless asked", async () => {
+    const { groupByCategory } = await import("@/lib/handbook/group");
+    const categories = [{ id: "a" }, { id: "b" }, { id: "c" }];
+    const pages = [{ categoryId: "c", t: 1 }, { categoryId: "a", t: 2 }];
+    expect(groupByCategory(categories, pages).map((g) => g.id)).toEqual(["a", "c"]);
+    expect(groupByCategory(categories, pages, { keepEmpty: true }).map((g) => [g.id, g.pages.length])).toEqual([["a", 1], ["b", 0], ["c", 1]]);
+  });
+});

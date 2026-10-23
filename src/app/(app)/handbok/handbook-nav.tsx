@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { MicroLabel } from "@/components/app/micro-label";
 import { formatNumber } from "@/lib/format";
+import { groupByCategory } from "@/lib/handbook/group";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
@@ -19,7 +20,7 @@ export function HandbookNav({
   pages: { id: string; title: string; categoryId: string }[];
   currentPageId?: string | null;
 }) {
-  const groups = categories.map((c) => ({ ...c, pages: pages.filter((p) => p.categoryId === c.id) })).filter((g) => g.pages.length > 0);
+  const groups = groupByCategory(categories, pages);
   if (groups.length === 0) return null;
   const currentCategory = pages.find((p) => p.id === currentPageId)?.categoryId;
 

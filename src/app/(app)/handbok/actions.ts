@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
-import { canEditHandbook, createPage, deletePage, HandbookError, restoreVersion, updatePage } from "@/lib/handbook/service";
+import { archivePage, canEditHandbook, createPage, deletePage, HandbookError, restoreVersion, unarchivePage, updatePage } from "@/lib/handbook/service";
 import { requireUser } from "@/lib/session";
 import type { MessageKey } from "@/lib/i18n";
 
@@ -26,20 +26,48 @@ export async function savePage(id: string | null, _: PageFormState, formData: Fo
   };
   if (!input.title.trim()) return { error: "handbook.errorTitle" };
   if (!input.categoryId) return { error: "handbook.errorCategory" };
+  // When the routine had last been changed as the editor opened it, so nobody's save is overwritten unseen.
+  const basedOn = new Date(String(formData.get("basedOn") ?? ""));
   let pageId = id;
   try {
-    if (id) await updatePage(db, user.studioId, id, user.id, input);
+    if (id) await updatePage(db, user.studioId, id, user.id, input, Number.isNaN(basedOn.getTime()) ? null : basedOn);
     else pageId = (await createPage(db, user.studioId, user.id, input)).id;
   } catch (error) {
     if (error instanceof HandbookError && error.code === "not_found") notFound();
-    if (error instanceof HandbookError) return { error: "handbook.errorSave" };
+    if (error instanceof HandbookError) return { error: error.code === "conflict" ? "handbook.errorConflict" : "handbook.errorSave" };
     throw error;
   }
   revalidatePath("/handbok");
   redirect(`/handbok/${pageId}`);
 }
 
-/** Takes a routine out of Handbok. It is kept, with its history, and can be brought back on request. */
+/** Takes a routine out of use: hidden from Handbok, kept with its history, back with one click. */
+export async function archive(id: string) {
+  const user = await requireEditor();
+  try {
+    await archivePage(db, user.studioId, id, user.id);
+  } catch (error) {
+    if (error instanceof HandbookError) notFound();
+    throw error;
+  }
+  revalidatePath("/handbok");
+  redirect(`/handbok/${id}?arkiverad=1`);
+}
+
+/** Brings an archived routine back into Handbok. */
+export async function unarchive(id: string) {
+  const user = await requireEditor();
+  try {
+    await unarchivePage(db, user.studioId, id);
+  } catch (error) {
+    if (error instanceof HandbookError) notFound();
+    throw error;
+  }
+  revalidatePath("/handbok");
+  redirect(`/handbok/${id}?tillbaka=1`);
+}
+
+/** Deletes a routine for good, with its history. */
 export async function removePage(id: string) {
   const user = await requireEditor();
   try {

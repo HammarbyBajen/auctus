@@ -1076,8 +1076,11 @@ export const handbookPage = pgTable(
     createdById: text("created_by_id").references(() => user.id, { onDelete: "set null" }),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
     updatedById: text("updated_by_id").references(() => user.id, { onDelete: "set null" }),
-    /** Removed from Handbok; kept with its history, so a removal can be undone. */
+    /** No longer used: removing a routine now deletes it (2026-10-23). Left for one release, then dropped. */
     deletedAt: timestamp("deleted_at"),
+    /** Out of use: hidden from Handbok, kept with its history; editors can bring it back. */
+    archivedAt: timestamp("archived_at"),
+    archivedById: text("archived_by_id").references(() => user.id, { onDelete: "set null" }),
   },
   (table) => [index("handbook_page_studio_idx").on(table.studioId, table.categoryId)],
 );

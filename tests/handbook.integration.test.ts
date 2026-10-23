@@ -50,10 +50,13 @@ describe.skipIf(!hasDb)("Handbok (ticket 37)", () => {
   it("keeps a version for every change, and can bring an earlier one back", async () => {
     const cat = await hb.createCategory(db, studioId, "  Öppna   och stänga ");
     expect(cat.name).toBe("Öppna och stänga");
-    const page = await hb.createPage(db, studioId, ownerId, { title: "Stänga", categoryId: cat.id, content: doc("Släck lamporna") });
-    await hb.updatePage(db, studioId, page.id, staffId, { title: "Stänga", categoryId: cat.id, content: doc("Släck lamporna och lås") }, new Date(Date.now() + 1000));
+    const created = new Date(Date.now() - 10_000);
+    const page = await hb.createPage(db, studioId, ownerId, { title: "Stänga", categoryId: cat.id, content: doc("Släck lamporna") }, created);
+    // The first version and the routine carry the same time, from the same clock as later ones.
+    expect(page.updatedAt.getTime()).toBe(created.getTime());
+    await hb.updatePage(db, studioId, page.id, staffId, { title: "Stänga", categoryId: cat.id, content: doc("Släck lamporna och lås") }, page.updatedAt, new Date(Date.now() + 1000));
     // Saving without a change makes no version.
-    await hb.updatePage(db, studioId, page.id, staffId, { title: "Stänga", categoryId: cat.id, content: doc("Släck lamporna och lås") }, new Date(Date.now() + 2000));
+    await hb.updatePage(db, studioId, page.id, staffId, { title: "Stänga", categoryId: cat.id, content: doc("Släck lamporna och lås") }, null, new Date(Date.now() + 2000));
     const versions = await hb.listVersions(db, studioId, page.id);
     expect(versions.map((v) => v.byName)).toEqual(["Coach", "Ägare"]);
     const found = await hb.getPage(db, studioId, page.id);
@@ -65,16 +68,34 @@ describe.skipIf(!hasDb)("Handbok (ticket 37)", () => {
     expect(await hb.listVersions(db, studioId, page.id)).toHaveLength(3);
   });
 
+  it("refuses a save based on a version someone else has changed since", async () => {
+    const [cat] = await hb.listCategories(db, studioId);
+    const [page] = await hb.listPages(db, studioId, { query: "Stänga" });
+    const opened = page.updatedAt;
+    await hb.updatePage(db, studioId, page.id, ownerId, { title: "Stänga", categoryId: cat.id, content: doc("Fredriks ändring") }, opened, new Date(Date.now() + 5000));
+    await expect(hb.updatePage(db, studioId, page.id, staffId, { title: "Stänga", categoryId: cat.id, content: doc("Coachens ändring") }, opened)).rejects.toThrow("conflict");
+    expect((await hb.getPage(db, studioId, page.id))?.page.text).toBe("Fredriks ändring");
+  });
+
+  it("answers ids that are not ids as not found or invalid, never with a database error", async () => {
+    const [cat] = await hb.listCategories(db, studioId);
+    await expect(hb.createPage(db, studioId, ownerId, { title: "X", categoryId: "x", content: doc("x") })).rejects.toThrow("invalid");
+    await expect(hb.updatePage(db, studioId, "x", ownerId, { title: "X", categoryId: cat.id, content: doc("x") }, null)).rejects.toThrow("not_found");
+    expect(await hb.getPage(db, studioId, "x")).toBeNull();
+    expect(await hb.getVersion(db, studioId, "x", "y")).toBeNull();
+    await expect(hb.deleteCategory(db, studioId, "x")).rejects.toThrow("invalid");
+  });
+
   it("finds routines by any part of a word, in the title or the text, and not another studio's", async () => {
     const [cat] = await hb.listCategories(db, studioId);
     await hb.createPage(db, studioId, ownerId, { title: "Ny medlem", categoryId: cat.id, content: doc("Visa omklädningsskåpen och 100% av passen") });
-    expect((await hb.listPages(db, studioId, "skåp")).map((p) => p.title)).toEqual(["Ny medlem"]);
-    expect((await hb.listPages(db, studioId, "STÄNG")).map((p) => p.title)).toEqual(["Stänga"]);
+    expect((await hb.listPages(db, studioId, { query: "skåp" })).map((p) => p.title)).toEqual(["Ny medlem"]);
+    expect((await hb.listPages(db, studioId, { query: "STÄNG" })).map((p) => p.title)).toEqual(["Stänga"]);
     // % and _ are searched for as written.
-    expect((await hb.listPages(db, studioId, "100%")).map((p) => p.title)).toEqual(["Ny medlem"]);
-    expect(await hb.listPages(db, studioId, "_")).toEqual([]);
-    expect(await hb.listPages(db, otherStudio, "skåp")).toEqual([]);
-    const [hit] = await hb.listPages(db, studioId, "skåp");
+    expect((await hb.listPages(db, studioId, { query: "100%" })).map((p) => p.title)).toEqual(["Ny medlem"]);
+    expect(await hb.listPages(db, studioId, { query: "_" })).toEqual([]);
+    expect(await hb.listPages(db, otherStudio, { query: "skåp" })).toEqual([]);
+    const [hit] = await hb.listPages(db, studioId, { query: "skåp" });
     expect(hit.excerpt).toContain("omklädningsskåpen");
   });
 
@@ -85,15 +106,31 @@ describe.skipIf(!hasDb)("Handbok (ticket 37)", () => {
     await expect(hb.createPage(db, studioId, ownerId, { title: "  ", categoryId: cat.id, content: doc("x") })).rejects.toThrow("invalid");
   });
 
-  it("removes a routine from the list but keeps it, and removes a category only when it is empty", async () => {
+  it("archives a routine out of the lists, keeps it, and brings it back", async () => {
+    const [page] = await hb.listPages(db, studioId, { query: "Ny medlem" });
+    await hb.archivePage(db, studioId, page.id, ownerId);
+    expect((await hb.listPages(db, studioId)).map((p) => p.title)).toEqual(["Stänga"]);
+    expect((await hb.listPages(db, studioId, { archived: true })).map((p) => p.title)).toEqual(["Ny medlem"]);
+    expect(await hb.getPage(db, studioId, page.id)).toMatchObject({ archivedByName: "Ägare" });
+    await expect(hb.archivePage(db, studioId, page.id, ownerId)).rejects.toThrow("not_found");
+    await hb.unarchivePage(db, studioId, page.id);
+    expect(await hb.listPages(db, studioId, { archived: true })).toEqual([]);
+    await hb.archivePage(db, studioId, page.id, ownerId);
+  });
+
+  it("removes a routine for good, and a category only when it holds none, archived ones included", async () => {
     const [cat] = await hb.listCategories(db, studioId);
+    expect(await hb.countByCategory(db, studioId)).toEqual(new Map([[cat.id, { active: 1, archived: 1 }]]));
+    const [active] = await hb.listPages(db, studioId);
+    await hb.deletePage(db, studioId, active.id);
+    expect(await hb.getPage(db, studioId, active.id)).toBeNull();
+    expect(await hb.listVersions(db, studioId, active.id)).toEqual([]);
+    // The archived one still holds the category.
     await expect(hb.deleteCategory(db, studioId, cat.id)).rejects.toThrow("category_in_use");
-    for (const p of await hb.listPages(db, studioId)) await hb.deletePage(db, studioId, p.id);
-    expect(await hb.listPages(db, studioId)).toEqual([]);
-    expect(await db.select().from(schema.handbookPage).where(eq(schema.handbookPage.studioId, studioId))).toHaveLength(2);
+    const [archived] = await hb.listPages(db, studioId, { archived: true });
+    await hb.deletePage(db, studioId, archived.id);
     await hb.deleteCategory(db, studioId, cat.id);
     expect(await hb.listCategories(db, studioId)).toEqual([]);
-    expect(await db.select().from(schema.handbookPage).where(eq(schema.handbookPage.studioId, studioId))).toHaveLength(0);
   });
 
   it("moves categories up and down", async () => {

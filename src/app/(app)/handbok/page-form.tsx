@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/app/native-select";
@@ -17,23 +17,30 @@ export function PageForm({
   categoryId,
   content,
   categories,
+  basedOn = null,
 }: {
   id: string | null;
   title: string;
   categoryId: string;
   content: HandbookDoc;
   categories: { id: string; name: string }[];
+  /** When the routine had last been changed as it was opened (ISO), to catch someone else's save in between. */
+  basedOn?: string | null;
 }) {
   const [state, action] = useActionState<PageFormState, FormData>(savePage.bind(null, id), {});
+  // Held here, not in the fields, so a refused save does not put back the old title or category.
+  const [titleValue, setTitle] = useState(title);
+  const [categoryValue, setCategory] = useState(categoryId);
   return (
     <form action={action} className="flex flex-col gap-5">
+      {basedOn && <input type="hidden" name="basedOn" value={basedOn} />}
       <div className="flex flex-col gap-2">
         <Label htmlFor="handbook-title">{t("handbook.titleLabel")}</Label>
-        <Input id="handbook-title" name="title" defaultValue={title} required maxLength={150} autoComplete="off" className="text-base" />
+        <Input id="handbook-title" name="title" value={titleValue} onChange={(e) => setTitle(e.target.value)} required maxLength={150} autoComplete="off" className="text-base" />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="handbook-category">{t("handbook.categoryLabel")}</Label>
-        <NativeSelect id="handbook-category" name="category" defaultValue={categoryId} required className="sm:max-w-xs">
+        <NativeSelect id="handbook-category" name="category" value={categoryValue} onChange={(e) => setCategory(e.target.value)} required className="sm:max-w-xs">
           <option value="" disabled>
             {t("handbook.categoryPick")}
           </option>

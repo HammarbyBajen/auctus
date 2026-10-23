@@ -145,7 +145,7 @@ export async function buildFacts(db: Db, studioId: string, now: Date = new Date(
     .select({ title: handbookPage.title, category: handbookCategory.name, text: handbookPage.text })
     .from(handbookPage)
     .innerJoin(handbookCategory, eq(handbookCategory.id, handbookPage.categoryId))
-    .where(and(eq(handbookPage.studioId, studioId), isNull(handbookPage.deletedAt)));
+    .where(and(eq(handbookPage.studioId, studioId), isNull(handbookPage.archivedAt)));
   let budget = handbookBudget;
   const handbook = pages.map((p) => {
     const text = withoutContactDetails(p.text).slice(0, Math.max(0, budget));

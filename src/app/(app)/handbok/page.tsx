@@ -1,6 +1,6 @@
 import Form from "next/form";
 import Link from "next/link";
-import { BookOpen, ChevronRight, Plus, Search, X } from "lucide-react";
+import { Archive as ArchiveIcon, BookOpen, ChevronRight, Plus, Search, X } from "lucide-react";
 import { db } from "@/db";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,7 @@ import { Notice } from "@/components/app/notice";
 import { Page } from "@/components/app/page";
 import { Surface } from "@/components/app/surface";
 import { formatDay, formatNumber } from "@/lib/format";
+import { groupByCategory } from "@/lib/handbook/group";
 import { canEditHandbook, listCategories, listPages, type PageListItem } from "@/lib/handbook/service";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { requireUser } from "@/lib/session";
@@ -25,14 +26,15 @@ export default async function HandbookPage({ searchParams }: { searchParams: Pro
   const user = await requireUser();
   const { q, fel, borttagen } = await searchParams;
   const query = q?.trim().slice(0, 100) || null;
-  const [categories, pages, all, editor] = await Promise.all([
+  const editor = await canEditHandbook(db, user);
+  const [categories, pages, all, archived] = await Promise.all([
     listCategories(db, user.studioId),
-    listPages(db, user.studioId, query),
+    listPages(db, user.studioId, { query }),
     // "Senast uppdaterade" is about every routine, also while searching.
     query ? listPages(db, user.studioId) : null,
-    canEditHandbook(db, user),
+    // The archive is for those who write.
+    editor && !query ? listPages(db, user.studioId, { archived: true }) : [],
   ]);
-  const groups = categories.map((c) => ({ ...c, pages: pages.filter((p) => p.categoryId === c.id) })).filter((g) => g.pages.length > 0);
   const owner = user.role === "owner";
 
   return (
@@ -91,7 +93,7 @@ export default async function HandbookPage({ searchParams }: { searchParams: Pro
             />
           ) : query ? (
             // Search: the hits, by category.
-            groups.map((g) => (
+            groupByCategory(categories, pages).map((g) => (
               <section key={g.id} className="flex flex-col gap-3" aria-labelledby={`cat-${g.id}`}>
                 <MicroLabel as="h2">
                   <span id={`cat-${g.id}`}>{g.name}</span>
@@ -104,8 +106,7 @@ export default async function HandbookPage({ searchParams }: { searchParams: Pro
           ) : (
             // Every category, to open and see its routines.
             <Surface as="div" className="divide-y divide-border overflow-hidden">
-              {categories.map((c) => {
-                const own = pages.filter((p) => p.categoryId === c.id);
+              {groupByCategory(categories, pages, { keepEmpty: true }).map(({ pages: own, ...c }) => {
                 return (
                   <details key={c.id} id={`cat-${c.id}`} className="group scroll-mt-20">
                     <summary className="focus-ring flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 hover:bg-accent [&::-webkit-details-marker]:hidden">
@@ -131,6 +132,7 @@ export default async function HandbookPage({ searchParams }: { searchParams: Pro
               })}
             </Surface>
           )}
+          {archived.length > 0 && <Archive pages={archived} categories={categories} />}
         </div>
         <LatestUpdates pages={all ?? pages} categories={categories} />
       </div>
@@ -148,6 +150,38 @@ function PageRow({ page, indent = false }: { page: PageListItem; indent?: boolea
         <span className="text-xs text-muted-foreground tabular-nums">{t("handbook.updated", { date: formatDay(todayInStockholm(page.updatedAt)) })}</span>
       </Link>
     </li>
+  );
+}
+
+/** Archived routines, for those who write: out of use, kept, and one click from coming back on their own page. */
+function Archive({ pages, categories }: { pages: PageListItem[]; categories: { id: string; name: string }[] }) {
+  const categoryName = new Map(categories.map((c) => [c.id, c.name]));
+  return (
+    <details className="group">
+      <summary className="focus-ring flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-md px-2 text-sm font-medium text-muted-foreground hover:bg-accent hover:text-foreground [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden="true" className="size-4 shrink-0 transition-transform group-open:rotate-90" />
+        <ArchiveIcon aria-hidden="true" className="size-4 shrink-0" />
+        {t("handbook.archiveTitle")}
+        <span className="text-xs font-normal tabular-nums">{formatNumber(pages.length)}</span>
+      </summary>
+      <div className="mt-2 flex flex-col gap-2">
+        <p className="px-2 text-xs text-muted-foreground">{t("handbook.archiveIntro")}</p>
+        <Surface as="div" className="overflow-hidden">
+          <ul className="divide-y divide-border">
+            {pages.map((p) => (
+              <li key={p.id}>
+                <Link href={`/handbok/${p.id}`} className="focus-ring flex flex-col gap-0.5 px-4 py-3 hover:bg-accent">
+                  <span className="text-sm font-medium">{p.title}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {categoryName.get(p.categoryId)} · {t("handbook.archivedOn", { date: formatDay(todayInStockholm(p.archivedAt ?? p.updatedAt)) })}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Surface>
+      </div>
+    </details>
   );
 }
 

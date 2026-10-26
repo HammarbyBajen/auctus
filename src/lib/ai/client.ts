@@ -166,9 +166,13 @@ export async function askAi<T>(db: Db, about: AiAbout, request: AiRequest<T>, tr
     await finish({ model: result.model, status: "ok", ...tokens, costMicroUsd: cost, suggestion: result.output as object });
     return { status: "ok", suggestionId: booked.id, output: result.output };
   } catch (error) {
-    // Only what went wrong: never the key, the prompt or the person. The reservation stays as the cost: it may have been billed.
+    // Only what went wrong: never the key, the prompt or the person.
     const reason = error instanceof Error ? error.message.slice(0, 300) : "okänt fel";
-    await finish({ status: "failed", error: reason });
+    // Refused before any answer (a wrong key, a bad request, no access): nothing was billed, so it costs 0.
+    // Otherwise the reservation stays as the cost: it may have been billed.
+    const status = typeof (error as { status?: unknown })?.status === "number" ? (error as { status: number }).status : null;
+    const refusedUpfront = status !== null && [400, 401, 403, 404].includes(status);
+    await finish({ status: "failed", error: reason, ...(refusedUpfront ? { costMicroUsd: 0 } : {}) });
     return { status: "failed", suggestionId: booked.id };
   }
 }

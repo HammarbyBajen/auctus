@@ -123,6 +123,16 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
     const result = await ai.askAi(db, { studioId, userId: ownerId, kind: "test" }, request, broken);
     const [row] = await db.select().from(schema.aiSuggestion).where(eq(schema.aiSuggestion.id, (result as { suggestionId: string }).suggestionId));
     expect([row.status, row.error]).toEqual(["failed", "overloaded"]);
+    // An error mid-call may have been billed: the reservation stays as its cost.
+    expect(row.costMicroUsd).toBeGreaterThan(0);
+  });
+
+  it("counts a call refused before any answer (a wrong key) as costing nothing", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test-only";
+    const wrongKey: AiTransport = { complete: async () => Promise.reject(Object.assign(new Error("401 invalid x-api-key"), { status: 401 })) };
+    const result = await ai.askAi(db, { studioId, userId: ownerId, kind: "test" }, request, wrongKey);
+    const [row] = await db.select().from(schema.aiSuggestion).where(eq(schema.aiSuggestion.id, (result as { suggestionId: string }).suggestionId));
+    expect([row.status, row.costMicroUsd]).toEqual(["failed", 0]);
   });
 
   it("shows the AI a lead without contact details, health notes or private notes", async () => {

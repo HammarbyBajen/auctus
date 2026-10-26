@@ -3,7 +3,8 @@ import { db } from "@/db";
 import { studio, user } from "@/db/schema";
 import { createCategory, createPage, listCategories, listPages } from "@/lib/handbook/service";
 
-// Handbok guides for using Tegen HQ (written 2026-10-26, approved by Max). Added to production on 2026-10-26.
+// Handbok guides for using Tegen HQ (written 2026-10-26, approved by Max). Added to production on 2026-10-26;
+// four updated there the same day for the Från Mana column, Säger upp and Fryser, and Sammanfatta.
 // To add them again (only missing titles are added): copy to scripts/, then run with the database's env loaded and NODE_OPTIONS="--conditions=react-server".
 type Block = ["h2" | "h3" | "p", string] | ["ul" | "ol" | "tasks", string[]];
 const text = (t: string) => [{ type: "text", text: t }];
@@ -34,7 +35,7 @@ export const guides: [string, Block[]][] = [
     ["p", "Vi lovar att höra av oss inom 24 timmar. En ny lead hamnar i steget Ny lead och syns på startsidan tills någon tagit kontakt."],
     ["ol", [
       "Öppna leaden från startsidan.",
-      "Är assistenten påslagen: tryck Förbered samtalet och läs igenom förberedelsen.",
+      "Är assistenten påslagen: tryck Sammanfatta, så slipper du läsa igenom hela historiken.",
       "Ring. Under Vad hände? skriver du en kort anteckning och trycker på det som hände: Ringde, Inget svar, Mejlade eller Bokade tid.",
       "Flytta leaden till nästa steg med knappen under Flytta till.",
       "Behöver något göras ett visst datum, lägg till en uppgift.",
@@ -70,18 +71,20 @@ export const guides: [string, Block[]][] = [
   ["Leads från Mana", [
     ["p", "Tegen HQ läser Mana varje natt och gör en lead när någon:"],
     ["ul", [
-      "säger upp sitt medlemskap,",
-      "fryser sitt medlemskap,",
       "har avslutat sitt medlemskap,",
       "köper dagpass eller klippkort utan att vara medlem.",
     ]],
+    ["p", "De hamnar i en egen kolumn, Från Mana, först under Leads. Så blandas de inte ihop med nya leads. Startsidan visar hur många som väntar där."],
     ["p", "När ett klippkort nästan är slut kommer en uppgift om att erbjuda medlemskap."],
+    ["p", "Medlemmar som säger upp eller fryser sitt medlemskap blir inte leads. De finns under Medlemmar → Säger upp och Fryser."],
     ["h3", "Varför slutade de?"],
-    ["p", "På en lead från en uppsägning, frysning eller ett avslutat medlemskap frågar Tegen HQ Varför slutade eller pausade de? Ta reda på det och välj en anledning. Mana säger inte varför."],
+    ["p", "På en lead från ett avslutat medlemskap frågar Tegen HQ Varför slutade eller pausade de? Ta reda på det och välj en anledning. Mana säger inte varför."],
   ]],
   ["Medlemmar: hör av dig till", [
     ["p", "Under Medlemmar finns medlemmar som kan behöva höra av oss, i grupper:"],
     ["ul", [
+      "Säger upp: har sagt upp sitt medlemskap i Mana. Raden visar sista dagen.",
+      "Fryser: har fryst sitt medlemskap. Raden visar när frysningen börjar.",
       "Nya medlemmar: har inte varit här på 10 dagar sedan de började.",
       "Aldrig incheckade: har inte varit här alls sedan flytten till Mana.",
       "Slutade komma: har inte varit här på 30 dagar.",
@@ -92,6 +95,7 @@ export const guides: [string, Block[]][] = [
       "Ring eller tryck E-post.",
       "Tryck Logga kontakt och välj Pratade med dem, Inget svar eller Mejlade eller sms:ade. Pratade med dem tar bort dem från listan.",
       "Vet ni varför de är borta, tryck Avfärda och välj Semester, Skada eller sjukdom eller Annat. Fyll gärna i Tillbaka senast.",
+      "För den som säger upp eller fryser: ta reda på varför, tryck Avfärda och välj en anledning.",
     ]],
     ["p", "Fördela delar ut medlemmar som ingen har tagit mellan de du bockar i."],
   ]],
@@ -107,7 +111,7 @@ export const guides: [string, Block[]][] = [
   ["Assistenten", [
     ["p", "Assistenten föreslår, en person bestämmer. Den gör aldrig något själv."],
     ["ul", [
-      "Förbered samtalet: en kort sammanfattning och en öppningsfras innan du ringer.",
+      "Sammanfatta: vem det är, vad de vill och var det står, så slipper du läsa igenom historiken. Plus nästa steg.",
       "Föreslå steg: skriv vad som hände så föreslår den kontakt, anteckning, uppgift och steg. Bocka i det som stämmer och tryck Spara valda.",
       "Föreslå mejl: ett utkast i Tegens ton. Läs och ändra innan du skickar.",
       "Fråga assistenten (ägare, under Rapport): frågor om leads, medlemmar och timmar.",

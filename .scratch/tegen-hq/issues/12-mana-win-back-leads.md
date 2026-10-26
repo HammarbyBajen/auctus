@@ -25,3 +25,5 @@
 
 Changed by Max (2026-10-26), after the first night made 31 leads in Ny lead: members who give notice or plan a freeze are still members, so they no longer become leads but go on the Medlemmar list as "Säger upp" and "Fryser" (with the last day or the freeze date; Avfärda asks why, from the studio's win-back reasons; a row closes by itself when the notice or freeze is gone, and comes back only if its date changes). Ended memberships, day passes and klippkort still become leads, now in their own first column "Från Mana" with no first-contact deadline; on Home they show only when a task is due, plus a line with how many wait in the column, and they no longer count in "Nya den här veckan".
 
+
+Tidied in production (2026-10-26, approved by Max): the 15 untouched ended and day-pass leads from that night moved to "Från Mana"; the 16 untouched notice and freeze leads (no events, tasks, owner or added notes) were deleted, the people kept, and the same 16 now show under Medlemmar as "Säger upp" and "Fryser". Four Handbok guides were updated to match (Svara på en ny lead, Leads från Mana, Medlemmar: hör av dig till, Assistenten).

@@ -232,6 +232,13 @@
       "when": 1792760365767,
       "tag": "0032_reflective_metal_master",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793026639140,
+      "tag": "0033_pretty_squirrel_girl",
+      "breakpoints": true
     }
   ]
 }

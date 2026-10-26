@@ -30,11 +30,18 @@ export type AtRiskFilter = "all" | AtRiskGroup;
 export type MembersFilter = AtRiskFilter | "milestones";
 
 /** How a group is written in the address. */
-export const groupParam: Record<AtRiskGroup | "milestones", string> = { never: "aldrig", away: "borta", new: "nya", milestones: "milstolpar" };
+export const groupParam: Record<AtRiskGroup | "milestones", string> = {
+  cancelling: "sager-upp",
+  freezing: "fryser",
+  never: "aldrig",
+  away: "borta",
+  new: "nya",
+  milestones: "milstolpar",
+};
 export const groupFromParam = (value: string | undefined): MembersFilter =>
   (Object.entries(groupParam).find(([, p]) => p === value)?.[0] as AtRiskGroup | "milestones" | undefined) ?? "all";
 /** The groups in the order they are shown. */
-export const atRiskGroups: AtRiskGroup[] = ["new", "never", "away"];
+export const atRiskGroups: AtRiskGroup[] = ["cancelling", "freezing", "new", "never", "away"];
 
 /** The members page (ticket 36) with a scope, a group and all rows or the first ten, as the address says it. */
 export function membersHref({ scope, filter, all }: { scope: "all" | "mine"; filter: MembersFilter; all: boolean }) {
@@ -106,6 +113,7 @@ export function AtRiskList({
   emails,
   emailMode,
   milestones = 0,
+  leavingReasons = [],
 }: {
   rows: AtRiskRow[];
   days: number;
@@ -118,6 +126,8 @@ export function AtRiskList({
   emailMode: EmailMode;
   /** How many open milestones there are, for Medlemmar's tabs (ticket 35). */
   milestones?: number;
+  /** Why someone leaves or pauses: the studio's win-back reasons, for those cancelling or freezing. */
+  leavingReasons?: { key: string; name: string }[];
 }) {
   const today = todayInStockholm();
   const assistantOn = aiEnabled();
@@ -130,7 +140,7 @@ export function AtRiskList({
 
   const href = (next: { filter?: AtRiskFilter; all?: boolean }) =>
     `${membersHref({ scope, filter: next.filter ?? filter, all: next.all ?? false })}#hor-av-dig`;
-  const counts: MembersCounts = { all: inScope.length, new: count("new"), never: count("never"), away: count("away"), milestones };
+  const counts = { all: inScope.length, milestones, ...Object.fromEntries(atRiskGroups.map((g) => [g, count(g)])) } as MembersCounts;
 
   return (
     <div id="hor-av-dig" className="flex min-w-0 scroll-mt-20 flex-col gap-3">
@@ -185,9 +195,13 @@ export function AtRiskList({
                         <p className="text-sm font-medium break-words">{name}</p>
                         {/* No visit at all in Mana: they may have stopped, or get in some other way and need help with Mana. */}
                         {row.group === "never" && <Chip tone="neutral">{t("atRisk.neverChip")}</Chip>}
+                        {row.group === "cancelling" && <Chip tone="warning">{t("atRisk.filter.cancelling")}</Chip>}
+                        {row.group === "freezing" && <Chip tone="neutral">{t("atRisk.filter.freezing")}</Chip>}
                         {row.group === "new" && <Chip tone="neutral">{t("atRisk.newChip")}</Chip>}
                       </div>
                       <p className="text-xs text-muted-foreground">
+                        {row.cause === "cancelling" && row.changeDate && `${t("atRisk.lastDay", { date: formatDay(row.changeDate) })} · `}
+                        {row.cause === "freezing" && row.changeDate && `${t("atRisk.freezeFrom", { date: formatDay(row.changeDate) })} · `}
                         {last
                           ? t("atRisk.lastVisit", { date: formatDay(todayInStockholm(last)), n: String(daysAgo(last, today)) })
                           : t("atRisk.never", { date: formatDay(todayInStockholm(row.since)) })}
@@ -222,8 +236,9 @@ export function AtRiskList({
                     logAction={logAtRiskContact.bind(null, row.id)}
                     dismissAction={dismissAtRisk.bind(null, row.id)}
                     outcomes={contactOutcomes}
-                    reasons={dismissReasons}
-                    minReturnBy={today}
+                    {...(row.cause === "away"
+                      ? { reasons: dismissReasons.map((r) => ({ key: r, label: t(`atRisk.reason.${r}` as MessageKey) })), reasonLabel: t("atRisk.reasonLabel"), minReturnBy: today }
+                      : { reasons: leavingReasons.map((r) => ({ key: r.key, label: r.name })), reasonLabel: t("atRisk.leavingReasonLabel"), minReturnBy: null })}
                     history={
                       row.notes.length > 0 ? (
                         <ul className="flex flex-col gap-2 text-xs text-muted-foreground">

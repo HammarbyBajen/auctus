@@ -10,9 +10,9 @@ import { t, type MessageKey } from "@/lib/i18n";
 type Brief = NonNullable<NonNullable<BriefState>["brief"]>;
 
 /**
- * Before a call (ticket 30, phase B): a short brief from the assistant, made
- * only when someone presses the button. The last one is shown again until
- * something new happens on the lead.
+ * Before getting in touch (ticket 30, phase B): a short summary of the lead
+ * from the assistant, so nobody has to read the whole history. Made only when
+ * someone presses the button; shown again until something new happens.
  */
 export function CallBrief({ leadId, initial }: { leadId: string; initial: Brief | null }) {
   const [state, action, pending] = useActionState<BriefState, FormData>(prepareCall.bind(null, leadId), initial ? { brief: initial } : null);
@@ -23,32 +23,17 @@ export function CallBrief({ leadId, initial }: { leadId: string; initial: Brief 
       {state?.error && <Notice tone={state.error === "failed" ? "danger" : "warning"}>{t(`ai.error.${state.error}` as MessageKey)}</Notice>}
       {brief && (
         <div className="flex flex-col gap-3 text-sm" aria-live="polite">
-          <p>{brief.summary}</p>
+          <p className="leading-6">{brief.tldr}</p>
           {brief.facts.length > 0 && (
             <ul className="flex list-disc flex-col gap-1 pl-5 text-muted-foreground">
-              {brief.facts.slice(0, 5).map((fact, i) => (
+              {brief.facts.slice(0, 4).map((fact, i) => (
                 <li key={i}>{fact}</li>
               ))}
             </ul>
           )}
-          <dl className="grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]">
-            <dt className="text-muted-foreground">{t("ai.brief.opening")}</dt>
-            <dd>{brief.opening}</dd>
-            {brief.questions.length > 0 && (
-              <>
-                <dt className="text-muted-foreground">{t("ai.brief.questions")}</dt>
-                <dd>
-                  <ul className="flex flex-col gap-1">
-                    {brief.questions.slice(0, 3).map((q, i) => (
-                      <li key={i}>{q}</li>
-                    ))}
-                  </ul>
-                </dd>
-              </>
-            )}
-            <dt className="text-muted-foreground">{t("ai.brief.goal")}</dt>
-            <dd>{brief.nextStep}</dd>
-          </dl>
+          <p>
+            <span className="text-muted-foreground">{t("ai.brief.next")}</span> {brief.nextStep}
+          </p>
           <p className="text-xs text-muted-foreground">{t("ai.brief.note")}</p>
         </div>
       )}

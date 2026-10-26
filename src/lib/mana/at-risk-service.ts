@@ -5,6 +5,8 @@ import { atRiskAlert, atRiskNote, manaMember, manaMembership, manaVisit, studioS
 import type { KpiMembership } from "@/lib/kpi/members";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { atRiskMembers, isNewMember, visitStatuses } from "./at-risk";
+import { getIgnoredMembershipIds } from "./leads";
+import { membershipSignals } from "./winback";
 import { distribute, emptyEmails, groupOf, type AtRiskGroup } from "./at-risk-work";
 import { customerRole } from "./membership";
 
@@ -81,7 +83,12 @@ export async function detectAtRisk(db: Db, studioId: string, now: Date = new Dat
   const away = atRiskMembers(memberships, await lastVisits(db, studioId, now), todayInStockholm(now), days);
   const awayIds = new Set(away.map((a) => a.manaUserId));
 
-  const alerts = await db.select().from(atRiskAlert).where(eq(atRiskAlert.studioId, studioId)).orderBy(desc(atRiskAlert.createdAt));
+  // Only the rows for being away; those about leaving (cancelling, freezing) are kept by detectLeaving.
+  const alerts = await db
+    .select()
+    .from(atRiskAlert)
+    .where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.cause, "away")))
+    .orderBy(desc(atRiskAlert.createdAt));
   const latestFor = new Map<string, (typeof alerts)[number]>();
   for (const a of alerts) if (!latestFor.has(a.manaUserId)) latestFor.set(a.manaUserId, a);
 
@@ -105,10 +112,76 @@ export async function detectAtRisk(db: Db, studioId: string, now: Date = new Dat
   return { created, resolved: resolve.length, away: away.length };
 }
 
+/**
+ * Members about to leave (decided by Max, 2026-10-26): a notice given or a
+ * freeze ahead in Mana, with no other membership that carries on, go on the
+ * Medlemmar list (not into the sales pipeline, they are still members) until
+ * staff have talked to them. One row per notice or freeze: a handled one comes
+ * back only if the date changes. A row closes by itself when the notice or
+ * freeze is gone (they changed their mind, or the day has passed; a membership
+ * that has ended then becomes a "Från Mana" lead, ticket 12).
+ */
+export async function detectLeaving(db: Db, studioId: string, now: Date = new Date()) {
+  const today = todayInStockholm(now);
+  const [settings] = await db.select({ addOns: studioSettings.addOnMembershipIds }).from(studioSettings).where(eq(studioSettings.studioId, studioId)).limit(1);
+  const ignored = [...(await getIgnoredMembershipIds(db, studioId)), ...(settings?.addOns ?? [])];
+  const memberships = (
+    await db
+      .select({ m: manaMembership })
+      .from(manaMembership)
+      .innerJoin(manaMember, and(eq(manaMember.studioId, manaMembership.studioId), eq(manaMember.manaUserId, manaMembership.manaUserId), eq(manaMember.role, customerRole)))
+      .where(eq(manaMembership.studioId, studioId))
+  ).map((r) => r.m);
+  const byUser = new Map<string, typeof memberships>();
+  for (const m of memberships) byUser.set(m.manaUserId, [...(byUser.get(m.manaUserId) ?? []), m]);
+
+  // Who is leaving now, and when: the soonest notice or freeze per member and cause.
+  const leaving = new Map<string, { manaUserId: string; cause: "cancelling" | "freezing"; changeDate: string | null }>();
+  for (const [manaUserId, list] of byUser) {
+    for (const signal of membershipSignals(list, ignored, today)) {
+      if (signal.kind === "ended") continue;
+      const cause = signal.kind === "cancelled" ? "cancelling" : "freezing";
+      const key = `${manaUserId}|${cause}`;
+      const previous = leaving.get(key);
+      if (!previous || (signal.date ?? "") < (previous.changeDate ?? "")) leaving.set(key, { manaUserId, cause, changeDate: signal.date });
+    }
+  }
+
+  const alerts = await db
+    .select()
+    .from(atRiskAlert)
+    .where(and(eq(atRiskAlert.studioId, studioId), inArray(atRiskAlert.cause, ["cancelling", "freezing"])))
+    .orderBy(desc(atRiskAlert.createdAt));
+  const latestFor = new Map<string, (typeof alerts)[number]>();
+  for (const a of alerts) if (!latestFor.has(`${a.manaUserId}|${a.cause}`)) latestFor.set(`${a.manaUserId}|${a.cause}`, a);
+
+  let created = 0;
+  for (const [key, l] of leaving) {
+    const previous = latestFor.get(key);
+    if (previous?.status === "open") {
+      if (previous.changeDate !== l.changeDate) await db.update(atRiskAlert).set({ changeDate: l.changeDate }).where(eq(atRiskAlert.id, previous.id));
+      continue;
+    }
+    // Already handled for this notice or freeze.
+    if (previous && previous.changeDate === l.changeDate) continue;
+    await db.insert(atRiskAlert).values({ studioId, manaUserId: l.manaUserId, cause: l.cause, changeDate: l.changeDate, createdAt: now });
+    created++;
+  }
+  const resolve = alerts.filter((a) => a.status === "open" && !leaving.has(`${a.manaUserId}|${a.cause}`)).map((a) => a.id);
+  if (resolve.length > 0) await db.update(atRiskAlert).set({ status: "resolved", handledAt: now }).where(inArray(atRiskAlert.id, resolve));
+  return { created, resolved: resolve.length, leaving: leaving.size };
+}
+
 export type AtRiskNoteRow = { kind: string; body: string; at: Date; by: string | null; private?: boolean };
+
+/** Why a member is on the list (see atRiskAlert.cause). */
+export type AtRiskCause = "away" | "cancelling" | "freezing";
 
 export type AtRiskRow = {
   id: string;
+  cause: AtRiskCause;
+  /** For cancelling, the last day; for freezing, the day the freeze starts. */
+  changeDate: string | null;
   /** Mana may have no name for someone; the email stands in then. */
   name: string | null;
   email: string | null;
@@ -171,7 +244,10 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
       lastVisitAt,
       since: firstStart ? new Date(`${firstStart}T12:00:00Z`) : o.alert.createdAt,
       memberships: [...new Set(own.map((m) => m.name))],
+      cause: o.alert.cause as AtRiskCause,
+      changeDate: o.alert.changeDate,
       group: ((): AtRiskGroup => {
+        if (o.alert.cause === "cancelling" || o.alert.cause === "freezing") return o.alert.cause;
         const first = firstStartOf.get(o.alert.manaUserId);
         return first && dataStart?.first && isNewMember(first, dataStart.first, today) ? "new" : groupOf({ lastVisitAt });
       })(),
@@ -182,12 +258,19 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
     };
   });
   // Longest away first: since the last visit, or since they started paying when they never came.
-  const awaySince = (r: AtRiskRow) => (r.lastVisitAt ?? r.since).getTime();
-  return rows.sort((a, b) => awaySince(a) - awaySince(b) || (a.name ?? "").localeCompare(b.name ?? "", "sv"));
+  // Someone leaving shows once, as leaving: their row for being away waits until they are not.
+  const memberOf = new Map(open.map((o) => [o.alert.id, o.alert.manaUserId]));
+  const leavingIds = new Set(rows.filter((r) => r.cause !== "away").map((r) => memberOf.get(r.id)));
+  const shown = rows.filter((r) => r.cause !== "away" || !leavingIds.has(memberOf.get(r.id)));
+  // Those leaving first, soonest change first; then those away, longest away first.
+  const leaving = (r: AtRiskRow) => (r.cause === "away" ? 1 : 0);
+  const order = (r: AtRiskRow) => (r.cause === "away" ? (r.lastVisitAt ?? r.since).getTime() : Date.parse(`${r.changeDate ?? "9999-12-31"}T12:00:00Z`));
+  return shown.sort((a, b) => leaving(a) - leaving(b) || order(a) - order(b) || (a.name ?? "").localeCompare(b.name ?? "", "sv"));
 }
 
 export const dismissReasons = ["holiday", "injury", "other"] as const;
-export type DismissReason = (typeof dismissReasons)[number];
+/** Why someone was taken off the list: holiday, injury or other for those away; for those leaving, the studio's own win-back reasons. */
+export type DismissReason = string;
 
 /** What happened when staff got in touch. Only "answered" takes them off the list; the rest are tries. */
 export const contactOutcomes = ["answered", "no_answer", "messaged"] as const;

@@ -635,6 +635,13 @@ export const atRiskAlert = pgTable(
     returnBy: date("return_by", { mode: "string" }),
     /** Who on the staff gets in touch. */
     assignedToId: text("assigned_to_id").references(() => user.id, { onDelete: "set null" }),
+    /**
+     * Why they are on the list: away (no visit, ticket 13), or about to leave:
+     * cancelling (notice given) or freezing (a freeze ahead), from Mana.
+     */
+    cause: text("cause").notNull().default("away"),
+    /** For cancelling, the last day; for freezing, the day the freeze starts. */
+    changeDate: date("change_date", { mode: "string" }),
   },
   (table) => [index("at_risk_alert_studio_idx").on(table.studioId, table.status)],
 );

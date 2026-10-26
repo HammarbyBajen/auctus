@@ -98,6 +98,8 @@ export const draftSystem = systemPrompt({
     "Till en lead: målet är att boka en provträning eller ett möte. Föreslå inga tider; be dem svara med vad som passar.",
     "Till en medlem som inte varit på gymmet: hör hur det är och säg att ni saknar dem. Ingen press och inget säljande.",
     "Till en medlem som nått en milstolpe: gratulera kort och glatt och nämn milstolpen (antal pass eller veckor i rad). Inget säljande.",
+    'Till en medlem som sagt upp sig (group "cancelling"): tacka för tiden, fråga gärna varför och om något hade kunnat vara annorlunda, och säg att de är välkomna tillbaka. Ingen press.',
+    'Till en medlem som ska frysa (group "freezing"): önska dem allt gott och säg att ni ser fram emot att ses igen. Fråga inte varför.',
     "Finns ett påbörjat utkast, utgå från det och behåll det personalen redan skrivit.",
     "Ämnesraden kort, utan utropstecken.",
   ],

@@ -6,7 +6,7 @@ import { contactOutcomes } from "@/lib/pipeline/defaults";
 import { listColdReasons, listStages } from "@/lib/pipeline/service";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { askAi, type AiResult, type AiTransport } from "./client";
-import { firstNameOnly, notesForAi } from "./privacy";
+import { notesForAi } from "./privacy";
 import { systemPrompt, tegen } from "./prompts";
 import { briefSchema, type Brief } from "./brief";
 import { leadContext, stepSchema, type Actor, type Step } from "./tools";
@@ -28,22 +28,23 @@ export const briefSystem = systemPrompt({
   role: `Du hjälper personalen på ${tegen} inför ett samtal med en lead: någon som visat intresse för att börja träna.`,
   input:
     "Du får en sammanfattning av leaden som JSON: förnamn, steg i säljprocessen, när och varifrån leaden kom, svar från formuläret på webben, vad som hänt (kontakter, stegbyten och anteckningar) och öppna uppgifter. Anteckningar som innehåller känsliga uppgifter har hållits tillbaka och räknas bara.",
-  task: "Skriv en kort förberedelse:",
+  task: "Skriv en kort sammanfattning, så att personen slipper läsa igenom historiken. Inget manus:",
   rules: [
+    "Det viktigaste först, i två eller tre korta meningar: vem det är, vad de vill och var det står.",
+    "Fakta bara om de tillför något utöver sammanfattningen, högst fyra, nyast först.",
     "Vardagligt och kort, som en kollega som snabbt sätter någon in i läget.",
     "Saknas något viktigt (till exempel att ingen kontakt tagits än), säg det rakt ut.",
-    "Målet med de flesta samtal är att boka en provträning eller ett möte.",
-    'Öppningen säger vem som ringer: använd förnamnet i "caller" om det finns, annars ingen namnlucka.',
+    "Nästa steg i några ord. Oftast att boka en provträning eller ett möte.",
   ],
 });
 
-/** Asks for a brief before a call. `callerName` is the staff member's, for the opening line. */
-export async function callBrief(db: Db, actor: Actor, leadId: string, transport?: AiTransport, now: Date = new Date(), callerName: string | null = null): Promise<AiResult<Brief>> {
+/** Asks for a short summary of a lead before getting in touch. */
+export async function callBrief(db: Db, actor: Actor, leadId: string, transport?: AiTransport, now: Date = new Date()): Promise<AiResult<Brief>> {
   const context = await leadContext(db, actor, leadId, now);
   return askAi(
     db,
     { studioId: actor.studioId, userId: actor.id, kind: "call_brief", leadId },
-    { system: briefSystem, prompt: JSON.stringify({ today: todayInStockholm(now), caller: firstNameOnly(callerName) || null, lead: context }), schema: briefSchema, effort: "low" },
+    { system: briefSystem, prompt: JSON.stringify({ today: todayInStockholm(now), lead: context }), schema: briefSchema, effort: "low" },
     transport,
     now,
   );

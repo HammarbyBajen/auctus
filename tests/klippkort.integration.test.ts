@@ -158,7 +158,7 @@ describe.skipIf(!hasDb)("klippkort running out (ticket 31)", () => {
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 2 }] }), studioA, now);
     expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 1, skipped: 0 });
     const [row] = await leadsOf();
-    expect(row.lead).toMatchObject({ source: "mana_klippkort", stage: "new_lead" });
+    expect(row.lead).toMatchObject({ source: "mana_klippkort", stage: "from_mana" });
     const found = await leads.getLead(db, studioA, row.lead.id);
     const note = found?.history.find((h) => h.kind === "note");
     expect(note?.kind === "note" && note.body).toBe("Mana: 2 klipp kvar på Klippkort (köpt 15 sep.). Inget medlemskap.");

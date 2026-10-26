@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { createManaClient } from "@/lib/mana/config";
 import { describeManaError, ManaError } from "@/lib/mana/errors";
 import { recordKpiSnapshot } from "@/lib/kpi/service";
-import { detectAtRisk, syncVisits } from "@/lib/mana/at-risk-service";
+import { detectAtRisk, detectLeaving, syncVisits } from "@/lib/mana/at-risk-service";
 import { afterSync } from "@/lib/mana/leads";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { addExtraIds, addRunRequests, failRun, holdRun, pauseRun, runBatch, startRun } from "@/lib/mana/sync";
@@ -130,14 +130,15 @@ async function memberStatsStep(studioId: string, runId: string) {
 async function afterSyncStep(studioId: string) {
   "use step";
   // Link CRM people to Mana, move leads whose person has just joined to Won,
-  // then make win-back leads (if switched on), flag members who are away,
+  // then make win-back leads (if switched on), flag members who are away or leaving,
   // note milestones reached, and save today's key numbers.
   const won = await afterSync(db, studioId);
   const winBack = await detectWinBacks(db, studioId);
   const atRisk = await detectAtRisk(db, studioId);
+  const leaving = await detectLeaving(db, studioId);
   const milestones = await detectMilestones(db, studioId);
   const snapshot = await recordKpiSnapshot(db, studioId, todayInStockholm());
-  return { won, winBack, atRisk, milestones, snapshot: snapshot !== null };
+  return { won, winBack, atRisk, leaving, milestones, snapshot: snapshot !== null };
 }
 
 /**

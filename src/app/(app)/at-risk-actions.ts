@@ -11,8 +11,8 @@ import {
   distributeAlerts,
   logContact,
   type ContactOutcome,
-  type DismissReason,
 } from "@/lib/mana/at-risk-service";
+import { listWinBackReasons } from "@/lib/pipeline/service";
 import { requirePermission } from "@/lib/session";
 
 const note = (formData: FormData) => String(formData.get("note") ?? "").slice(0, 2000);
@@ -31,10 +31,12 @@ export async function logAtRiskContact(alertId: string, formData: FormData) {
 export async function dismissAtRisk(alertId: string, formData: FormData) {
   const user = await requirePermission("leads", "write");
   const reason = String(formData.get("reason") ?? "");
-  if (!(dismissReasons as readonly string[]).includes(reason)) return;
+  // Those away: holiday, injury or other; those leaving: the studio's own win-back reasons.
+  const leavingReasons = (await listWinBackReasons(db, user.studioId)).map((r) => r.key);
+  if (!(dismissReasons as readonly string[]).includes(reason) && !leavingReasons.includes(reason)) return;
   const returnBy = String(formData.get("returnBy") ?? "").trim();
   await dismissAlert(db, user.studioId, alertId, user.id, {
-    reason: reason as DismissReason,
+    reason,
     returnBy: /^\d{4}-\d{2}-\d{2}$/.test(returnBy) ? returnBy : null,
     body: note(formData),
   });

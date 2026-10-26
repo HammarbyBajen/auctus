@@ -59,7 +59,7 @@ describe.skipIf(!hasDb)("the assistant on the lead page (ticket 30, phase B)", (
 
   it("makes a brief from what may be sent, and shows it again until something happens on the lead", async () => {
     const { lead } = await leads.createOrMatchLead(db, studioId, { name: "Klara Karlsson", email: `klara-${tag}@example.test`, phone: "070-555 44 33", source: "contact_form" });
-    const answer = { summary: "Klara vill börja träna.", facts: ["Kom via kontaktformuläret"], opening: "Hej Klara!", questions: ["Vad vill du träna mot?"], nextStep: "Boka provträning" };
+    const answer = { tldr: "Klara vill börja träna och kom via kontaktformuläret.", facts: [], nextStep: "Boka provträning" };
     const { transport, sent } = fake(answer);
     const result = await assist.callBrief(db, actor(), lead.id, transport);
     expect(result).toMatchObject({ status: "ok", output: answer });

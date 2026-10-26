@@ -33,6 +33,9 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
       ...overrides,
     } as Held;
   }
+  /** A membership that ended within the last 30 days: the kind of change that still makes a lead. */
+  const ended = (overrides: Partial<Held> = {}) => held({ status: "ended", pendingChange: { kind: "cancel", endDate: "2026-09-30" }, cancelEffectiveDate: null, ...overrides });
+
   async function member(studioId: string, id: string, items: Held[], email = `${id}@example.test`, role = "member") {
     await sync.upsertMembers(db, studioId, [{ userId: id, role, profile: { name: `Namn ${id}`, email, phone: null } }] as never, "seed");
     await sync.replaceMemberships(db, studioId, id, items);
@@ -80,25 +83,32 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
 
   it("does nothing until an owner switches it on", async () => {
     await wb.setWinBackEnabled(db, studioA, false);
-    await member(studioA, "off", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })]);
+    await member(studioA, "off", [ended()]);
     expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 0, skipped: 0 });
     expect(await leadsOf(studioA)).toHaveLength(0);
   });
 
-  it("makes a lead for a cancellation, in the first stage, with its own source and what happened", async () => {
-    await member(studioA, "leaver", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })]);
+  it("makes a lead for a recently ended membership, in its own Från Mana column, with its own source and what happened", async () => {
+    await member(studioA, "leaver", [ended()]);
     expect((await wb.detectWinBacks(db, studioA, now)).created).toBe(1);
     const [row] = await leadsOf(studioA);
-    expect(row.lead).toMatchObject({ source: "mana_cancelled", stage: "new_lead" });
+    expect(row.lead).toMatchObject({ source: "mana_ended", stage: "from_mana" });
     expect(row.person).toMatchObject({ manaUserId: "leaver", email: "leaver@example.test", name: "Namn leaver" });
     const found = await leads.getLead(db, studioA, row.lead.id);
     const note = found?.history.find((h) => h.kind === "note");
     expect(note?.kind === "note" && note.body).toContain("Basic");
-    expect(note?.kind === "note" && note.body).toContain("30 nov");
+    expect(note?.kind === "note" && note.body).toContain("30 sep");
+  });
+
+  it("makes no lead for a notice or a freeze: they are still members, on the Medlemmar list instead", async () => {
+    await member(studioA, "notice", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })]);
+    await member(studioA, "freezer", [held({ pendingChange: { kind: "freeze", freezeDate: "2026-10-20" } })]);
+    expect((await wb.detectWinBacks(db, studioA, now)).created).toBe(0);
+    expect(await leadsOf(studioA)).toHaveLength(0);
   });
 
   it("handles a signal once: no second lead on the next run, not even after the first is closed", async () => {
-    await member(studioA, "once", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })]);
+    await member(studioA, "once", [ended()]);
     await wb.detectWinBacks(db, studioA, now);
     const [row] = await leadsOf(studioA);
     await leads.moveLeadStage(db, studioA, row.lead.id, "won");
@@ -115,16 +125,12 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
     expect((await wb.detectWinBacks(db, studioA, now)).created).toBe(0);
   });
 
-  it("makes a lead for a freeze and for a recently ended membership, but not an old one", async () => {
-    await member(studioA, "freezer", [held({ pendingChange: { kind: "freeze", freezeDate: "2026-10-20" } })]);
-    await member(studioA, "ended", [held({ status: "ended", pendingChange: { kind: "cancel", endDate: "2026-09-30" }, cancelEffectiveDate: null })]);
-    await member(studioA, "longgone", [held({ status: "ended", pendingChange: { kind: "cancel", endDate: "2026-07-31" }, cancelEffectiveDate: null })]);
+  it("makes a lead for a recently ended membership, but not an old one", async () => {
+    await member(studioA, "ended", [ended()]);
+    await member(studioA, "longgone", [ended({ pendingChange: { kind: "cancel", endDate: "2026-07-31" } })]);
     await wb.detectWinBacks(db, studioA, now);
     const sources = (await leadsOf(studioA)).map((r) => [r.person.manaUserId, r.lead.source]).sort();
-    expect(sources).toEqual([
-      ["ended", "mana_ended"],
-      ["freezer", "mana_freeze"],
-    ]);
+    expect(sources).toEqual([["ended", "mana_ended"]]);
   });
 
   it("makes a lead for a recent day pass buyer with no membership, but not for a member", async () => {
@@ -151,18 +157,18 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
 
   it("adds a note to a person's open lead instead of making a second lead", async () => {
     const { lead } = await leads.createOrMatchLead(db, studioA, { name: "Öppen", email: "open@example.test", source: "contact_form" });
-    await member(studioA, "openperson", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })], "open@example.test");
+    await member(studioA, "openperson", [ended()], "open@example.test");
     expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 0, skipped: 1 });
     const rows = await leadsOf(studioA);
     expect(rows).toHaveLength(1);
     const found = await leads.getLead(db, studioA, lead.id);
-    expect(found?.history.some((h) => h.kind === "note" && h.body.includes("uppsagt"))).toBe(true);
+    expect(found?.history.some((h) => h.kind === "note" && h.body.includes("avslutades"))).toBe(true);
   });
 
   it("leaves alone a person dismissed in the last 90 days", async () => {
     const { lead } = await leads.createOrMatchLead(db, studioA, { name: "Avfärdad", email: "gone@example.test", source: "contact_form" });
     await leads.moveLeadStage(db, studioA, lead.id, "cold", { coldReason: "price" });
-    await member(studioA, "dismissed", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })], "gone@example.test");
+    await member(studioA, "dismissed", [ended()], "gone@example.test");
     expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 0, skipped: 1 });
     expect(await leadsOf(studioA)).toHaveLength(1);
   });
@@ -170,7 +176,7 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
   it("gives a member whose old lead was won a new win-back lead on the same person", async () => {
     const { lead, person } = await leads.createOrMatchLead(db, studioA, { name: "Vunnen", email: "won@example.test", source: "contact_form" });
     await leads.moveLeadStage(db, studioA, lead.id, "won");
-    await member(studioA, "wonbefore", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })], "won@example.test");
+    await member(studioA, "wonbefore", [ended()], "won@example.test");
     expect((await wb.detectWinBacks(db, studioA, now)).created).toBe(1);
     const rows = await leadsOf(studioA);
     expect(rows).toHaveLength(2);
@@ -178,7 +184,7 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
   });
 
   it("records the reason on a win-back lead, and refuses other leads and unknown reasons", async () => {
-    await member(studioA, "why", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })]);
+    await member(studioA, "why", [ended()]);
     await wb.detectWinBacks(db, studioA, now);
     const [row] = await leadsOf(studioA);
     expect((await wb.setWinBackReason(db, studioA, row.lead.id, "injury")).winBackReason).toBe("injury");
@@ -199,9 +205,9 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
     await expect(wb.setWinBackReason(db, studioA, row.lead.id, "injury")).rejects.toMatchObject({ code: "not_win_back" });
   });
 
-  it("still makes a lead when someone cancels the gym but keeps an add-on such as a locker", async () => {
+  it("still makes a lead when someone leaves the gym but keeps an add-on such as a locker", async () => {
     await member(studioA, "lockerkeeper", [
-      held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } }),
+      ended(),
       held({ membershipId: "locker", name: "Förvaringsbox", price: { amount: 5000, currency: "SEK" } }),
     ]);
     expect((await wb.detectWinBacks(db, studioA, now)).created).toBe(0);
@@ -212,7 +218,7 @@ describe.skipIf(!hasDb)("win-back leads from Mana", () => {
   });
 
   it("keeps studios apart", async () => {
-    await member(studioB, "elsewhere", [held({ pendingChange: { kind: "cancel", endDate: "2026-11-30" } })]);
+    await member(studioB, "elsewhere", [ended()]);
     await wb.detectWinBacks(db, studioA, now);
     expect(await leadsOf(studioA)).toHaveLength(0);
     await wb.detectWinBacks(db, studioB, now);

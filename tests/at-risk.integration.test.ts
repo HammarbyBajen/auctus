@@ -162,4 +162,34 @@ describe.skipIf(!hasDb)("at-risk members", () => {
     // Members moved in on the first day are never "new".
     expect(rows.filter((r) => r.name !== "Namn rookie").every((r) => r.group !== "new")).toBe(true);
   });
+  it("puts members who give notice or plan a freeze on the list, apart from those away, until handled", async () => {
+    await db.insert(schema.manaMember).values([person("quitter"), person("pauser")] as never);
+    await db.insert(schema.manaMembership).values([
+      membership("7", "quitter", { pendingChangeKind: "cancel", pendingChangeDate: "2026-12-31" }),
+      membership("8", "pauser", { pendingChangeKind: "freeze", pendingChangeDate: "2026-12-15" }),
+    ]);
+    const at = day("2026-12-01", 9);
+    expect(await risk.detectLeaving(db, studioId, at)).toMatchObject({ created: 2 });
+    const rows = await risk.listAtRisk(db, studioId, at);
+    const quitter = rows.find((r) => r.name === "Namn quitter")!;
+    expect(quitter).toMatchObject({ cause: "cancelling", group: "cancelling", changeDate: "2026-12-31" });
+    expect(rows.find((r) => r.name === "Namn pauser")).toMatchObject({ cause: "freezing", group: "freezing", changeDate: "2026-12-15" });
+    // Those leaving come first on the list.
+    expect(rows.slice(0, 2).map((r) => r.cause).sort()).toEqual(["cancelling", "freezing"]);
+
+    // Handled: not back for the same notice, but back if the last day changes.
+    await risk.dismissAlert(db, studioId, quitter.id, ownerId, { reason: "price", returnBy: null, body: "" }, at);
+    expect((await risk.detectLeaving(db, studioId, at)).created).toBe(0);
+    await db.update(schema.manaMembership).set({ pendingChangeDate: "2027-01-31" }).where(eq(schema.manaMembership.id, `${tag}-7`));
+    expect((await risk.detectLeaving(db, studioId, at)).created).toBe(1);
+
+    // The freeze is called off: the row closes by itself. The away check leaves these rows alone
+    // (it may add its own row for the same person, who has never been in).
+    await db.update(schema.manaMembership).set({ pendingChangeKind: null, pendingChangeDate: null }).where(eq(schema.manaMembership.id, `${tag}-8`));
+    const isFreezeRow = (r: { name: string | null; cause: string }) => r.name === "Namn pauser" && r.cause === "freezing";
+    await risk.detectAtRisk(db, studioId, at);
+    expect((await risk.listAtRisk(db, studioId, at)).some(isFreezeRow)).toBe(true);
+    expect((await risk.detectLeaving(db, studioId, at)).resolved).toBe(1);
+    expect((await risk.listAtRisk(db, studioId, at)).some(isFreezeRow)).toBe(false);
+  });
 });

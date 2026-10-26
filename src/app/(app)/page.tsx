@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertCircle, CircleCheck, Clock, Phone, RotateCcw, TimerReset } from "lucide-react";
+import { AlertCircle, CircleCheck, Clock, Phone, RotateCcw, TimerReset, ChevronRight } from "lucide-react";
 import { db } from "@/db";
 import { ButtonAnchor } from "@/components/ui/button";
 import { Chip } from "@/components/app/chip";
@@ -17,6 +17,7 @@ import { listAtRisk } from "@/lib/mana/at-risk-service";
 import { can } from "@/lib/permissions";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { rowChip } from "@/lib/leads/row";
+import { manaStage } from "@/lib/leads/constants";
 import { listStages } from "@/lib/pipeline/service";
 import { isGreyedOut } from "@/lib/tasks/dates";
 import { ScopeToggle } from "@/components/app/scope-toggle";
@@ -136,6 +137,12 @@ export default async function HomePage({ searchParams }: { searchParams: Promise
             <Surface as="div" className="overflow-hidden">
               <ul className="divide-y divide-border">{now.map(row)}</ul>
             </Surface>
+          )}
+          {counts.fromMana > 0 && (
+            <Link href={`/leads?steg=${manaStage}`} className="focus-ring flex min-h-11 items-center justify-between gap-3 rounded-md bg-well px-4 text-sm hover:bg-accent">
+              <span>{t("home.fromMana", { n: formatNumber(counts.fromMana) })}</span>
+              <ChevronRight aria-hidden="true" className="size-4 text-muted-foreground" />
+            </Link>
           )}
           {later.length > 0 && (
             <div id="utan-nasta-steg" className="mt-3 flex scroll-mt-20 flex-col gap-3">

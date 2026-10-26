@@ -15,7 +15,8 @@ import {
   winBackReason,
 } from "@/db/schema";
 import { formatDay } from "@/lib/format";
-import { initialStage, isWinBackSource, type ManaSignalSource } from "@/lib/leads/constants";
+import { isWinBackSource, type ManaSignalSource } from "@/lib/leads/constants";
+import { ensureManaStage } from "@/lib/pipeline/service";
 import { t } from "@/lib/i18n";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { getIgnoredMembershipIds } from "./leads";
@@ -212,7 +213,7 @@ async function handleSignal(db: Db, studioId: string, signal: Signal, now: Date)
   return db.transaction(async (tx) => {
     const [created] = await tx
       .insert(lead)
-      .values({ studioId, personId: p.id, source: sourceFor[signal.kind], stage: initialStage })
+      .values({ studioId, personId: p.id, source: sourceFor[signal.kind], stage: await ensureManaStage(tx as unknown as Db, studioId) })
       .returning();
     await tx.insert(leadNote).values({ studioId, leadId: created.id, body: signal.detail });
     if (signal.task) await tx.insert(task).values({ studioId, leadId: created.id, title: signal.task, dueDate: today });
@@ -261,6 +262,8 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
   const signals: Signal[] = [];
   for (const [manaUserId, list] of byUser) {
     for (const s of membershipSignals(list, ignored, today)) {
+      // Notices and freezes are members still: they go on the Medlemmar list (detectLeaving), not into the sales pipeline.
+      if (s.kind !== "ended") continue;
       signals.push({
         kind: s.kind,
         manaRef: s.membership.id,

@@ -12,8 +12,9 @@ export { firstName };
 /**
  * never: no visit at all in Mana (they may have stopped, or get in some other way). away: came, then stopped.
  * new: a new member who has not been in for 10 days (ticket 34), whether they came at first or not.
+ * cancelling and freezing: a notice given or a freeze ahead in Mana (they are still members).
  */
-export type AtRiskGroup = "never" | "away" | "new";
+export type AtRiskGroup = "never" | "away" | "new" | "cancelling" | "freezing";
 
 /** never or away, by visits alone; the list puts new members in their own group. Also picks the email template. */
 export const groupOf = (row: { lastVisitAt: Date | null }): "never" | "away" => (row.lastVisitAt ? "away" : "never");
@@ -31,8 +32,13 @@ export function distribute(alertIds: string[], userIds: string[]): Map<string, s
   return out;
 }
 
-/** The template for a member's group, filled in for them (for the composer in Tegen HQ). */
-export function atRiskDraft(row: { name: string | null; lastVisitAt: Date | null }, emails: AtRiskEmails | null): AtRiskEmail {
+/**
+ * The template for a member's group, filled in for them (for the composer in
+ * Tegen HQ). Those cancelling or freezing get none: "we miss you" is the wrong
+ * note for someone who has just given notice.
+ */
+export function atRiskDraft(row: { name: string | null; lastVisitAt: Date | null; group?: AtRiskGroup }, emails: AtRiskEmails | null): AtRiskEmail {
+  if (row.group === "cancelling" || row.group === "freezing") return { subject: "", body: "" };
   const template = (emails ?? emptyEmails)[groupOf(row)];
   return { subject: fillTemplate(template.subject, row.name), body: fillTemplate(template.body, row.name) };
 }

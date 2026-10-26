@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { and, asc, count, eq, isNull, max } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { coldReason, lead, leadEvent, leadField, pipelineStage, winBackReason } from "@/db/schema";
+import { manaStage } from "@/lib/leads/constants";
 import { defaultColdReasons, defaultStages, defaultWinBackReasons } from "./defaults";
 
 type Db = typeof defaultDb;
@@ -20,6 +21,16 @@ export async function ensureDefaultPipeline(db: Db, studioId: string) {
     .insert(winBackReason)
     .values(defaultWinBackReasons.map((r, position) => ({ studioId, ...r, position })))
     .onConflictDoNothing();
+}
+
+/** Adds the "Från Mana" column first on the board, if the studio does not have it yet. Returns its key. */
+export async function ensureManaStage(db: Db, studioId: string): Promise<string> {
+  const [first] = await db.select({ position: pipelineStage.position }).from(pipelineStage).where(eq(pipelineStage.studioId, studioId)).orderBy(asc(pipelineStage.position)).limit(1);
+  await db
+    .insert(pipelineStage)
+    .values({ studioId, key: manaStage, name: "Från Mana", kind: "open", position: (first?.position ?? 0) - 1 })
+    .onConflictDoNothing();
+  return manaStage;
 }
 
 export async function listWinBackReasons(db: Db, studioId: string) {

@@ -20,3 +20,9 @@ export function isLeadSource(value: string): value is LeadSource {
 
 /** Stages become an editable table in a later ticket. Until then every lead starts here. */
 export const initialStage = "new_lead";
+/**
+ * Where Mana's leads start (ended memberships, day passes, klippkort): their
+ * own column, apart from new leads, with no first-contact deadline (decided
+ * by Max, 2026-10-26).
+ */
+export const manaStage = "from_mana";

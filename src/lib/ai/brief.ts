@@ -11,12 +11,14 @@ import { aiSuggestion } from "@/db/schema";
 
 type Db = typeof defaultDb;
 
+/**
+ * A short summary of the lead, so whoever calls need not read the history
+ * (changed by Max, 2026-10-26: no script, no opening line, no questions).
+ */
 export const briefSchema = z.object({
-  summary: z.string().describe("Two or three short sentences: who this is, what they want, where it stands."),
-  facts: z.array(z.string()).describe("Up to five short facts worth having in mind on the call, newest first."),
-  opening: z.string().describe("One natural opening line for the call, in Swedish, using the first name."),
-  questions: z.array(z.string()).describe("Up to three questions to ask, in Swedish."),
-  nextStep: z.string().describe("The one next step to aim for on this call."),
+  tldr: z.string().describe("Two or three short sentences in Swedish: who this is, what they want, where it stands."),
+  facts: z.array(z.string()).describe("Up to four short facts in Swedish worth knowing that are not in the summary, newest first; empty if none."),
+  nextStep: z.string().describe("The one next step, in Swedish, in a few words."),
 });
 export type Brief = z.infer<typeof briefSchema>;
 

@@ -62,3 +62,5 @@ Phase E, built (2026-10-23), decided by Max: a "Fråga assistenten" box on Rappo
 
 Production key (2026-10-26): added by Max in Vercel and confirmed working (call brief on a lead). The first value was mistyped (Anthropic answered 401 invalid x-api-key); it was replaced with the value from .env.local, piped so it was never shown. Calls refused before any answer now cost 0 against the cap; the five refused ones were reset to 0.
 
+Call brief changed by Max (2026-10-26): no script (no opening line, no questions); a short summary instead, so nobody has to read the history: two or three sentences, up to four facts, the next step. The panel is "Kort om leaden", the button "Sammanfatta".
+

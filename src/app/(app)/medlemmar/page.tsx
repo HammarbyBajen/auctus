@@ -10,7 +10,8 @@ import { getAtRiskEmails, listAtRisk } from "@/lib/mana/at-risk-service";
 import { listUsers } from "@/lib/users/service";
 import { requireUser } from "@/lib/session";
 import { t } from "@/lib/i18n";
-import { AtRiskList, groupFromParam, membersHref, type MembersCounts } from "../at-risk-list";
+import { AtRiskList, atRiskGroups, groupFromParam, membersHref, type MembersCounts } from "../at-risk-list";
+import { listWinBackReasons } from "@/lib/pipeline/service";
 import { MilestoneList } from "../milestone-list";
 import { listMilestones } from "@/lib/mana/milestones-service";
 import type { AtRiskRow } from "@/lib/mana/at-risk-service";
@@ -19,7 +20,7 @@ import type { AtRiskRow } from "@/lib/mana/at-risk-service";
 function countsOf(rows: AtRiskRow[], milestones: number, scope: "all" | "mine", viewerId: string): MembersCounts {
   const inScope = scope === "mine" ? rows.filter((r) => !r.assignedToId || r.assignedToId === viewerId) : rows;
   const count = (group: AtRiskRow["group"]) => inScope.filter((r) => r.group === group).length;
-  return { all: inScope.length, new: count("new"), never: count("never"), away: count("away"), milestones };
+  return { all: inScope.length, milestones, ...Object.fromEntries(atRiskGroups.map((g) => [g, count(g)])) } as MembersCounts;
 }
 
 /**
@@ -33,13 +34,14 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   const { visa, grupp, alla } = await searchParams;
   const scope = visa === "mina" ? "mine" : "all";
   const filter = groupFromParam(grupp);
-  const [rows, milestones, [settings], people, emails, emailSettings] = await Promise.all([
+  const [rows, milestones, [settings], people, emails, emailSettings, leavingReasons] = await Promise.all([
     listAtRisk(db, user.studioId),
     listMilestones(db, user.studioId),
     db.select({ atRiskDays: studioSettings.atRiskDays }).from(studioSettings).where(eq(studioSettings.studioId, user.studioId)).limit(1),
     listUsers(db, user.studioId),
     getAtRiskEmails(db, user.studioId),
     getEmailSettings(db, user.studioId),
+    listWinBackReasons(db, user.studioId),
   ]);
 
   return (
@@ -58,6 +60,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
           days={settings?.atRiskDays ?? 30}
           filter={filter}
           milestones={milestones.length}
+          leavingReasons={leavingReasons.map((r) => ({ key: r.key, name: r.name }))}
           showAll={alla === "1"}
           scope={scope}
           viewerId={user.id}

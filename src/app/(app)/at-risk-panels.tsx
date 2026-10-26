@@ -31,6 +31,7 @@ export function AtRiskPanels({
   dismissAction,
   outcomes,
   reasons,
+  reasonLabel,
   minReturnBy,
 }: {
   id: string;
@@ -50,8 +51,12 @@ export function AtRiskPanels({
   logAction: (formData: FormData) => Promise<void>;
   dismissAction: (formData: FormData) => Promise<void>;
   outcomes: readonly string[];
-  reasons: readonly string[];
-  minReturnBy: string;
+  /** The reasons to pick from when taking someone off the list, with their labels. */
+  reasons: { key: string; label: string }[];
+  /** The question above the reasons. */
+  reasonLabel: string;
+  /** Only for those away: a day by which they should be back. */
+  minReturnBy: string | null;
 }) {
   const [open, setOpen] = useState<Panel>(null);
   const toggle = (panel: Panel) => setOpen((current) => (current === panel ? null : panel));
@@ -123,23 +128,25 @@ export function AtRiskPanels({
       {open === "dismiss" && (
         <form id={panelId("dismiss")} action={submitThenClose(dismissAction)} className="flex flex-col gap-3 rounded-md bg-well p-3">
           <fieldset className="flex flex-col gap-1">
-            <legend className="mb-1 text-sm font-medium">{t("atRisk.reasonLabel")}</legend>
+            <legend className="mb-1 text-sm font-medium">{reasonLabel}</legend>
             <RadioGroup name="reason" required className="gap-0 sm:grid-cols-3">
               {reasons.map((reason) => (
-                <Label key={reason} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-normal hover:bg-accent sm:min-h-9">
-                  <RadioGroupItem value={reason} />
-                  {t(`atRisk.reason.${reason}` as MessageKey)}
+                <Label key={reason.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-normal hover:bg-accent sm:min-h-9">
+                  <RadioGroupItem value={reason.key} />
+                  {reason.label}
                 </Label>
               ))}
             </RadioGroup>
           </fieldset>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor={panelId("return")}>{t("atRisk.returnBy")}</Label>
-            <Input id={panelId("return")} name="returnBy" type="date" min={minReturnBy} className="w-44" aria-describedby={panelId("return-hint")} />
-            <p id={panelId("return-hint")} className="text-xs text-muted-foreground">
-              {t("atRisk.returnByHint")}
-            </p>
-          </div>
+          {minReturnBy && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={panelId("return")}>{t("atRisk.returnBy")}</Label>
+              <Input id={panelId("return")} name="returnBy" type="date" min={minReturnBy} className="w-44" aria-describedby={panelId("return-hint")} />
+              <p id={panelId("return-hint")} className="text-xs text-muted-foreground">
+                {t("atRisk.returnByHint")}
+              </p>
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Label htmlFor={panelId("dismiss-note")}>{t("atRisk.noteLabel")}</Label>
             <Textarea id={panelId("dismiss-note")} name="note" rows={2} maxLength={2000} />

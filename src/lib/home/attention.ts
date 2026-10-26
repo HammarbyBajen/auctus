@@ -1,4 +1,4 @@
-import { initialStage, isWinBackSource } from "@/lib/leads/constants";
+import { initialStage, isWinBackSource, manaStage } from "@/lib/leads/constants";
 import type { StageKind } from "@/lib/pipeline/defaults";
 import { dueState } from "@/lib/tasks/dates";
 import { addRunningHours, type Clock } from "./clock";
@@ -140,7 +140,9 @@ export function buildAttention(input: {
       else if (state === "today") reasons.push({ type: "task_today", title: task.title });
     }
 
-    if (lead.stage !== initialStage && openTasks.length === 0) {
+    // Mana's leads keep to their own column: on Home only when a task is due (e.g. a klippkort running out).
+    const fromMana = lead.stage === manaStage;
+    if (lead.stage !== initialStage && !fromMana && openTasks.length === 0) {
       const idleMs = now.getTime() - lead.updatedAt.getTime();
       const limit = thresholds.stalledDaysByStage?.[lead.stage] ?? thresholds.stalledDays;
       if (idleMs >= limit * DAY) {
@@ -149,7 +151,7 @@ export function buildAttention(input: {
     }
 
     // A win-back lead whose reason is still unknown needs someone to find out why.
-    if (lead.source && isWinBackSource(lead.source) && !lead.winBackReason) {
+    if (!fromMana && lead.source && isWinBackSource(lead.source) && !lead.winBackReason) {
       reasons.push({ type: "win_back", source: lead.source });
     }
 

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { ImportLead } from "@/lib/import/pipedrive";
 
@@ -11,6 +11,7 @@ describe.skipIf(!hasDb)("pipedrive import", () => {
   let pool: typeof import("@/db").pool;
   let schema: typeof import("@/db/schema");
   let importer: typeof import("@/lib/import/pipedrive");
+  const userId = `${tag}-u`;
 
   const item = (ref: string, email: string, stage = "new_lead"): ImportLead => ({
     ref,
@@ -32,11 +33,13 @@ describe.skipIf(!hasDb)("pipedrive import", () => {
     [{ id: studioId }] = await db.insert(schema.studio).values({ slug: tag, name: "Import" }).returning();
     const { ensureDefaultPipeline } = await import("@/lib/pipeline/service");
     await ensureDefaultPipeline(db, studioId);
+    await db.insert(schema.user).values({ id: userId, name: "Personal", email: `${userId}@example.test`, emailVerified: true, role: "owner", studioId });
   });
 
   afterAll(async () => {
     await db.delete(schema.lead).where(eq(schema.lead.studioId, studioId));
     await db.delete(schema.person).where(eq(schema.person.studioId, studioId));
+    await db.delete(schema.user).where(eq(schema.user.id, userId));
     await db.delete(schema.studio).where(eq(schema.studio.id, studioId));
     await pool.end();
   });
@@ -70,7 +73,7 @@ describe.skipIf(!hasDb)("pipedrive import", () => {
   it("replaces every imported lead with a new export, keeping leads made in Tegen HQ", async () => {
     // From the tests above: two imported leads (1, 2) and one made by hand (c-).
     const before = await importer.previewReplace(db, studioId);
-    expect(before).toEqual({ leads: 2, persons: 2, kept: 1 });
+    expect(before).toEqual({ leads: 2, persons: 2, kept: 1, worked: 0 });
 
     const fresh = [item("pipedrive:person:1", `a-${tag}@example.test`, "cold"), item("pipedrive:person:4", `d-${tag}@example.test`)];
     const result = await importer.replaceImport(db, studioId, fresh);
@@ -85,6 +88,17 @@ describe.skipIf(!hasDb)("pipedrive import", () => {
     // Person 2 is gone with their lead; the hand-made one is untouched.
     const people = await db.select({ email: schema.person.email }).from(schema.person).where(eq(schema.person.studioId, studioId));
     expect(people.map((p) => p.email).sort()).toEqual([`a-${tag}@example.test`, `c-${tag}@example.test`, `d-${tag}@example.test`]);
+  });
+
+  it("refuses to replace once staff have worked on an imported lead, unless forced", async () => {
+    const [imported] = await db.select().from(schema.lead).where(and(eq(schema.lead.studioId, studioId), eq(schema.lead.externalRef, "pipedrive:person:1")));
+    const [note] = await db.insert(schema.leadNote).values({ studioId, leadId: imported.id, body: "Ringde, återkommer", authorId: userId }).returning();
+    expect((await importer.previewReplace(db, studioId)).worked).toBe(1);
+    const fresh = [item("pipedrive:person:1", `a-${tag}@example.test`, "cold"), item("pipedrive:person:4", `d-${tag}@example.test`)];
+    await expect(importer.replaceImport(db, studioId, fresh)).rejects.toMatchObject({ code: "worked_on", count: 1 });
+    // Nothing changed: the note is still there.
+    expect(await db.select().from(schema.leadNote).where(eq(schema.leadNote.id, note.id))).toHaveLength(1);
+    await db.delete(schema.leadNote).where(eq(schema.leadNote.id, note.id));
   });
 
   it("changes nothing when the new import fails partway", async () => {

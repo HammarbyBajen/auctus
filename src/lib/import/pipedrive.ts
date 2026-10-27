@@ -1,6 +1,6 @@
-import { and, eq, exists, inArray, isNotNull, isNull, notExists, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { lead, leadEvent, leadNote, person } from "@/db/schema";
+import { emailMessage, lead, leadEvent, leadNote, person, task } from "@/db/schema";
 import { normalizeEmail, normalizePhone } from "@/lib/leads/matching";
 
 type Db = typeof defaultDb;
@@ -334,7 +334,8 @@ export async function applyImport(db: Conn, studioId: string, leads: ImportLead[
   return result;
 }
 
-export type ReplaceCounts = { leads: number; persons: number; kept: number };
+/** worked: imported leads someone has worked on in Tegen HQ, whose work a replace would delete. */
+export type ReplaceCounts = { leads: number; persons: number; kept: number; worked: number };
 
 /** Leads that came from a Pipedrive import, and the people who have no other lead. */
 const importedLead = (studioId: string) => and(eq(lead.studioId, studioId), isNotNull(lead.externalRef));
@@ -345,13 +346,34 @@ const onlyImported = (db: Conn, studioId: string) =>
     notExists(db.select({ one: sql`1` }).from(lead).where(and(eq(lead.personId, person.id), isNull(lead.externalRef)))),
   );
 
-/** What a replace would remove, and how many leads made in Tegen HQ stay. */
+/**
+ * Work done in Tegen HQ on a lead: what the import never writes. A note or a
+ * history entry by a person, a task, an owner or an email. (The import's own
+ * note and stage, and Mana's moves to Medlem, have no author.)
+ */
+const worked = (db: Conn) =>
+  or(
+    isNotNull(lead.assignedToId),
+    exists(db.select({ one: sql`1` }).from(leadNote).where(and(eq(leadNote.leadId, lead.id), isNotNull(leadNote.authorId)))),
+    exists(db.select({ one: sql`1` }).from(leadEvent).where(and(eq(leadEvent.leadId, lead.id), isNotNull(leadEvent.authorId)))),
+    exists(db.select({ one: sql`1` }).from(task).where(eq(task.leadId, lead.id))),
+    exists(db.select({ one: sql`1` }).from(emailMessage).where(eq(emailMessage.leadId, lead.id))),
+  );
+
+/** What a replace would remove, how many leads made in Tegen HQ stay, and how many imported leads have been worked on. */
 export async function previewReplace(db: Conn, studioId: string): Promise<ReplaceCounts> {
   // One after another: inside a transaction they share one connection.
   const [leads] = await db.select({ n: sql<number>`count(*)::int` }).from(lead).where(importedLead(studioId));
   const [persons] = await db.select({ n: sql<number>`count(*)::int` }).from(person).where(onlyImported(db, studioId));
   const [kept] = await db.select({ n: sql<number>`count(*)::int` }).from(lead).where(and(eq(lead.studioId, studioId), isNull(lead.externalRef)));
-  return { leads: leads.n, persons: persons.n, kept: kept.n };
+  const [workedOn] = await db.select({ n: sql<number>`count(*)::int` }).from(lead).where(and(importedLead(studioId), worked(db)));
+  return { leads: leads.n, persons: persons.n, kept: kept.n, worked: workedOn.n };
+}
+
+export class ImportError extends Error {
+  constructor(public code: "worked_on", public count: number) {
+    super(`${count} imported leads have been worked on in Tegen HQ (notes, logged contacts, tasks, an owner or emails); a replace would delete that work`);
+  }
 }
 
 /**
@@ -362,10 +384,13 @@ export async function previewReplace(db: Conn, studioId: string): Promise<Replac
  * if anything fails, nothing has changed. Leads made in Tegen HQ (by hand,
  * from the website, win-backs) stay, and the import matches against them so
  * nobody is doubled. Moves to Medlem that Mana made come back on the next sync.
+ * Refuses when staff have worked on any imported lead, unless forced: once
+ * Tegen HQ is in use, a plain import (no replace) adds what is new instead.
  */
-export async function replaceImport(db: Db, studioId: string, leads: ImportLead[]) {
+export async function replaceImport(db: Db, studioId: string, leads: ImportLead[], { force = false }: { force?: boolean } = {}) {
   return db.transaction(async (tx) => {
     const removed = await previewReplace(tx, studioId);
+    if (removed.worked > 0 && !force) throw new ImportError("worked_on", removed.worked);
     // Which people go is read before the leads are deleted, since the leads are what tells.
     const people = await tx.select({ id: person.id }).from(person).where(onlyImported(tx, studioId));
     await tx.delete(lead).where(importedLead(studioId));

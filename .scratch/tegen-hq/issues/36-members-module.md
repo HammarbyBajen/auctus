@@ -4,7 +4,7 @@
 
 **Blocked by:** 13 (built). The groups from 19, 34 and 35 are added as those tickets are built.
 
-**Status:** built (2026-10-21); waiting on Max's look at the copy
+**Status:** done (2026-10-27, Max)
 
 **Why:** from Max's meeting with Erik (2026-10-21): "missing" members, by the fixed rule and by a drop in activity, belong in their own module where different groups can be filtered, and should show up on Home as a summary for the owner. Members stay out of the sales pipeline (Max's call for 13).
 
@@ -17,5 +17,5 @@
 - [x] A members page in the menu, with today's Hör av dig till list (Ring, E-post, Logga kontakt, Avfärda, Tillbaka senast, notes, Fördela) moved there unchanged
 - [x] Filters per group, and Mina / Alla as on Home
 - [x] Home shows a count per group, each a link to the filtered page
-- [ ] Groups from 19, 34 and 35 slot in when built
+- [x] Groups from 34 and 35 slot in (19 adds its own group when it is built, January)
 - [x] Tests (the existing at-risk tests; the page was tried on localhost with made-up members)

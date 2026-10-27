@@ -1,7 +1,6 @@
 import { Clock, Download, Lock, RefreshCw } from "lucide-react";
 import { db } from "@/db";
 import { Button, ButtonAnchor } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { EmptyState } from "@/components/app/empty-state";
@@ -18,6 +17,7 @@ import { todayInStockholm } from "@/lib/tasks/dates";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
 import { lockMonthAction, pullMonthAction, setCountedAction, unlockMonthAction } from "./actions";
+import { CategoryChecks } from "./category-checks";
 
 export const dynamic = "force-dynamic";
 // Pulling a month asks Mana a dozen or so questions, one a second.
@@ -212,19 +212,12 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
             <Panel title={t("salary.categories")} id="kategorier">
               <p className="text-sm text-muted-foreground">{locked ? t("salary.categoriesLocked") : t("salary.categoriesHint")}</p>
               <form action={setCountedAction.bind(null, month)} className="flex flex-col gap-4">
-                {categories.map((c) => (
-                  <fieldset key={c.key} className="flex flex-col gap-1">
-                    <legend className="mb-1 text-xs font-medium text-muted-foreground">{t(c.title)}</legend>
-                    {c.types.map((ty) => (
-                      <Label key={ty.typeKey} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-normal hover:bg-accent has-disabled:cursor-default has-disabled:hover:bg-transparent sm:min-h-9">
-                        <input type="hidden" name="shown" value={ty.typeKey} />
-                        <Checkbox name="counted" value={ty.typeKey} defaultChecked={ty.counted} disabled={locked} />
-                        <span className="min-w-0 flex-1">{ty.label}</span>
-                        <span className="tabular-nums text-muted-foreground">{formatHours(ty.hours)} h</span>
-                      </Label>
-                    ))}
-                  </fieldset>
-                ))}
+                {/* Starts again from what is saved after a save or a change of month. */}
+                <CategoryChecks
+                  key={`${month}:${categories.flatMap((c) => c.types.filter((ty) => ty.counted).map((ty) => ty.typeKey)).join(",")}`}
+                  groups={categories.map((c) => ({ key: c.key, title: t(c.title), types: c.types.map(({ typeKey, label, hours, counted }) => ({ typeKey, label, hours, counted })) }))}
+                  locked={locked}
+                />
                 {!locked && (
                   <SubmitButton variant="outline" className="self-start">
                     {t("salary.saveCounted")}

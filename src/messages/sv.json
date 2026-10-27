@@ -708,6 +708,8 @@
   "salary.categoriesHint": "Alla kategorier räknas från början. Bocka ur dem som inte ska räknas och spara. Valet gäller tills det ändras.",
   "salary.categoriesLocked": "Månaden är låst, så urvalet kan inte ändras. Lås upp den för att ändra.",
   "salary.saveCounted": "Spara urval",
+  "salary.selectAll": "Markera alla",
+  "salary.deselectAll": "Avmarka alla",
   "salary.countedSaved": "Urvalet är sparat.",
   "salary.leftOutNote": "Räknas inte: {names}",
   "salary.notCountedMark": "(räknas inte)",

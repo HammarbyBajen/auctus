@@ -23,3 +23,5 @@ Import dry run against production (2026-10-27, export of that day, nothing writt
 
 The day before go-live: a fresh export, then
 `pnpm import:pipedrive --deals <deals.csv> --people <people.csv> --replace --env .env.production.local` (dry run), check the counts, then the same with `--apply`; delete the files.
+
+Replaced in production (2026-10-27, run by Max with the export of that morning), to catch Tegen HQ up with Pipedrive before go-live: 557 removed, 552 created, 20 matched (the 14 leads made in Tegen HQ, and 6 deals sharing an email or phone with another in the same export), 2 website leads moved on from Ny lead (Kontaktad, Bokat möte). Open stages now match the export: Ny lead 15 (12 still Ny lead in Pipedrive, 1 not in the export, 2 imported), Kontaktad 9, Prisinfo 8, Konsultation klar 4, Bokat möte 2, Bokat provträning 2, Avbokat möte 1; Kall 526. No person is doubled. Rerun the same way until go-live, as long as nobody works leads in Tegen HQ.

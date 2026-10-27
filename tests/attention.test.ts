@@ -260,28 +260,3 @@ describe("Stockholm week and month boundaries", () => {
     expect(startOfMonthInStockholm(new Date("2026-10-31T23:30:00Z")).toISOString()).toBe("2026-10-31T23:00:00.000Z");
   });
 });
-
-describe("win-back leads", () => {
-  it("asks for the reason on a win-back lead until it is given", () => {
-    const missing = lead({ stage: "contacted", source: "mana_cancelled", winBackReason: null });
-    const given = lead({ stage: "contacted", source: "mana_cancelled", winBackReason: "injury" });
-    const ordinary = lead({ stage: "contacted", source: "contact_form" });
-    const items = run([missing, given, ordinary]);
-    expect(items.map((i) => i.lead.id)).toEqual([missing.id]);
-    expect(items[0].reasons).toEqual([{ type: "win_back", source: "mana_cancelled" }]);
-  });
-
-  it("lists a new win-back lead under its first-contact deadline, with the reason as well", () => {
-    const fresh = lead({ source: "mana_freeze", winBackReason: null, createdAt: ago(30 * H) });
-    const [item] = run([fresh]);
-    expect(item.reasons.map((r) => r.type).sort()).toEqual(["first_contact_overdue", "win_back"]);
-    expect(item.severity).toBe("red");
-  });
-});
-
-describe("day-pass leads", () => {
-  it("are not asked why they left", () => {
-    const prospect = lead({ stage: "contacted", source: "mana_day_pass", winBackReason: null });
-    expect(run([prospect])).toEqual([]);
-  });
-});

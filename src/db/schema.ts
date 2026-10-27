@@ -71,7 +71,7 @@ export const studioSettings = pgTable("studio_settings", {
   manaStudioId: text("mana_studio_id"),
   manaBaseUrl: text("mana_base_url").notNull().default("https://www.getmana.app"),
   thresholds: jsonb("thresholds").$type<Thresholds>().notNull().default(defaultThresholds),
-  /** Whether leads are made from Mana signals (cancellations, freezes, ended memberships, day passes). Off until an owner turns it on. */
+  /** Whether Mana's signals (ended memberships, day passes, klippkort) go on the Medlemmar list. Off until an owner turns it on. */
   winBackEnabled: boolean("win_back_enabled").notNull().default(false),
   /**
    * Add-ons (for example a locker) by Mana membership id. They still count as a
@@ -237,7 +237,7 @@ export const leadField = pgTable(
   (table) => [primaryKey({ columns: [table.studioId, table.key] })],
 );
 
-/** The reasons offered when a win-back lead is handled (why someone left or paused). */
+/** Why someone left, paused or did not join: offered when a Medlemmar row from Mana is dismissed. */
 export const winBackReason = pgTable(
   "win_back_reason",
   {
@@ -297,7 +297,7 @@ export const lead = pgTable(
     assignedToId: text("assigned_to_id").references(() => user.id, { onDelete: "set null" }),
     /** Why the lead went cold. Set only while the lead is in a cold stage. */
     coldReason: text("cold_reason"),
-    /** For a win-back lead: why the person left or paused, picked by whoever handles it. */
+    /** No longer set: Mana's signals moved from Leads to Medlemmar on 2026-10-27, where at_risk_alert.reason holds why. To be dropped. */
     winBackReason: text("win_back_reason"),
     /** Where an imported lead came from, for example "pipedrive:person:123", so a rerun of the import skips it. */
     externalRef: text("external_ref"),
@@ -636,11 +636,12 @@ export const atRiskAlert = pgTable(
     /** Who on the staff gets in touch. */
     assignedToId: text("assigned_to_id").references(() => user.id, { onDelete: "set null" }),
     /**
-     * Why they are on the list: away (no visit, ticket 13), or about to leave:
-     * cancelling (notice given) or freezing (a freeze ahead), from Mana.
+     * Why they are on the list: away (no visit, ticket 13); about to leave:
+     * cancelling (notice given) or freezing (a freeze ahead); or, from Mana's
+     * signals, ended (a membership that ended), day_pass or klippkort.
      */
     cause: text("cause").notNull().default("away"),
-    /** For cancelling, the last day; for freezing, the day the freeze starts. */
+    /** For cancelling and ended, the last day; for freezing, the day the freeze starts; for a day pass, the day bought; for a klippkort, the day it expires. */
     changeDate: date("change_date", { mode: "string" }),
   },
   (table) => [index("at_risk_alert_studio_idx").on(table.studioId, table.status)],
@@ -660,7 +661,7 @@ export const atRiskNote = pgTable(
       .references(() => studio.id, { onDelete: "cascade" }),
     manaUserId: text("mana_user_id").notNull(),
     alertId: uuid("alert_id").references(() => atRiskAlert.id, { onDelete: "set null" }),
-    /** answered, no_answer, messaged, dismissed or note */
+    /** answered, no_answer, messaged, dismissed, note, or mana (what Mana showed when the row was made) */
     kind: text("kind").notNull(),
     body: text("body").notNull().default(""),
     /** Never sent to an AI (ticket 30). */
@@ -776,14 +777,14 @@ export const manaSignal = pgTable(
     studioId: uuid("studio_id")
       .notNull()
       .references(() => studio.id, { onDelete: "cascade" }),
-    /** What happened: cancelled, freeze, ended or day_pass. */
+    /** What happened: ended, day_pass or klippkort (cancelled and freeze in older rows). */
     kind: text("kind").notNull(),
     /** The membership (or, for a day pass, the payment) in Mana that the signal is about. */
     manaRef: text("mana_ref").notNull(),
     manaUserId: text("mana_user_id").notNull(),
-    /** The lead it became, or empty when it was skipped (for example the person is already an open lead). */
+    /** The lead it became, before signals moved to Medlemmar (2026-10-27); now always empty. */
     leadId: uuid("lead_id").references(() => lead.id, { onDelete: "set null" }),
-    /** Why no lead was made, when skipped. */
+    /** Why it was not put on the list, when skipped (the person is an open lead, or was dismissed lately). */
     skipped: text("skipped"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },

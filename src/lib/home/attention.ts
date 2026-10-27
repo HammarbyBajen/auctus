@@ -1,4 +1,4 @@
-import { initialStage, isWinBackSource, manaStage } from "@/lib/leads/constants";
+import { initialStage } from "@/lib/leads/constants";
 import type { StageKind } from "@/lib/pipeline/defaults";
 import { dueState } from "@/lib/tasks/dates";
 import { addRunningHours, type Clock } from "./clock";
@@ -25,7 +25,6 @@ export type AttentionLead = {
   assignedToId: string | null;
   assigneeName: string | null;
   source?: string;
-  winBackReason?: string | null;
 };
 
 export type AttentionTask = { id: string; leadId: string; title: string; dueDate: string };
@@ -37,8 +36,7 @@ export type Reason =
   | { type: "first_contact_ok"; msLeft: number }
   | { type: "task_overdue"; title: string; dueDate: string }
   | { type: "task_today"; title: string }
-  | { type: "stalled"; days: number }
-  | { type: "win_back"; source: string };
+  | { type: "stalled"; days: number };
 
 export type Severity = "red" | "amber" | "normal";
 
@@ -71,8 +69,6 @@ function rankOf(reason: Reason): { rank: number; magnitude: number } {
       return { rank: 4, magnitude: 0 };
     case "stalled":
       return { rank: 5, magnitude: reason.days };
-    case "win_back":
-      return { rank: 5, magnitude: 0 };
     case "first_contact_ok":
       return { rank: 6, magnitude: -reason.msLeft };
   }
@@ -140,19 +136,12 @@ export function buildAttention(input: {
       else if (state === "today") reasons.push({ type: "task_today", title: task.title });
     }
 
-    // Mana's leads keep to their own column: on Home only when a task is due (e.g. a klippkort running out).
-    const fromMana = lead.stage === manaStage;
-    if (lead.stage !== initialStage && !fromMana && openTasks.length === 0) {
+    if (lead.stage !== initialStage && openTasks.length === 0) {
       const idleMs = now.getTime() - lead.updatedAt.getTime();
       const limit = thresholds.stalledDaysByStage?.[lead.stage] ?? thresholds.stalledDays;
       if (idleMs >= limit * DAY) {
         reasons.push({ type: "stalled", days: Math.floor(idleMs / DAY) });
       }
-    }
-
-    // A win-back lead whose reason is still unknown needs someone to find out why.
-    if (!fromMana && lead.source && isWinBackSource(lead.source) && !lead.winBackReason) {
-      reasons.push({ type: "win_back", source: lead.source });
     }
 
     if (reasons.length > 0) {

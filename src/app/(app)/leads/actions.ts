@@ -12,7 +12,6 @@ import { addNote, createOrMatchLead, getLead, LeadError, logContact, moveLeadSta
 import { createManaClient } from "@/lib/mana/config";
 import { watchFirstContact } from "@/lib/notify/start";
 import { refreshPersonFromMana } from "@/lib/mana/leads";
-import { setWinBackReason, WinBackError } from "@/lib/mana/winback-service";
 import { assignLead, createTask, deleteTask, setTaskDone, TaskError } from "@/lib/tasks/service";
 import { isParkDay, parkDay, parkPresets, type ParkPreset } from "@/lib/leads/park";
 import { isTrialDay, trialFollowUpDay } from "@/lib/leads/trial";
@@ -239,19 +238,6 @@ export async function checkLeadInMana(leadId: string): Promise<{ changed: boolea
   } catch {
     return { changed: false };
   }
-}
-
-export async function saveWinBackReason(leadId: string, formData: FormData) {
-  const user = await requirePermission("leads", "write");
-  try {
-    await setWinBackReason(db, user.studioId, leadId, String(formData.get("reason") ?? ""));
-  } catch (error) {
-    if (error instanceof WinBackError && error.code === "unknown_reason") redirect(`/leads/${leadId}?fel=vinnanledning`);
-    if (error instanceof WinBackError) notFound();
-    throw error;
-  }
-  revalidatePath("/");
-  revalidatePath(`/leads/${leadId}`);
 }
 
 /** Saves the studio's own fields on a lead (ticket 07). */

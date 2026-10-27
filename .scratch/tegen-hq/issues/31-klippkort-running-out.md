@@ -32,3 +32,5 @@
 - [x] A task on their open lead or a new Klippkort lead, with the balance, the product and when it was bought
 - [x] Tests with a balance going down over nights
 - [x] Migration 0029 run in production (Max), copy approved (Max), then pushed
+
+Changed (2026-10-27, ticket 12): a klippkort running out now puts the holder under Medlemmar → Klippkort instead of making a lead with a task; someone who is an open lead still gets the task on their lead.

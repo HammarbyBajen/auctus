@@ -1,6 +1,8 @@
 import { and, desc, eq, gte, inArray, lt, ne, or } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import {
+  atRiskAlert,
+  atRiskNote,
   lead,
   leadEvent,
   leadNote,
@@ -12,13 +14,11 @@ import {
   pipelineStage,
   studioSettings,
   task,
-  winBackReason,
 } from "@/db/schema";
 import { formatDay } from "@/lib/format";
-import { isWinBackSource, type ManaSignalSource } from "@/lib/leads/constants";
-import { ensureManaStage } from "@/lib/pipeline/service";
 import { t } from "@/lib/i18n";
 import { todayInStockholm } from "@/lib/tasks/dates";
+import { fromManaCauses } from "./at-risk-work";
 import { getIgnoredMembershipIds } from "./leads";
 import { customerRole } from "./membership";
 import { keepBundlePurchasesDays } from "./klippkort";
@@ -28,15 +28,7 @@ import { dayPassKinds, isDayPassProspect, membershipSignals, type SignalKind } f
 type Db = typeof defaultDb;
 
 const DAY = 86_400_000;
-const sourceFor: Record<SignalKind, ManaSignalSource> = {
-  cancelled: "mana_cancelled",
-  freeze: "mana_freeze",
-  ended: "mana_ended",
-  day_pass: "mana_day_pass",
-  klippkort: "mana_klippkort",
-};
-
-/** A person dismissed (moved to a cold stage) this recently is not nagged about again. */
+/** A person dismissed as a lead (moved to a cold stage) this recently is not nagged about again. */
 export const recentlyDismissedDays = 90;
 
 type Payment = { id: string; user: { id: string } | null; paidAt: string | null; status: string; kind: string; description: string | null };
@@ -91,7 +83,7 @@ export async function syncPurchases(
   return { saved: rows.length, payers };
 }
 
-/** Finds or creates the CRM person for a Mana person (by link, then email, then phone). */
+/** The CRM person for a Mana member, if there is one. Mana's signals no longer make people or leads. */
 async function personForMember(db: Db, studioId: string, manaUserId: string) {
   const [member] = await db
     .select()
@@ -108,26 +100,10 @@ async function personForMember(db: Db, studioId: string, manaUserId: string) {
     .where(and(eq(person.studioId, studioId), or(...matchers)))
     .orderBy(person.createdAt)
     .limit(1);
-  if (existing) {
-    if (!existing.manaUserId) await db.update(person).set({ manaUserId }).where(eq(person.id, existing.id));
-    return existing;
-  }
-  const [created] = await db
-    .insert(person)
-    .values({
-      studioId,
-      name: member.name ?? member.email ?? "Okänd",
-      email: member.email,
-      emailNormalized: member.emailNormalized,
-      phone: member.phone,
-      phoneNormalized: member.phoneNormalized,
-      manaUserId,
-    })
-    .returning();
-  return created;
+  return existing ?? null;
 }
 
-/** Why a signal must not become a new lead, if it must not. Adds a note to an open lead instead. */
+/** Why a signal must not go on the Medlemmar list, if it must not: the person is being sold to already, or said no lately. */
 async function reasonToSkip(db: Db, studioId: string, personId: string, now: Date): Promise<{ skip: string; openLeadId?: string } | null> {
   const leads = await db
     .select({ id: lead.id, kind: pipelineStage.kind })
@@ -166,23 +142,33 @@ async function reasonToSkip(db: Db, studioId: string, personId: string, now: Dat
   return null;
 }
 
-function describeSignal(kind: Exclude<SignalKind, "klippkort">, name: string, date: string | null): string {
+function describeSignal(kind: "ended" | "day_pass", name: string, date: string | null): string {
   const when = date ? formatDay(date) : "";
-  switch (kind) {
-    case "cancelled":
-      return t("winback.noteCancelled", { name, date: when });
-    case "freeze":
-      return t("winback.noteFreeze", { name, date: when });
-    case "ended":
-      return t("winback.noteEnded", { name, date: when });
-    case "day_pass":
-      return t("winback.noteDayPass", { name, date: when });
-  }
+  return kind === "ended" ? t("winback.noteEnded", { name, date: when }) : t("winback.noteDayPass", { name, date: when });
 }
 
-type Signal = { kind: SignalKind; manaRef: string; manaUserId: string; detail: string; /** A task for today, as well as the note (ticket 31). */ task?: string };
+/** The signals that go on the Medlemmar list; notices and freezes are kept there by detectLeaving. */
+type RowSignalKind = Exclude<SignalKind, "cancelled" | "freeze">;
 
-/** Turns one signal into a lead (or a note on an open lead), and records it so it never happens twice. */
+type Signal = {
+  kind: RowSignalKind;
+  manaRef: string;
+  manaUserId: string;
+  /** What Mana shows, in a line: kept as the row's first note. */
+  detail: string;
+  /** For ended, the last day; for a day pass, the day bought; for a klippkort, the day it expires, if soon. */
+  changeDate: string | null;
+  /** For someone who is already a lead: a task for today on their lead, as well as the note (ticket 31). */
+  task?: string;
+};
+
+/**
+ * Puts one signal on the Medlemmar list (or, for someone already being sold
+ * to, a note on their lead), and records it so it never happens twice. A
+ * member has one open row per kind, and a buyer one row in all: a klippkort
+ * counts as a day pass when bought, so its row turns into a Klippkort row when
+ * the card runs low. A later signal is added to the open row as a note.
+ */
 async function handleSignal(db: Db, studioId: string, signal: Signal, now: Date): Promise<"created" | "skipped" | "seen"> {
   const [seen] = await db
     .select({ ref: manaSignal.manaRef })
@@ -190,52 +176,70 @@ async function handleSignal(db: Db, studioId: string, signal: Signal, now: Date)
     .where(and(eq(manaSignal.studioId, studioId), eq(manaSignal.kind, signal.kind), eq(manaSignal.manaRef, signal.manaRef)))
     .limit(1);
   if (seen) return "seen";
+  const record = (tx: Db, skipped: string | null) =>
+    tx.insert(manaSignal).values({ studioId, kind: signal.kind, manaRef: signal.manaRef, manaUserId: signal.manaUserId, skipped }).onConflictDoNothing();
 
   const p = await personForMember(db, studioId, signal.manaUserId);
-  if (!p) return "seen";
-
-  const today = todayInStockholm(now);
-  const skip = await reasonToSkip(db, studioId, p.id, now);
-  // A klippkort running out is news even about someone dismissed lately: they still train, and still pay.
-  if (skip && !(signal.kind === "klippkort" && skip.skip === "recently_dismissed")) {
-    if (skip.openLeadId) {
-      await db.insert(leadNote).values({ studioId, leadId: skip.openLeadId, body: signal.detail });
-      if (signal.task) await db.insert(task).values({ studioId, leadId: skip.openLeadId, title: signal.task, dueDate: today });
-      await db.update(lead).set({ updatedAt: now }).where(eq(lead.id, skip.openLeadId));
-    }
-    await db
-      .insert(manaSignal)
-      .values({ studioId, kind: signal.kind, manaRef: signal.manaRef, manaUserId: signal.manaUserId, skipped: skip.skip })
-      .onConflictDoNothing();
+  const skip = p ? await reasonToSkip(db, studioId, p.id, now) : null;
+  if (skip?.openLeadId) {
+    // Someone already being sold to stays in Leads: the news goes on their lead.
+    await db.insert(leadNote).values({ studioId, leadId: skip.openLeadId, body: t("winback.leadNote", { detail: signal.detail }) });
+    if (signal.task) await db.insert(task).values({ studioId, leadId: skip.openLeadId, title: signal.task, dueDate: todayInStockholm(now) });
+    await db.update(lead).set({ updatedAt: now }).where(eq(lead.id, skip.openLeadId));
+    await record(db, skip.skip);
+    return "skipped";
+  }
+  // A klippkort running out is news even about someone who said no lately: they still train, and still pay.
+  if (skip && signal.kind !== "klippkort") {
+    await record(db, skip.skip);
     return "skipped";
   }
 
-  return db.transaction(async (tx) => {
-    const [created] = await tx
-      .insert(lead)
-      .values({ studioId, personId: p.id, source: sourceFor[signal.kind], stage: await ensureManaStage(tx as unknown as Db, studioId) })
-      .returning();
-    await tx.insert(leadNote).values({ studioId, leadId: created.id, body: signal.detail });
-    if (signal.task) await tx.insert(task).values({ studioId, leadId: created.id, title: signal.task, dueDate: today });
-    await tx
-      .insert(manaSignal)
-      .values({ studioId, kind: signal.kind, manaRef: signal.manaRef, manaUserId: signal.manaUserId, leadId: created.id });
-    return "created" as const;
+  const buyer = ["day_pass", "klippkort"];
+  const [open] = await db
+    .select({ id: atRiskAlert.id, cause: atRiskAlert.cause })
+    .from(atRiskAlert)
+    .where(
+      and(
+        eq(atRiskAlert.studioId, studioId),
+        eq(atRiskAlert.manaUserId, signal.manaUserId),
+        inArray(atRiskAlert.cause, buyer.includes(signal.kind) ? buyer : [signal.kind]),
+        eq(atRiskAlert.status, "open"),
+      ),
+    )
+    .limit(1);
+  await db.transaction(async (tx) => {
+    let alertId = open?.id;
+    if (alertId) {
+      // A day pass on a Klippkort row is only a note; anything else takes the row over, with its date.
+      if (!(signal.kind === "day_pass" && open.cause === "klippkort")) {
+        await tx.update(atRiskAlert).set({ cause: signal.kind, ...(signal.changeDate ? { changeDate: signal.changeDate } : {}) }).where(eq(atRiskAlert.id, alertId));
+      }
+    } else {
+      [{ id: alertId }] = await tx
+        .insert(atRiskAlert)
+        .values({ studioId, manaUserId: signal.manaUserId, cause: signal.kind, changeDate: signal.changeDate, createdAt: now })
+        .returning({ id: atRiskAlert.id });
+    }
+    await tx.insert(atRiskNote).values({ studioId, manaUserId: signal.manaUserId, alertId, kind: "mana", body: signal.detail, createdAt: now });
+    await record(tx as unknown as Db, null);
   });
+  return open ? "skipped" : "created";
 }
 
 /**
- * Looks through the Mana mirror for people leaving, pausing or only buying
- * day passes, and makes a win-back lead for each (see `membershipSignals` and
- * `isDayPassProspect`); and for klippkort holders whose card is nearly used
- * up, a task to offer a membership (ticket 31). Does nothing until an owner
- * has switched it on.
- * A signal is handled once: it never makes a second lead, even after the first
- * is closed. A person who is already an open lead gets a note instead, and one
- * dismissed in the last 90 days is left alone.
+ * Looks through the Mana mirror for people whose membership has ended, who
+ * only buy day passes, or whose klippkort is nearly used up (ticket 31), and
+ * puts each on the Medlemmar list: Har slutat, Dagpass or Klippkort (decided
+ * by Max, 2026-10-27: Mana makes no leads; staff add a lead by hand when
+ * someone wants to talk membership). Does nothing until an owner has switched
+ * it on. A signal is handled once, even after its row is handled. A person
+ * who is already an open lead gets a note on the lead instead, and one
+ * dismissed as a lead in the last 90 days is left alone. A row closes by
+ * itself when the person holds a membership again.
  */
 export async function detectWinBacks(db: Db, studioId: string, now: Date = new Date()) {
-  const result = { created: 0, skipped: 0 };
+  const result = { created: 0, skipped: 0, resolved: 0 };
   const [settings] = await db
     .select({ enabled: studioSettings.winBackEnabled, addOns: studioSettings.addOnMembershipIds })
     .from(studioSettings)
@@ -246,7 +250,7 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
   const today = todayInStockholm(now);
   // Add-ons such as a locker do not keep someone "in" when they cancel their gym membership.
   const ignored = [...(await getIgnoredMembershipIds(db, studioId)), ...settings.addOns];
-  // Only customers can be won back: staff and owners hold coach memberships and lockers too, and buy classes.
+  // Only customers: staff and owners hold coach memberships and lockers too, and buy classes.
   const ofCustomers = (manaUserId: typeof manaMembership.manaUserId | typeof manaPurchase.manaUserId) =>
     and(eq(manaMember.studioId, studioId), eq(manaMember.manaUserId, manaUserId), eq(manaMember.role, customerRole));
   const memberships = (
@@ -262,14 +266,9 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
   const signals: Signal[] = [];
   for (const [manaUserId, list] of byUser) {
     for (const s of membershipSignals(list, ignored, today)) {
-      // Notices and freezes are members still: they go on the Medlemmar list (detectLeaving), not into the sales pipeline.
+      // Notices and freezes are members still: detectLeaving keeps them on the list.
       if (s.kind !== "ended") continue;
-      signals.push({
-        kind: s.kind,
-        manaRef: s.membership.id,
-        manaUserId,
-        detail: describeSignal(s.kind, s.membership.name, s.date),
-      });
+      signals.push({ kind: s.kind, manaRef: s.membership.id, manaUserId, detail: describeSignal(s.kind, s.membership.name, s.date), changeDate: s.date });
     }
   }
 
@@ -288,14 +287,15 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
     if (isDayPassProspect(byUser.get(manaUserId) ?? [], ignored, day, today)) {
       signals.push({
         kind: "day_pass",
-        manaRef: manaUserId, // one day-pass lead per person
+        manaRef: manaUserId, // once per person
         manaUserId,
-        detail: describeSignal("day_pass", purchase.description ?? "", day),
+        detail: describeSignal("day_pass", (purchase.description ?? "").replace(/^Credit bundle: /, ""), day),
+        changeDate: day,
       });
     }
   }
 
-  // Klippkort nearly used up or about to expire: a task to offer a membership (ticket 31).
+  // Klippkort nearly used up or about to expire (ticket 31).
   for (const k of await klippkortSignals(db, studioId, now)) signals.push({ kind: "klippkort", ...k });
 
   for (const s of signals) {
@@ -303,36 +303,18 @@ export async function detectWinBacks(db: Db, studioId: string, now: Date = new D
     if (outcome === "created") result.created += 1;
     if (outcome === "skipped") result.skipped += 1;
   }
+
+  // Back as a member: their row for having left, a day pass or a klippkort closes by itself.
+  const holdsMembership = (manaUserId: string) =>
+    (byUser.get(manaUserId) ?? []).some((m) => !ignored.includes(m.membershipId) && (m.status === "active" || m.status === "future"));
+  const open = await db
+    .select({ id: atRiskAlert.id, manaUserId: atRiskAlert.manaUserId })
+    .from(atRiskAlert)
+    .where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.status, "open"), inArray(atRiskAlert.cause, [...fromManaCauses])));
+  const resolve = open.filter((a) => holdsMembership(a.manaUserId)).map((a) => a.id);
+  if (resolve.length > 0) await db.update(atRiskAlert).set({ status: "resolved", handledAt: now }).where(inArray(atRiskAlert.id, resolve));
+  result.resolved = resolve.length;
   return result;
-}
-
-export class WinBackError extends Error {
-  constructor(public code: "not_found" | "not_win_back" | "unknown_reason") {
-    super(code);
-  }
-}
-
-/** Records why a win-back lead's person left or paused. */
-export async function setWinBackReason(db: Db, studioId: string, leadId: string, reasonKey: string) {
-  const [found] = await db
-    .select()
-    .from(lead)
-    .where(and(eq(lead.studioId, studioId), eq(lead.id, leadId)))
-    .limit(1);
-  if (!found) throw new WinBackError("not_found");
-  if (!isWinBackSource(found.source)) throw new WinBackError("not_win_back");
-  const [reason] = await db
-    .select()
-    .from(winBackReason)
-    .where(and(eq(winBackReason.studioId, studioId), eq(winBackReason.key, reasonKey)))
-    .limit(1);
-  if (!reason) throw new WinBackError("unknown_reason");
-  const [updated] = await db
-    .update(lead)
-    .set({ winBackReason: reason.key, updatedAt: new Date() })
-    .where(eq(lead.id, leadId))
-    .returning();
-  return updated;
 }
 
 export async function setWinBackEnabled(db: Db, studioId: string, enabled: boolean) {

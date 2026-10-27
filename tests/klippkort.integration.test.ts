@@ -68,9 +68,13 @@ describe.skipIf(!hasDb)("klippkort running out (ticket 31)", () => {
       .innerJoin(schema.person, eq(schema.person.id, schema.lead.personId))
       .where(eq(schema.lead.studioId, studioA));
   const tasksOf = (leadId: string) => db.select().from(schema.task).where(eq(schema.task.leadId, leadId));
+  const rowsOf = () => db.select().from(schema.atRiskAlert).where(eq(schema.atRiskAlert.studioId, studioA));
+  const notesOf = (alertId: string) => db.select().from(schema.atRiskNote).where(eq(schema.atRiskNote.alertId, alertId)).orderBy(schema.atRiskNote.createdAt);
 
   async function reset() {
     await db.delete(schema.manaSignal).where(eq(schema.manaSignal.studioId, studioA));
+    await db.delete(schema.atRiskNote).where(eq(schema.atRiskNote.studioId, studioA));
+    await db.delete(schema.atRiskAlert).where(eq(schema.atRiskAlert.studioId, studioA));
     await db.delete(schema.lead).where(eq(schema.lead.studioId, studioA));
     await db.delete(schema.person).where(eq(schema.person.studioId, studioA));
     await db.delete(schema.manaMembership).where(eq(schema.manaMembership.studioId, studioA));
@@ -152,74 +156,73 @@ describe.skipIf(!hasDb)("klippkort running out (ticket 31)", () => {
     expect(afterNew.read).toEqual(["holder"]);
   });
 
-  it("at 2 classes left, makes a Klippkort lead with a note and a task for today, once per card", async () => {
+  it("at 2 classes left, puts them under Medlemmar → Klippkort with what Mana shows, once per card", async () => {
     await member("holder");
     await bought("holder", "Klippkort", "2026-09-15T10:00:00Z");
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 2 }] }), studioA, now);
-    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 1, skipped: 0 });
-    const [row] = await leadsOf();
-    expect(row.lead).toMatchObject({ source: "mana_klippkort", stage: "from_mana" });
-    const found = await leads.getLead(db, studioA, row.lead.id);
-    const note = found?.history.find((h) => h.kind === "note");
-    expect(note?.kind === "note" && note.body).toBe("Mana: 2 klipp kvar på Klippkort (köpt 15 sep.). Inget medlemskap.");
-    expect((await tasksOf(row.lead.id)).map((t) => [t.title, t.dueDate])).toEqual([["Erbjud medlemskap: 2 klipp kvar", "2026-10-21"]]);
+    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 1, skipped: 0, resolved: 0 });
+    const [row] = await rowsOf();
+    expect(row).toMatchObject({ manaUserId: "holder", cause: "klippkort", changeDate: null, status: "open" });
+    expect((await notesOf(row.id)).map((n) => [n.kind, n.body])).toEqual([["mana", "2 klipp kvar på Klippkort (köpt 15 sep.). Inget medlemskap."]]);
+    expect(await leadsOf()).toHaveLength(0);
 
     // The next night, with 1 left: the same card, nothing new.
     const later = new Date(now.getTime() + 86_400_000);
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 1 }] }), studioA, later);
-    expect(await wb.detectWinBacks(db, studioA, later)).toEqual({ created: 0, skipped: 0 });
-    expect(await tasksOf(row.lead.id)).toHaveLength(1);
+    expect(await wb.detectWinBacks(db, studioA, later)).toEqual({ created: 0, skipped: 0, resolved: 0 });
+    expect(await notesOf(row.id)).toHaveLength(1);
   });
 
-  it("puts the task on a recent buyer's day-pass lead, made when they bought the card", async () => {
+  it("turns a recent buyer's Dagpass row into a Klippkort row when the card runs low: one row per buyer", async () => {
     await member("holder");
     await bought("holder", "Klippkort", "2026-10-01T10:00:00Z");
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 8 }] }), studioA, now);
-    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 1, skipped: 0 });
+    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 1, skipped: 0, resolved: 0 });
+    expect((await rowsOf()).map((r) => r.cause)).toEqual(["day_pass"]);
     const later = new Date("2026-10-28T04:00:00Z");
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 2 }] }), studioA, later);
-    expect(await wb.detectWinBacks(db, studioA, later)).toEqual({ created: 0, skipped: 1 });
-    const [row] = await leadsOf();
-    expect(row.lead.source).toBe("mana_day_pass");
-    expect((await tasksOf(row.lead.id)).map((t) => [t.title, t.dueDate])).toEqual([["Erbjud medlemskap: 2 klipp kvar", "2026-10-28"]]);
+    expect(await wb.detectWinBacks(db, studioA, later)).toEqual({ created: 0, skipped: 1, resolved: 0 });
+    const [row] = await rowsOf();
+    expect(row.cause).toBe("klippkort");
+    expect((await notesOf(row.id)).map((n) => n.body)).toEqual(["Köpte Klippkort 1 okt. och har inget medlemskap", "2 klipp kvar på Klippkort (köpt 1 okt.). Inget medlemskap."]);
   });
 
   it("does nothing with 3 or more left", async () => {
     await member("holder");
     await bought("holder", "Klippkort", "2026-09-15T10:00:00Z");
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 3 }] }), studioA, now);
-    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 0, skipped: 0 });
+    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 0, skipped: 0, resolved: 0 });
   });
 
-  it("nudges about a card that expires within 14 days with classes left", async () => {
+  it("nudges about a card that expires within 14 days with classes left, with the day it expires", async () => {
     await member("holder");
     await bought("holder", "Klippkort", "2025-11-01T10:00:00Z");
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 6, expireDate: "2026-11-01" }] }), studioA, now);
     await wb.detectWinBacks(db, studioA, now);
-    const [row] = await leadsOf();
-    expect((await tasksOf(row.lead.id)).map((t) => t.title)).toEqual(["Erbjud medlemskap: klippkortet går ut 1 nov."]);
+    const [row] = await rowsOf();
+    expect(row).toMatchObject({ cause: "klippkort", changeDate: "2026-11-01" });
+    expect((await notesOf(row.id))[0].body).toContain("går ut 1 nov.");
   });
 
-  it("puts the task on the person's open lead instead of making a second lead", async () => {
+  it("puts a task on the person's open lead instead of a row, so someone being sold to stays in Leads", async () => {
     const { lead } = await leads.createOrMatchLead(db, studioA, { name: "Öppen", email: "holder@example.test", source: "contact_form" });
     await member("holder");
     await bought("holder", "Klippkort", "2026-09-15T10:00:00Z");
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 1 }] }), studioA, now);
-    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 0, skipped: 1 });
-    expect(await leadsOf()).toHaveLength(1);
-    expect((await tasksOf(lead.id)).map((t) => t.title)).toEqual(["Erbjud medlemskap: 1 klipp kvar"]);
+    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 0, skipped: 1, resolved: 0 });
+    expect(await rowsOf()).toHaveLength(0);
+    expect((await tasksOf(lead.id)).map((t) => [t.title, t.dueDate])).toEqual([["Erbjud medlemskap: 1 klipp kvar", "2026-10-21"]]);
   });
 
-  it("makes a new lead even when the person was dismissed lately: they still train and pay", async () => {
+  it("puts them on the list even when the person was dismissed as a lead lately: they still train and pay", async () => {
     const { lead } = await leads.createOrMatchLead(db, studioA, { name: "Avfärdad", email: "holder@example.test", source: "contact_form" });
     await leads.moveLeadStage(db, studioA, lead.id, "cold", { coldReason: "price" });
     await member("holder");
     await bought("holder", "Klippkort", "2026-09-15T10:00:00Z");
     await kk.syncKlippkort(db, mana({ holder: [{ credits: 0 }] }), studioA, now);
-    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 1, skipped: 0 });
-    const rows = await leadsOf();
-    const fresh = rows.find((r) => r.lead.id !== lead.id)!;
-    expect((await tasksOf(fresh.lead.id)).map((t) => t.title)).toEqual(["Erbjud medlemskap: klippkortet är slut"]);
+    expect(await wb.detectWinBacks(db, studioA, now)).toEqual({ created: 1, skipped: 0, resolved: 0 });
+    const [row] = await rowsOf();
+    expect((await notesOf(row.id))[0].body).toBe("Klippkort är slut (köpt 15 sep.). Inget medlemskap.");
   });
 
   it("does not act on a balance from before the card was bought", async () => {

@@ -7,7 +7,7 @@ import { todayInStockholm } from "@/lib/tasks/dates";
 import { atRiskMembers, isNewMember, visitStatuses } from "./at-risk";
 import { getIgnoredMembershipIds } from "./leads";
 import { membershipSignals } from "./winback";
-import { distribute, emptyEmails, groupOf, type AtRiskGroup } from "./at-risk-work";
+import { distribute, emptyEmails, groupOf, type AtRiskCause, type AtRiskGroup } from "./at-risk-work";
 import { customerRole } from "./membership";
 
 type Db = typeof defaultDb;
@@ -174,13 +174,12 @@ export async function detectLeaving(db: Db, studioId: string, now: Date = new Da
 
 export type AtRiskNoteRow = { kind: string; body: string; at: Date; by: string | null; private?: boolean };
 
-/** Why a member is on the list (see atRiskAlert.cause). */
-export type AtRiskCause = "away" | "cancelling" | "freezing";
+export type { AtRiskCause };
 
 export type AtRiskRow = {
   id: string;
   cause: AtRiskCause;
-  /** For cancelling, the last day; for freezing, the day the freeze starts. */
+  /** For cancelling, the last day; for freezing, the day the freeze starts; for ended, the last day; for a day pass, the day bought. */
   changeDate: string | null;
   /** Mana may have no name for someone; the email stands in then. */
   name: string | null;
@@ -247,7 +246,7 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
       cause: o.alert.cause as AtRiskCause,
       changeDate: o.alert.changeDate,
       group: ((): AtRiskGroup => {
-        if (o.alert.cause === "cancelling" || o.alert.cause === "freezing") return o.alert.cause;
+        if (o.alert.cause !== "away") return o.alert.cause as AtRiskGroup;
         const first = firstStartOf.get(o.alert.manaUserId);
         return first && dataStart?.first && isNewMember(first, dataStart.first, today) ? "new" : groupOf({ lastVisitAt });
       })(),
@@ -257,19 +256,25 @@ export async function listAtRisk(db: Db, studioId: string, now: Date = new Date(
       attempts: theirs.filter((n) => n.alertId === o.alert.id && (n.kind === "no_answer" || n.kind === "messaged")).length,
     };
   });
-  // Longest away first: since the last visit, or since they started paying when they never came.
   // Someone leaving shows once, as leaving: their row for being away waits until they are not.
   const memberOf = new Map(open.map((o) => [o.alert.id, o.alert.manaUserId]));
   const leavingIds = new Set(rows.filter((r) => r.cause !== "away").map((r) => memberOf.get(r.id)));
   const shown = rows.filter((r) => r.cause !== "away" || !leavingIds.has(memberOf.get(r.id)));
-  // Those leaving first, soonest change first; then those away, longest away first.
-  const leaving = (r: AtRiskRow) => (r.cause === "away" ? 1 : 0);
-  const order = (r: AtRiskRow) => (r.cause === "away" ? (r.lastVisitAt ?? r.since).getTime() : Date.parse(`${r.changeDate ?? "9999-12-31"}T12:00:00Z`));
-  return shown.sort((a, b) => leaving(a) - leaving(b) || order(a) - order(b) || (a.name ?? "").localeCompare(b.name ?? "", "sv"));
+  // Those leaving first, soonest change first; then those who have left, latest first; those away,
+  // longest away first (since the last visit, or since they started paying); last day passes and klippkort, newest first.
+  const rank: Record<AtRiskCause, number> = { cancelling: 0, freezing: 0, ended: 1, away: 2, day_pass: 3, klippkort: 3 };
+  const day = (r: AtRiskRow) => Date.parse(`${r.changeDate ?? "9999-12-31"}T12:00:00Z`);
+  const order = (r: AtRiskRow) => {
+    if (rank[r.cause] === 0) return day(r);
+    if (r.cause === "ended") return -day(r);
+    if (r.cause === "away") return (r.lastVisitAt ?? r.since).getTime();
+    return -r.since.getTime();
+  };
+  return shown.sort((a, b) => rank[a.cause] - rank[b.cause] || order(a) - order(b) || (a.name ?? "").localeCompare(b.name ?? "", "sv"));
 }
 
 export const dismissReasons = ["holiday", "injury", "other"] as const;
-/** Why someone was taken off the list: holiday, injury or other for those away; for those leaving, the studio's own win-back reasons. */
+/** Why someone was taken off the list: holiday, injury or other for those away; for everyone else, the studio's own win-back reasons. */
 export type DismissReason = string;
 
 /** What happened when staff got in touch. Only "answered" takes them off the list; the rest are tries. */

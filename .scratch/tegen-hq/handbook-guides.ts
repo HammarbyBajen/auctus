@@ -4,7 +4,8 @@ import { studio, user } from "@/db/schema";
 import { createCategory, createPage, listCategories, listPages } from "@/lib/handbook/service";
 
 // Handbok guides for using Tegen HQ (written 2026-10-26, approved by Max). Added to production on 2026-10-26;
-// four updated there the same day for the Från Mana column, Säger upp and Fryser, and Sammanfatta.
+// four updated there the same day for the Från Mana column, Säger upp and Fryser, and Sammanfatta;
+// on 2026-10-27 "Leads från Mana" became "Från Mana" and Medlemmar got Har slutat, Dagpass and Klippkort.
 // To add them again (only missing titles are added): copy to scripts/, then run with the database's env loaded and NODE_OPTIONS="--conditions=react-server".
 type Block = ["h2" | "h3" | "p", string] | ["ul" | "ol" | "tasks", string[]];
 const text = (t: string) => [{ type: "text", text: t }];
@@ -68,26 +69,27 @@ export const guides: [string, Block[]][] = [
     ["h2", "Vänta till"],
     ["p", "När leaden själv vill höra av sig senare, eller ni väntar på svar: tryck Vänta till… under Uppgifter och välj 1 vecka, 2 veckor, 1 månad eller ett datum. Leaden kommer tillbaka som en uppgift den dagen."],
   ]],
-  ["Leads från Mana", [
-    ["p", "Tegen HQ läser Mana varje natt och gör en lead när någon:"],
+  ["Från Mana", [
+    ["p", "Tegen HQ läser Mana varje natt. Det som gäller medlemmar och de som tränar utan medlemskap hamnar under Medlemmar, inte bland leads:"],
     ["ul", [
-      "har avslutat sitt medlemskap,",
-      "köper dagpass eller klippkort utan att vara medlem.",
+      "Säger upp och Fryser: har sagt upp eller ska frysa sitt medlemskap.",
+      "Har slutat: medlemskapet tog slut den senaste månaden.",
+      "Dagpass: har köpt dagpass utan att vara medlem.",
+      "Klippkort: har 2 klipp kvar, eller kortet går ut inom 14 dagar.",
     ]],
-    ["p", "De hamnar i en egen kolumn, Från Mana, först under Leads. Så blandas de inte ihop med nya leads. Startsidan visar hur många som väntar där."],
-    ["p", "När ett klippkort nästan är slut kommer en uppgift om att erbjuda medlemskap."],
-    ["p", "Medlemmar som säger upp eller fryser sitt medlemskap blir inte leads. De finns under Medlemmar → Säger upp och Fryser."],
-    ["h3", "Varför slutade de?"],
-    ["p", "På en lead från ett avslutat medlemskap frågar Tegen HQ Varför slutade eller pausade de? Ta reda på det och välj en anledning. Mana säger inte varför."],
+    ["p", "Är personen redan en lead blir det en anteckning på leaden i stället. Vill någon prata medlemskap, lägg till dem med Ny lead."],
+    ["p", "Raden försvinner av sig själv när de har ett medlemskap igen."],
   ]],
   ["Medlemmar: hör av dig till", [
     ["p", "Under Medlemmar finns medlemmar som kan behöva höra av oss, i grupper:"],
     ["ul", [
       "Säger upp: har sagt upp sitt medlemskap i Mana. Raden visar sista dagen.",
       "Fryser: har fryst sitt medlemskap. Raden visar när frysningen börjar.",
+      "Har slutat: medlemskapet har tagit slut. Raden visar sista dagen.",
       "Nya medlemmar: har inte varit här på 10 dagar sedan de började.",
       "Aldrig incheckade: har inte varit här alls sedan flytten till Mana.",
       "Slutade komma: har inte varit här på 30 dagar.",
+      "Dagpass och Klippkort: tränar utan medlemskap.",
       "Milstolpar: har nått ett antal pass eller veckor i rad.",
     ]],
     ["h2", "Så här gör du"],
@@ -95,7 +97,7 @@ export const guides: [string, Block[]][] = [
       "Ring eller tryck E-post.",
       "Tryck Logga kontakt och välj Pratade med dem, Inget svar eller Mejlade eller sms:ade. Pratade med dem tar bort dem från listan.",
       "Vet ni varför de är borta, tryck Avfärda och välj Semester, Skada eller sjukdom eller Annat. Fyll gärna i Tillbaka senast.",
-      "För den som säger upp eller fryser: ta reda på varför, tryck Avfärda och välj en anledning.",
+      "För alla andra grupper: ta reda på varför de slutar, pausar eller inte blir medlemmar, tryck Avfärda och välj en anledning.",
     ]],
     ["p", "Fördela delar ut medlemmar som ingen har tagit mellan de du bockar i."],
   ]],

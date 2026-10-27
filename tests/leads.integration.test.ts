@@ -105,7 +105,7 @@ describe.skipIf(!hasDb)("leads", () => {
     const result = await service.createOrMatchLead(db, studioA, {
       name: "Fia M",
       email: "FIA@example.test",
-      source: "mana_win_back",
+      source: "manual",
     });
     expect(result.duplicate).toBe(false);
     expect(result.person.id).toBe(known.id);

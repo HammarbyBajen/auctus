@@ -33,6 +33,9 @@ export type MembersFilter = AtRiskFilter | "milestones";
 export const groupParam: Record<AtRiskGroup | "milestones", string> = {
   cancelling: "sager-upp",
   freezing: "fryser",
+  ended: "har-slutat",
+  day_pass: "dagpass",
+  klippkort: "klippkort",
   never: "aldrig",
   away: "borta",
   new: "nya",
@@ -41,7 +44,7 @@ export const groupParam: Record<AtRiskGroup | "milestones", string> = {
 export const groupFromParam = (value: string | undefined): MembersFilter =>
   (Object.entries(groupParam).find(([, p]) => p === value)?.[0] as AtRiskGroup | "milestones" | undefined) ?? "all";
 /** The groups in the order they are shown. */
-export const atRiskGroups: AtRiskGroup[] = ["cancelling", "freezing", "new", "never", "away"];
+export const atRiskGroups: AtRiskGroup[] = ["cancelling", "freezing", "ended", "new", "never", "away", "day_pass", "klippkort"];
 
 /** The members page (ticket 36) with a scope, a group and all rows or the first ten, as the address says it. */
 export function membersHref({ scope, filter, all }: { scope: "all" | "mine"; filter: MembersFilter; all: boolean }) {
@@ -126,7 +129,7 @@ export function AtRiskList({
   emailMode: EmailMode;
   /** How many open milestones there are, for Medlemmar's tabs (ticket 35). */
   milestones?: number;
-  /** Why someone leaves or pauses: the studio's win-back reasons, for those cancelling or freezing. */
+  /** Why someone leaves, pauses or does not join: the studio's win-back reasons, for everyone but those away. */
   leavingReasons?: { key: string; name: string }[];
 }) {
   const today = todayInStockholm();
@@ -197,14 +200,18 @@ export function AtRiskList({
                         {row.group === "never" && <Chip tone="neutral">{t("atRisk.neverChip")}</Chip>}
                         {row.group === "cancelling" && <Chip tone="warning">{t("atRisk.filter.cancelling")}</Chip>}
                         {row.group === "freezing" && <Chip tone="neutral">{t("atRisk.filter.freezing")}</Chip>}
+                        {(row.group === "ended" || row.group === "day_pass" || row.group === "klippkort") && <Chip tone="neutral">{t(`atRisk.filter.${row.group}`)}</Chip>}
                         {row.group === "new" && <Chip tone="neutral">{t("atRisk.newChip")}</Chip>}
                       </div>
                       <p className="text-xs text-muted-foreground">
                         {row.cause === "cancelling" && row.changeDate && `${t("atRisk.lastDay", { date: formatDay(row.changeDate) })} · `}
                         {row.cause === "freezing" && row.changeDate && `${t("atRisk.freezeFrom", { date: formatDay(row.changeDate) })} · `}
+                        {row.cause === "ended" && row.changeDate && `${t("atRisk.endedOn", { date: formatDay(row.changeDate) })} · `}
                         {last
                           ? t("atRisk.lastVisit", { date: formatDay(todayInStockholm(last)), n: String(daysAgo(last, today)) })
-                          : t("atRisk.never", { date: formatDay(todayInStockholm(row.since)) })}
+                          : row.cause === "away" || row.cause === "cancelling" || row.cause === "freezing"
+                            ? t("atRisk.never", { date: formatDay(todayInStockholm(row.since)) })
+                            : t("atRisk.noVisit")}
                         {row.memberships.length > 0 ? ` · ${row.memberships.join(", ")}` : ""}
                       </p>
                       {latest && (
@@ -238,7 +245,11 @@ export function AtRiskList({
                     outcomes={contactOutcomes}
                     {...(row.cause === "away"
                       ? { reasons: dismissReasons.map((r) => ({ key: r, label: t(`atRisk.reason.${r}` as MessageKey) })), reasonLabel: t("atRisk.reasonLabel"), minReturnBy: today }
-                      : { reasons: leavingReasons.map((r) => ({ key: r.key, label: r.name })), reasonLabel: t("atRisk.leavingReasonLabel"), minReturnBy: null })}
+                      : {
+                          reasons: leavingReasons.map((r) => ({ key: r.key, label: r.name })),
+                          reasonLabel: t(row.cause === "day_pass" || row.cause === "klippkort" ? "atRisk.prospectReasonLabel" : "atRisk.leavingReasonLabel"),
+                          minReturnBy: null,
+                        })}
                     history={
                       row.notes.length > 0 ? (
                         <ul className="flex flex-col gap-2 text-xs text-muted-foreground">

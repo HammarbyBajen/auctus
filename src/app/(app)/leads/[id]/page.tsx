@@ -17,17 +17,16 @@ import { SubmitButton } from "@/components/app/submit-button";
 import { formatDateTime, formatDay } from "@/lib/format";
 import { webNotePrefix } from "@/lib/intake/service";
 import { daysAgo, groupActivity } from "@/lib/leads/activity";
-import { isWinBackSource } from "@/lib/leads/constants";
 import { getLead, type HistoryItem } from "@/lib/leads/service";
 import { getManaInfo } from "@/lib/mana/leads";
-import { listColdReasons, listLeadFields, listStages, listWinBackReasons } from "@/lib/pipeline/service";
+import { listColdReasons, listLeadFields, listStages } from "@/lib/pipeline/service";
 import { dueState, isGreyedOut, todayInStockholm } from "@/lib/tasks/dates";
 import { listStudioUsers, listTasksForLead } from "@/lib/tasks/service";
 import { can } from "@/lib/permissions";
 import { requirePermission } from "@/lib/session";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
-import { assignAction, finishTask, moveStage, removeTask, saveLeadFieldsAction, saveWinBackReason } from "../actions";
+import { assignAction, finishTask, moveStage, removeTask, saveLeadFieldsAction } from "../actions";
 import { AssigneeSelect } from "./assignee-select";
 import { ManaRefresher } from "./mana-refresher";
 import { ActivityForm } from "./activity-form";
@@ -61,13 +60,12 @@ export default async function LeadPage({
   if (!found) notFound();
   const { lead, person, stage, assigneeName, history } = found;
   const today = todayInStockholm();
-  const [allStages, allReasons, taskLists, people, mana, winBackReasons, fields, emailSettings, emails] = await Promise.all([
+  const [allStages, allReasons, taskLists, people, mana, fields, emailSettings, emails] = await Promise.all([
     listStages(db, user.studioId, { includeArchived: true }),
     listColdReasons(db, user.studioId, { includeArchived: true }),
     listTasksForLead(db, user.studioId, lead.id),
     listStudioUsers(db, user.studioId),
     getManaInfo(db, user.studioId, person.manaUserId),
-    listWinBackReasons(db, user.studioId),
     listLeadFields(db, user.studioId),
     getEmailSettings(db, user.studioId),
     listEmails(db, user.studioId, { leadId: id }),
@@ -75,7 +73,6 @@ export default async function LeadPage({
   // Removed stages and reasons still name old history; only the current ones are offered.
   const stages = allStages.filter((s) => !s.archivedAt);
   const reasons = allReasons.filter((r) => !r.archivedAt);
-  const winBack = isWinBackSource(lead.source);
   const canDelete = can(user.role, "settings", "manage");
   const stageName = (key: string | null) => allStages.find((s) => s.key === key)?.name ?? key ?? "";
   const reasonName = (key: string | null) => allReasons.find((r) => r.key === key)?.name ?? key ?? "";
@@ -87,7 +84,7 @@ export default async function LeadPage({
   const otherStages = stages.filter((s) => s.kind !== "cold" && s.key !== lead.stage && s.key !== nextStage?.key);
   const move = moveStage.bind(null, lead.id);
   const phoneHref = person.phone ? `tel:${person.phone.replace(/[^\d+]/g, "")}` : null;
-  const alreadyMember = Boolean(mana && mana.counting.length > 0 && stage.kind !== "won" && !winBack);
+  const alreadyMember = Boolean(mana && mana.counting.length > 0 && stage.kind !== "won");
   const source = t(`source.${lead.source}` as MessageKey) || t("source.unknown");
 
   // The assistant (ticket 30): only when a key is set; the last brief stands until something happens on the lead.
@@ -219,31 +216,6 @@ export default async function LeadPage({
 
           {/* Everything you change about the lead. */}
           <div className="flex min-w-0 flex-col gap-6">
-            {winBack && (
-              <StaggerItem>
-                <Panel title={t("winback.title")} id="winback">
-                  <form action={saveWinBackReason.bind(null, lead.id)} className="flex flex-col gap-4">
-                    {lead.winBackReason ? (
-                      <p className="text-sm">
-                        {t("winback.current", { reason: winBackReasons.find((r) => r.key === lead.winBackReason)?.name ?? lead.winBackReason })}
-                      </p>
-                    ) : (
-                      <Notice tone="warning">{t("winback.prompt")}</Notice>
-                    )}
-                    {fel === "vinnanledning" && <Notice tone="danger">{t("winback.error")}</Notice>}
-                    <RadioGroup name="reason" defaultValue={lead.winBackReason ?? undefined} required className="gap-0">
-                      {winBackReasons.map((r) => (
-                        <Label key={r.key} className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 text-sm font-normal hover:bg-accent">
-                          <RadioGroupItem value={r.key} />
-                          {r.name}
-                        </Label>
-                      ))}
-                    </RadioGroup>
-                    <SubmitButton className="self-start">{t("winback.save")}</SubmitButton>
-                  </form>
-                </Panel>
-              </StaggerItem>
-            )}
             <StaggerItem>
             <Panel title={t("lead.moveTo")} id="move">
               {/* The usual next step as one button; any other stage from the menu below it. */}

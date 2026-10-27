@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, ne } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { atRiskAlert, handbookCategory, handbookPage, lead, leadEvent, manaMember, manaMembership, person } from "@/db/schema";
 import { startOfDayInStockholm } from "@/lib/home/time";
@@ -58,7 +58,7 @@ export async function buildFacts(db: Db, studioId: string, now: Date = new Date(
 
   // ---- Leads ----
   const leads = await db
-    .select({ id: lead.id, source: lead.source, stage: lead.stage, createdAt: lead.createdAt, attribution: lead.attributionParsed, winBackReason: lead.winBackReason, name: person.name })
+    .select({ id: lead.id, source: lead.source, stage: lead.stage, createdAt: lead.createdAt, attribution: lead.attributionParsed, name: person.name })
     .from(lead)
     .innerJoin(person, eq(person.id, lead.personId))
     .where(and(eq(lead.studioId, studioId), gte(lead.createdAt, yearAgo)));
@@ -119,7 +119,12 @@ export async function buildFacts(db: Db, studioId: string, now: Date = new Date(
     .select({ manaUserId: atRiskAlert.manaUserId, lastVisitAt: atRiskAlert.lastVisitAt, member: manaMember.name })
     .from(atRiskAlert)
     .innerJoin(manaMember, and(eq(manaMember.studioId, atRiskAlert.studioId), eq(manaMember.manaUserId, atRiskAlert.manaUserId)))
-    .where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.status, "open")));
+    .where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.status, "open"), eq(atRiskAlert.cause, "away")));
+  // Why people left, paused or did not join, as staff found out (Medlemmar's Avfärda), over the last year.
+  const reasons = await db
+    .select({ cause: atRiskAlert.cause, reason: atRiskAlert.reason })
+    .from(atRiskAlert)
+    .where(and(eq(atRiskAlert.studioId, studioId), eq(atRiskAlert.status, "dismissed"), ne(atRiskAlert.cause, "away"), gte(atRiskAlert.handledAt, yearAgo)));
 
   // ---- Timmar: the last three months ----
   const thisMonth = today.slice(0, 7);
@@ -162,7 +167,6 @@ export async function buildFacts(db: Db, studioId: string, now: Date = new Date(
       campaigns: [...campaigns.values()].sort((a, b) => b.leads - a.leads),
       openByStage,
       wentColdByMonthAndReason: coldByMonth,
-      winBackReasons: tally(leads.filter((l) => l.winBackReason).map((l) => winBackName.get(l.winBackReason!) ?? l.winBackReason!)),
       joinedLast30Days: joinedRecently,
       lastWeek: {
         newLeads: tally(leads.filter((l) => inLastWeek(l.createdAt)).map((l) => l.source)),
@@ -178,6 +182,8 @@ export async function buildFacts(db: Db, studioId: string, now: Date = new Date(
       cancellingNext60Days: leaving,
       freezingNext60Days: pausing,
       startedLast30Days: startedRecently,
+      whyTheyLeftOrPaused: tally(reasons.filter((r) => r.cause !== "day_pass" && r.cause !== "klippkort" && r.reason).map((r) => winBackName.get(r.reason!) ?? r.reason!)),
+      whyDayPassOrKlippkortDidNotJoin: tally(reasons.filter((r) => (r.cause === "day_pass" || r.cause === "klippkort") && r.reason).map((r) => winBackName.get(r.reason!) ?? r.reason!)),
       awayNow: { total: alerts.length, neverCheckedIn: alerts.filter((a) => !a.lastVisitAt).length, firstNames: alerts.map((a) => firstNameOnly(a.member)) },
     },
     hours,

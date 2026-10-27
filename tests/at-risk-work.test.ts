@@ -22,6 +22,13 @@ describe("working the Hör av dig till list", () => {
     expect(atRiskDraft({ name: "Bo Ek", lastVisitAt: new Date() }, emails)).toEqual({ subject: "Vi saknar dig", body: "Hej Bo Ek" });
   });
 
+  it("gives the we-miss-you template only to those away, never to someone leaving, gone or buying day passes", () => {
+    expect(atRiskDraft({ name: "Bo Ek", lastVisitAt: new Date(), group: "new" }, emails).subject).toBe("Vi saknar dig");
+    for (const group of ["cancelling", "freezing", "ended", "day_pass", "klippkort"] as const) {
+      expect(atRiskDraft({ name: "Bo Ek", lastVisitAt: new Date(), group }, emails)).toEqual({ subject: "", body: "" });
+    }
+  });
+
   it("starts empty while Tegen has written no template", () => {
     expect(atRiskDraft({ name: "Åsa", lastVisitAt: null }, null)).toEqual({ subject: "", body: "" });
   });

@@ -121,7 +121,7 @@ describe.skipIf(!hasDb)("home page data", () => {
 
   it("counts new this week, booked tests and won this month", async () => {
     const before = (await home.getHomeData(db, studioB, "x", "all", now)).counts;
-    expect(before).toEqual({ newThisWeek: 0, bookedTests: 0, wonThisMonth: 0, fromMana: 0 });
+    expect(before).toEqual({ newThisWeek: 0, bookedTests: 0, wonThisMonth: 0 });
 
     const fresh = await newLead(studioB, { created: 60_000 });
     const old = await newLead(studioB, { created: 40 * D });
@@ -136,20 +136,6 @@ describe.skipIf(!hasDb)("home page data", () => {
     expect(counts.newThisWeek).toBe(1); // only the lead created a minute ago
     expect(counts.bookedTests).toBe(2);
     expect(counts.wonThisMonth).toBe(1);
-  });
-
-  it("keeps Mana's leads out of new this week and off the list, counted on their own", async () => {
-    const { ensureManaStage } = await import("@/lib/pipeline/service");
-    await ensureManaStage(db, studioB);
-    const before = (await home.getHomeData(db, studioB, "x", "all", now)).counts;
-    const mana = await newLead(studioB, { created: 60_000 });
-    await db.update(schema.lead).set({ source: "mana_ended", stage: "from_mana", updatedAt: new Date(now.getTime() - 10 * D) }).where(eq(schema.lead.id, mana.id));
-    const after = await home.getHomeData(db, studioB, "x", "all", now);
-    expect(after.counts.newThisWeek).toBe(before.newThisWeek);
-    expect(after.counts.fromMana).toBe(1);
-    // Not overdue for first contact, not stalled, not asked why: it waits in its own column.
-    expect(after.items.some((i) => i.lead.id === mana.id)).toBe(false);
-    await db.delete(schema.lead).where(eq(schema.lead.id, mana.id));
   });
 
   it("does not leak another studio's leads", async () => {

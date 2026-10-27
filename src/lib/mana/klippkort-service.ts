@@ -117,7 +117,7 @@ export async function syncKlippkort(
   return { read: toRead.length };
 }
 
-export type KlippkortSignal = { manaRef: string; manaUserId: string; detail: string; task: string };
+export type KlippkortSignal = { manaRef: string; manaUserId: string; detail: string; changeDate: string | null; task: string };
 
 /**
  * The holders worth a call today, from the balances read in the last two
@@ -155,6 +155,7 @@ export async function klippkortSignals(db: Db, studioId: string, now: Date = new
       {
         manaRef: h.purchase.id,
         manaUserId: h.manaUserId,
+        changeDate: nudge.kind === "expiring" ? nudge.expireDate : null,
         detail:
           nudge.kind === "expiring"
             ? t("klippkort.noteExpiring", { name, n, date: formatDay(nudge.expireDate), bought })

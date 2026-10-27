@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db as defaultDb } from "@/db";
 import {
@@ -11,7 +11,6 @@ import {
   task,
   user,
 } from "@/db/schema";
-import { manaSignalSources, manaStage } from "@/lib/leads/constants";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { buildAttention, type AttentionItem, type Scope, type Thresholds } from "./attention";
 import { startOfMonthInStockholm, startOfWeekInStockholm } from "./time";
@@ -28,8 +27,7 @@ export async function getThresholds(db: Db, studioId: string) {
   return { ...defaultThresholds, ...(row?.thresholds ?? {}) };
 }
 
-/** fromMana: Mana's leads waiting in their own column (shown on Home as a count, not one by one). */
-export type HomeCounts = { newThisWeek: number; bookedTests: number; wonThisMonth: number; fromMana: number };
+export type HomeCounts = { newThisWeek: number; bookedTests: number; wonThisMonth: number };
 
 export type HomeData = { items: AttentionItem[]; counts: HomeCounts; thresholds: Thresholds };
 
@@ -57,7 +55,6 @@ export async function getHomeData(
       assignedToId: lead.assignedToId,
       assigneeName: assignee.name,
       source: lead.source,
-      winBackReason: lead.winBackReason,
     })
     .from(lead)
     .innerJoin(person, eq(person.id, lead.personId))
@@ -88,12 +85,11 @@ export async function getHomeData(
 
   const weekStart = startOfWeekInStockholm(now);
   const monthStart = startOfMonthInStockholm(now);
-  const [[newThisWeek], [bookedTests], [wonThisMonth], [fromMana]] = await Promise.all([
-    // New leads only: not the ones Mana makes.
+  const [[newThisWeek], [bookedTests], [wonThisMonth]] = await Promise.all([
     db
       .select({ n: count() })
       .from(lead)
-      .where(and(eq(lead.studioId, studioId), gte(lead.createdAt, weekStart), notInArray(lead.source, [...manaSignalSources]))),
+      .where(and(eq(lead.studioId, studioId), gte(lead.createdAt, weekStart))),
     db
       .select({ n: count() })
       .from(lead)
@@ -113,10 +109,6 @@ export async function getHomeData(
           gte(leadEvent.createdAt, monthStart),
         ),
       ),
-    db
-      .select({ n: count() })
-      .from(lead)
-      .where(and(eq(lead.studioId, studioId), eq(lead.stage, manaStage))),
   ]);
 
   return {
@@ -125,7 +117,6 @@ export async function getHomeData(
       newThisWeek: newThisWeek.n,
       bookedTests: bookedTests.n,
       wonThisMonth: wonThisMonth.n,
-      fromMana: fromMana.n,
     },
     thresholds,
   };

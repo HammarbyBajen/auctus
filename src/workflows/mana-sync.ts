@@ -130,7 +130,7 @@ async function memberStatsStep(studioId: string, runId: string) {
 async function afterSyncStep(studioId: string) {
   "use step";
   // Link CRM people to Mana, move leads whose person has just joined to Won,
-  // then make win-back leads (if switched on), flag members who are away or leaving,
+  // then put ended memberships, day passes and klippkort on Medlemmar (if switched on), flag members who are away or leaving,
   // note milestones reached, and save today's key numbers.
   const won = await afterSync(db, studioId);
   const winBack = await detectWinBacks(db, studioId);

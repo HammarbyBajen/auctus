@@ -11,7 +11,7 @@ import { Page } from "@/components/app/page";
 import { Panel, Surface } from "@/components/app/surface";
 import { SubmitButton } from "@/components/app/submit-button";
 import { formatDateTime, formatHours, formatMonth, formatNumber } from "@/lib/format";
-import { monthOptions, previousMonth } from "@/lib/salary/calc";
+import { monthOptions } from "@/lib/salary/calc";
 import { getMonth, isMonth, monthLog, testMonths } from "@/lib/salary/service";
 import { requirePermission } from "@/lib/session";
 import { todayInStockholm } from "@/lib/tasks/dates";
@@ -47,7 +47,8 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
   const user = await requirePermission("salary", "read");
   const params = await searchParams;
   const today = todayInStockholm();
-  const month = isMonth(params.manad) ? params.manad : previousMonth(today);
+  // This month unless the address says otherwise (Max, 2026-10-27): the hours so far, and the month to lock once it ends.
+  const month = isMonth(params.manad) ? params.manad : today.slice(0, 7);
   const options = monthOptions(today);
   if (!options.includes(month)) options.unshift(month);
 

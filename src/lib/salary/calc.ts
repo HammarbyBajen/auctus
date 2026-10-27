@@ -141,9 +141,3 @@ export function monthOptions(today: string, first = "2026-09"): string[] {
   }
   return months;
 }
-
-/** The month hours are usually counted for: the one before today's. */
-export function previousMonth(today: string): string {
-  const [y, m] = today.slice(0, 7).split("-").map(Number);
-  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
-}

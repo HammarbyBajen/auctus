@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateMonth, monthOptions, previousMonth, pullWindow, type Category, type Work } from "@/lib/salary/calc";
+import { calculateMonth, monthOptions, pullWindow, type Category, type Work } from "@/lib/salary/calc";
 import { crc32, exportSheet, toCsv, toXlsx } from "@/lib/salary/export";
 
 let n = 0;
@@ -88,10 +88,8 @@ describe("hours per coach", () => {
 });
 
 describe("months", () => {
-  it("lists the months since Mana, newest first, and picks the previous one", () => {
+  it("lists the months since Mana, newest first", () => {
     expect(monthOptions("2027-01-10")).toEqual(["2027-01", "2026-12", "2026-11", "2026-10", "2026-09"]);
-    expect(previousMonth("2027-01-10")).toBe("2026-12");
-    expect(previousMonth("2026-10-14")).toBe("2026-09");
   });
 });
 

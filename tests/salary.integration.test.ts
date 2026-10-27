@@ -84,21 +84,21 @@ describe.skipIf(!hasDb)("hours: pulling and locking a month", () => {
     expect(await salary.listCoaches(db, studioId)).toEqual([{ id: "i-anna", name: "Anna A" }]);
   });
 
-  it("takes in hidden classes as their own categories, left out until an owner ticks them (ticket 23)", async () => {
+  it("takes in hidden classes as their own categories, counted like the rest until an owner unticks them", async () => {
     const shop = { ...classEvent("h1", "2026-10-03T10:00:00+02:00", 120), class: { id: "shop", title: "Tegenbutik" }, isHidden: true };
     const pt = { ...classEvent("h2", "2026-10-07T12:00:00+02:00"), class: { id: "pt60-class", title: "PT60" }, isHidden: true };
     await salary.pullMonth(db, fake([classEvent("c1", "2026-10-01T17:00:00+02:00"), shop, pt]), studioId, "2026-10", ownerId, t0);
     const categories = await salary.listCategories(db, studioId);
     expect(categories.filter((c) => c.typeKey === "class:shop" || c.typeKey === "class:pt60-class").map((c) => [c.label, c.counted])).toEqual([
-      ["PT60 (dold)", false],
-      ["Tegenbutik (dold)", false],
+      ["PT60 (dold)", true],
+      ["Tegenbutik (dold)", true],
     ]);
-    // Shown, but not in the total: WOD 1 h, PT booking 1 h, Kids 0.75 h.
+    // In the total: WOD 1 h, PT booking 1 h, Kids 0.75 h, Tegenbutik 2 h, PT60 class 1 h.
     const before = (await salary.getMonth(db, studioId, "2026-10")).result!.coaches[0];
     expect(before.byType["class:shop"]).toBe(2);
-    expect(before.total).toBe(2.75);
-    // Ticked, Tegenbutik counts, and stays ticked on the next pull.
-    await salary.setCounted(db, studioId, categories.map((c) => c.typeKey), [...categories.filter((c) => c.counted).map((c) => c.typeKey), "class:shop"]);
+    expect(before.total).toBe(5.75);
+    // Unticked, the PT60 class is left out, and stays out on the next pull.
+    await salary.setCounted(db, studioId, categories.map((c) => c.typeKey), categories.filter((c) => c.counted && c.typeKey !== "class:pt60-class").map((c) => c.typeKey));
     await salary.pullMonth(db, fake([classEvent("c1", "2026-10-01T17:00:00+02:00"), shop, pt]), studioId, "2026-10", ownerId, t0);
     expect((await salary.getMonth(db, studioId, "2026-10")).result!.coaches[0].total).toBe(4.75);
     // Back to the month the next tests expect.

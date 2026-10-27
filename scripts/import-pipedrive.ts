@@ -26,7 +26,7 @@ config({ path: values.env });
 
 async function main() {
   if (!values.deals || !values.people) throw new Error("Give --deals and --people (the two Pipedrive CSV files)");
-  const { planImport, applyImport, previewReplace, replaceImport } = await import("../src/lib/import/pipedrive");
+  const { planImport, applyImport, previewMatches, previewReplace, replaceImport } = await import("../src/lib/import/pipedrive");
   const plan = planImport(readFileSync(values.deals, "utf8"), readFileSync(values.people, "utf8"));
 
   const byStage: Record<string, number> = {};
@@ -50,6 +50,9 @@ async function main() {
     console.log("Replacing the earlier import, removes:", removes);
     if (removes.worked > 0) console.log(`Warning: ${removes.worked} imported leads have been worked on in Tegen HQ; a replace would delete that work${values.force ? " (--force given)" : " and is refused without --force"}.`);
   }
+
+  // People already in Tegen HQ are matched, not doubled; a lead of theirs still in Ny lead takes Pipedrive's stage.
+  console.log("Already in Tegen HQ:", await previewMatches(db, tegen.id, plan.leads, { replacing: values.replace }));
 
   if (!values.apply) {
     console.log("\nDry run: nothing was written. Add --apply to import.");

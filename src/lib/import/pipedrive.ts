@@ -1,6 +1,7 @@
 import { and, eq, exists, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { emailMessage, lead, leadEvent, leadNote, person, task } from "@/db/schema";
+import { initialStage } from "@/lib/leads/constants";
 import { normalizeEmail, normalizePhone } from "@/lib/leads/matching";
 
 type Db = typeof defaultDb;
@@ -236,26 +237,75 @@ export function planImport(dealsCsv: string, peopleCsv: string): ImportPlan {
   return { leads, skipped, unmapped };
 }
 
-export type ImportResult = { created: number; alreadyImported: number; matchedExisting: number };
+/** stageCarried: leads made in Tegen HQ, still in Ny lead, moved to the stage Pipedrive has them in. */
+export type ImportResult = { created: number; alreadyImported: number; matchedExisting: number; stageCarried: number };
+
+/** The person a planned lead is, if the CRM has them: by email, then phone, like the intake. */
+async function matchPerson(db: Conn, studioId: string, item: ImportLead) {
+  const emailNormalized = normalizeEmail(item.email);
+  const phoneNormalized = normalizePhone(item.phone);
+  if (emailNormalized) {
+    const [byEmail] = await db.select().from(person).where(and(eq(person.studioId, studioId), eq(person.emailNormalized, emailNormalized))).limit(1);
+    if (byEmail) return byEmail;
+  }
+  if (!phoneNormalized) return undefined;
+  const [byPhone] = await db.select().from(person).where(and(eq(person.studioId, studioId), eq(person.phoneNormalized, phoneNormalized))).limit(1);
+  return byPhone;
+}
+
+/**
+ * A matched person's lead that is still in Ny lead while Pipedrive has them
+ * further along (before go-live, staff worked leads in Pipedrive), if any:
+ * the import moves it, so Home does not show it as waiting for first contact.
+ */
+async function leadToCarry(db: Conn, personId: string, item: ImportLead) {
+  if (item.stage === initialStage) return undefined;
+  const [waiting] = await db.select().from(lead).where(and(eq(lead.personId, personId), eq(lead.stage, initialStage))).limit(1);
+  return waiting;
+}
+
+/**
+ * What an import would do with people the CRM already has, without writing:
+ * how many it matches, and how many of their leads move on from Ny lead
+ * (by the stage they move to). With `replacing`, the earlier import is about
+ * to go, so only people with a lead made in Tegen HQ count.
+ */
+export async function previewMatches(db: Conn, studioId: string, leads: ImportLead[], { replacing = false }: { replacing?: boolean } = {}) {
+  const out = { alreadyImported: 0, matchedExisting: 0, stageCarried: {} as Record<string, number> };
+  const done = replacing ? new Set<string | null>() : await importedRefs(db, studioId, leads);
+  for (const item of leads) {
+    if (done.has(item.ref)) {
+      out.alreadyImported++;
+      continue;
+    }
+    const existing = await matchPerson(db, studioId, item);
+    if (!existing) continue;
+    const leadsOf = await db.select({ id: lead.id }).from(lead).where(and(eq(lead.personId, existing.id), replacing ? isNull(lead.externalRef) : undefined)).limit(1);
+    if (leadsOf.length === 0) continue;
+    out.matchedExisting++;
+    const carry = await leadToCarry(db, existing.id, item);
+    if (carry && (!replacing || carry.externalRef === null)) out.stageCarried[item.stage] = (out.stageCarried[item.stage] ?? 0) + 1;
+  }
+  return out;
+}
+
+async function importedRefs(db: Conn, studioId: string, leads: ImportLead[]) {
+  const refs = leads.map((l) => l.ref);
+  if (refs.length === 0) return new Set<string | null>();
+  const rows = await db.select({ ref: lead.externalRef }).from(lead).where(and(eq(lead.studioId, studioId), inArray(lead.externalRef, refs)));
+  return new Set(rows.map((r) => r.ref));
+}
 
 /**
  * Writes the planned leads. Safe to run twice: a lead already imported (same
  * Pipedrive person) is skipped, and so is anyone the CRM already has a lead
  * for (matched by email, then phone, like the intake), so nothing is doubled.
+ * A matched lead still in Ny lead takes Pipedrive's stage, with a history
+ * entry saying so (decided by Max, 2026-10-27).
  */
 export async function applyImport(db: Conn, studioId: string, leads: ImportLead[]): Promise<ImportResult> {
-  const result: ImportResult = { created: 0, alreadyImported: 0, matchedExisting: 0 };
-  const refs = leads.map((l) => l.ref);
-  const done = new Set(
-    refs.length === 0
-      ? []
-      : (
-          await db
-            .select({ ref: lead.externalRef })
-            .from(lead)
-            .where(and(eq(lead.studioId, studioId), inArray(lead.externalRef, refs)))
-        ).map((r) => r.ref),
-  );
+  const result: ImportResult = { created: 0, alreadyImported: 0, matchedExisting: 0, stageCarried: 0 };
+  const done = await importedRefs(db, studioId, leads);
 
   for (const item of leads) {
     if (done.has(item.ref)) {
@@ -265,24 +315,27 @@ export async function applyImport(db: Conn, studioId: string, leads: ImportLead[
     await db.transaction(async (tx) => {
       const emailNormalized = normalizeEmail(item.email);
       const phoneNormalized = normalizePhone(item.phone);
-      let [existing] = emailNormalized
-        ? await tx
-            .select()
-            .from(person)
-            .where(and(eq(person.studioId, studioId), eq(person.emailNormalized, emailNormalized)))
-            .limit(1)
-        : [];
-      if (!existing && phoneNormalized) {
-        [existing] = await tx
-          .select()
-          .from(person)
-          .where(and(eq(person.studioId, studioId), eq(person.phoneNormalized, phoneNormalized)))
-          .limit(1);
-      }
+      const existing = await matchPerson(tx, studioId, item);
       if (existing) {
         const [hasLead] = await tx.select({ id: lead.id }).from(lead).where(eq(lead.personId, existing.id)).limit(1);
         if (hasLead) {
           result.matchedExisting++;
+          const carry = await leadToCarry(tx, existing.id, item);
+          if (carry) {
+            const at = carry.updatedAt > item.updatedAt ? carry.updatedAt : item.updatedAt;
+            await tx.update(lead).set({ stage: item.stage, coldReason: item.coldReason, updatedAt: at }).where(eq(lead.id, carry.id));
+            await tx.insert(leadEvent).values({
+              studioId,
+              leadId: carry.id,
+              type: "stage_changed",
+              fromStage: initialStage,
+              toStage: item.stage,
+              coldReason: item.coldReason,
+              via: "pipedrive",
+              createdAt: at,
+            });
+            result.stageCarried++;
+          }
           return;
         }
       }

@@ -46,8 +46,8 @@ describe.skipIf(!hasDb)("pipedrive import", () => {
 
   it("creates leads with their dates, stage, history and note, and a rerun creates nothing", async () => {
     const leads = [item("pipedrive:person:1", `a-${tag}@example.test`), item("pipedrive:person:2", `b-${tag}@example.test`, "cold")];
-    expect(await importer.applyImport(db, studioId, leads)).toEqual({ created: 2, alreadyImported: 0, matchedExisting: 0 });
-    expect(await importer.applyImport(db, studioId, leads)).toEqual({ created: 0, alreadyImported: 2, matchedExisting: 0 });
+    expect(await importer.applyImport(db, studioId, leads)).toEqual({ created: 2, alreadyImported: 0, matchedExisting: 0, stageCarried: 0 });
+    expect(await importer.applyImport(db, studioId, leads)).toEqual({ created: 0, alreadyImported: 2, matchedExisting: 0, stageCarried: 0 });
 
     const rows = await db.select().from(schema.lead).where(eq(schema.lead.studioId, studioId));
     expect(rows).toHaveLength(2);
@@ -67,7 +67,25 @@ describe.skipIf(!hasDb)("pipedrive import", () => {
       created: 0,
       alreadyImported: 0,
       matchedExisting: 1,
+      stageCarried: 0,
     });
+  });
+
+  it("moves a matched lead still in Ny lead to the stage Pipedrive has it in, and says so beforehand", async () => {
+    const leads = await import("@/lib/leads/service");
+    const email = `w-${tag}@example.test`;
+    const { lead, person } = await leads.createOrMatchLead(db, studioId, { name: "Från webben", email, source: "contact_form" });
+    const worked = [item("pipedrive:person:9", email, "contacted")];
+    expect(await importer.previewMatches(db, studioId, worked)).toEqual({ alreadyImported: 0, matchedExisting: 1, stageCarried: { contacted: 1 } });
+    expect(await importer.applyImport(db, studioId, worked)).toEqual({ created: 0, alreadyImported: 0, matchedExisting: 1, stageCarried: 1 });
+    const [moved] = await db.select().from(schema.lead).where(eq(schema.lead.id, lead.id));
+    expect(moved.stage).toBe("contacted");
+    const events = await db.select().from(schema.leadEvent).where(eq(schema.leadEvent.leadId, lead.id));
+    expect(events).toContainEqual(expect.objectContaining({ fromStage: "new_lead", toStage: "contacted", via: "pipedrive" }));
+    // Only from Ny lead: a lead already further along in Tegen HQ keeps its stage.
+    expect(await importer.applyImport(db, studioId, [item("pipedrive:person:9", email, "price_info")])).toMatchObject({ matchedExisting: 1, stageCarried: 0 });
+    await db.delete(schema.lead).where(eq(schema.lead.id, lead.id));
+    await db.delete(schema.person).where(eq(schema.person.id, person.id));
   });
 
   it("replaces every imported lead with a new export, keeping leads made in Tegen HQ", async () => {
@@ -77,7 +95,7 @@ describe.skipIf(!hasDb)("pipedrive import", () => {
 
     const fresh = [item("pipedrive:person:1", `a-${tag}@example.test`, "cold"), item("pipedrive:person:4", `d-${tag}@example.test`)];
     const result = await importer.replaceImport(db, studioId, fresh);
-    expect(result).toEqual({ removed: before, imported: { created: 2, alreadyImported: 0, matchedExisting: 0 } });
+    expect(result).toEqual({ removed: before, imported: { created: 2, alreadyImported: 0, matchedExisting: 0, stageCarried: 0 } });
 
     const rows = await db.select().from(schema.lead).where(eq(schema.lead.studioId, studioId));
     expect(rows.map((r) => [r.externalRef, r.stage]).sort()).toEqual([

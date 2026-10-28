@@ -28,6 +28,11 @@ export function formatNumber(value: number): string {
   return numberFormatter.format(value);
 }
 
+/** Öre as whole kronor: "1 250 kr". Amounts are rounded to the krona, as on a payslip. */
+export function formatKr(ore: number): string {
+  return `${numberFormatter.format(Math.round(ore / 100))} kr`;
+}
+
 /** A share the Swedish way, with a non-breaking space before the sign ("10 %"). */
 export function formatPercent(share: number): string {
   return percentFormatter.format(share).replace(/\s%/, " %");

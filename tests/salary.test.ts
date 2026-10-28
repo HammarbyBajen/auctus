@@ -18,7 +18,7 @@ const work = (startsAt: string, minutes: number, extra: Partial<Work> = {}): Wor
   };
 };
 const coaches = [
-  { id: "i-anna", name: "Anna" },
+  { id: "i-anna", name: "Anna", hourlyRateOre: 25_000 },
   { id: "i-bo", name: "Bo" },
 ];
 const pt = (status: string, extra: Partial<Work> = {}) => work("2026-10-08T12:00:00+02:00", 60, { source: "service", typeKey: "service:pt60", typeLabel: "PT60", status, ...extra });
@@ -40,7 +40,7 @@ describe("the pull window", () => {
 describe("hours per coach", () => {
   it("come from real minutes, so a 30-minute class is half an hour", () => {
     const r = month([work("2026-10-06T07:00:00+02:00", 30), work("2026-10-07T17:00:00+02:00", 60)]);
-    expect(r.coaches).toEqual([{ coachId: "i-anna", name: "Anna", byType: { "class:crossfit": 1.5 }, total: 1.5 }]);
+    expect(r.coaches).toEqual([{ coachId: "i-anna", name: "Anna", byType: { "class:crossfit": 1.5 }, total: 1.5, hourlyRateOre: 25_000, amountOre: 37_500 }]);
   });
 
   it("are split by category: classes, PT and courses", () => {
@@ -61,6 +61,18 @@ describe("hours per coach", () => {
   it("leave out work outside the month, and coaches who did not work", () => {
     const r = month([work("2026-09-30T18:00:00+02:00", 60), work("2026-11-01T10:00:00+01:00", 60)]);
     expect(r.coaches).toEqual([]);
+  });
+
+  it("give an amount from counted hours and the gross rate per hour, and none at all without a rate", () => {
+    const result = month([work("2026-10-01T17:00:00+02:00", 90), work("2026-10-02T17:00:00+02:00", 60, { instructorId: "i-bo" })]);
+    const anna = result.coaches.find((c) => c.coachId === "i-anna")!;
+    const bo = result.coaches.find((c) => c.coachId === "i-bo")!;
+    // 1.5 h × 250 kr = 375 kr, in öre.
+    expect([anna.hourlyRateOre, anna.amountOre]).toEqual([25_000, 37_500]);
+    expect([bo.hourlyRateOre, bo.amountOre]).toEqual([null, null]);
+    // A category an owner left out pays nothing.
+    const leftOut = month([work("2026-10-01T17:00:00+02:00", 90)], [{ typeKey: "class:crossfit", label: "CrossFit", source: "class", counted: false }]);
+    expect(leftOut.coaches[0].amountOre).toBe(0);
   });
 
   it("count a PT booking only when completed, and list the others by status", () => {
@@ -96,21 +108,22 @@ describe("months", () => {
 describe("export", () => {
   const result = calculateMonth({
     month: "2026-10",
-    coaches: [{ id: "i-anna", name: "Åsa Öberg" }],
+    coaches: [{ id: "i-anna", name: "Åsa Öberg", hourlyRateOre: 20_050 }],
     categories: [{ typeKey: "class:mote", label: "Tegenmöte", source: "class", counted: false }],
     work: [work("2026-10-05T07:00:00+02:00", 60), work("2026-10-06T07:00:00+02:00", 90), meeting("2026-10-06T19:00:00+02:00", 60)],
   });
 
   it("has one column per counted category and decimal hours", () => {
     const sheet = exportSheet(result);
-    expect(sheet.header).toEqual(["Namn", "CrossFit", "Timmar totalt"]);
-    expect(sheet.rows).toEqual([["Åsa Öberg", 2.5, 2.5]]);
+    expect(sheet.header).toEqual(["Namn", "CrossFit", "Timmar totalt", "Timlön (kr)", "Att betala (kr)"]);
+    // 2.5 h × 200,50 kr = 501,25 kr.
+    expect(sheet.rows).toEqual([["Åsa Öberg", 2.5, 2.5, 200.5, 501.25]]);
   });
 
   it("writes CSV for Swedish Excel", () => {
     const csv = toCsv(exportSheet(result));
     expect(csv.startsWith("﻿Namn;CrossFit;")).toBe(true);
-    expect(csv).toContain("Åsa Öberg;2,5;2,5");
+    expect(csv).toContain("Åsa Öberg;2,5;2,5;200,5;501,25");
   });
 
   it("writes a zip that holds the workbook", () => {

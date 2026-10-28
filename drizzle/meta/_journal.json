@@ -239,6 +239,20 @@
       "when": 1793026639140,
       "tag": "0033_pretty_squirrel_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793181749821,
+      "tag": "0034_salary_hourly_rate",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1793181962713,
+      "tag": "0035_accountant_email",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,7 @@
-import { Clock, Download, Lock, RefreshCw } from "lucide-react";
+import { Clock, Download, Lock, RefreshCw, Send } from "lucide-react";
 import { db } from "@/db";
 import { Button, ButtonAnchor } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ConfirmButton } from "@/components/app/confirm-button";
 import { EmptyState } from "@/components/app/empty-state";
@@ -9,21 +10,21 @@ import { Notice } from "@/components/app/notice";
 import { Page } from "@/components/app/page";
 import { Panel, Surface } from "@/components/app/surface";
 import { SubmitButton } from "@/components/app/submit-button";
-import { formatDateTime, formatHours, formatMonth, formatNumber } from "@/lib/format";
+import { formatDateTime, formatHours, formatKr, formatMonth, formatNumber } from "@/lib/format";
 import { monthOptions } from "@/lib/salary/calc";
-import { getMonth, isMonth, monthLog, testMonths } from "@/lib/salary/service";
+import { getAccountantEmail, getMonth, isMonth, listCoaches, monthLog, testMonths } from "@/lib/salary/service";
 import { requirePermission } from "@/lib/session";
 import { todayInStockholm } from "@/lib/tasks/dates";
 import { cn } from "@/lib/utils";
 import { t, type MessageKey } from "@/lib/i18n";
-import { lockMonthAction, pullMonthAction, setCountedAction, unlockMonthAction } from "./actions";
+import { lockMonthAction, pullMonthAction, sendToAccountantAction, setAccountantEmailAction, setCountedAction, setRatesAction, unlockMonthAction } from "./actions";
 import { CategoryChecks } from "./category-checks";
 
 export const dynamic = "force-dynamic";
 // Pulling a month asks Mana a dozen or so questions, one a second.
 export const maxDuration = 300;
 
-const errors = ["locked", "not_pulled", "stale", "mana-auth", "mana-not_configured", "mana-rate_limited", "mana-network", "mana-api", "mana-contract"];
+const errors = ["locked", "not_pulled", "stale", "rate", "accountant", "no_accountant", "not_locked", "send_not_sent", "send_suppressed", "send_failed", "mana-auth", "mana-not_configured", "mana-rate_limited", "mana-network", "mana-api", "mana-contract"];
 
 const sources: { key: string; title: MessageKey }[] = [
   { key: "class", title: "salary.source.classes" },
@@ -43,7 +44,7 @@ const statusLabel: Record<string, MessageKey> = {
  * in a month, by category, from Mana. Every category counts until an owner
  * leaves it out. Names and hours only. Owners only.
  */
-export default async function HoursPage({ searchParams }: { searchParams: Promise<{ manad?: string; fel?: string; hamtat?: string; last?: string; upplast?: string; urval?: string }> }) {
+export default async function HoursPage({ searchParams }: { searchParams: Promise<{ manad?: string; fel?: string; hamtat?: string; last?: string; upplast?: string; urval?: string; timlon?: string; revisor?: string; skickat?: string }> }) {
   const user = await requirePermission("salary", "read");
   const params = await searchParams;
   const today = todayInStockholm();
@@ -52,9 +53,13 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
   const options = monthOptions(today);
   if (!options.includes(month)) options.unshift(month);
 
-  const [state, log] = await Promise.all([getMonth(db, user.studioId, month), monthLog(db, user.studioId, month)]);
+  const [state, log, coaches, accountant] = await Promise.all([getMonth(db, user.studioId, month), monthLog(db, user.studioId, month), listCoaches(db, user.studioId), getAccountantEmail(db, user.studioId)]);
+  // The latest send to the accountant, if any: shown by the button so two owners do not both send.
+  const sent = log.find((l) => l.action === "sent");
   const result = state.result;
   const locked = Boolean(state.lockedAt);
+  // A coach who worked this month with no rate set: their amount is unknown, and the month's total with it.
+  const withoutRate = result?.coaches.filter((c) => c.hourlyRateOre === null) ?? [];
   const error = errors.find((e) => e === params.fel);
   const notCounted = Object.entries(result?.notCounted ?? {});
   const unassigned = result?.unassigned ?? [];
@@ -105,14 +110,23 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
               : state.pulledAt
                 ? t("salary.pulledAt", { when: formatDateTime(state.pulledAt) })
                 : t("salary.notPulled")}
+            {sent && ` ${t("salary.sentBy", { when: formatDateTime(sent.at), who: sent.by ?? t("salary.someone") })}`}
           </p>
           <div className="flex flex-wrap gap-2">
             {locked ? (
-              <form action={unlockMonthAction.bind(null, month)}>
-                <ConfirmButton variant="outline" confirmLabel={t("salary.unlockConfirm")}>
-                  {t("salary.unlock")}
-                </ConfirmButton>
-              </form>
+              <>
+                <form action={sendToAccountantAction.bind(null, month)}>
+                  <ConfirmButton variant={sent ? "outline" : "default"} confirmLabel={t("salary.sendConfirm")} disabled={!accountant}>
+                    <Send aria-hidden="true" />
+                    {sent ? t("salary.sendAgain") : t("salary.send")}
+                  </ConfirmButton>
+                </form>
+                <form action={unlockMonthAction.bind(null, month)}>
+                  <ConfirmButton variant="outline" confirmLabel={t("salary.unlockConfirm")}>
+                    {t("salary.unlock")}
+                  </ConfirmButton>
+                </form>
+              </>
             ) : (
               <>
                 <form action={pullMonthAction.bind(null, month)}>
@@ -169,6 +183,9 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
                     <th scope="col" className="px-4 py-2 text-right font-medium whitespace-nowrap text-foreground sm:px-5">
                       {t("salary.col.total")}
                     </th>
+                    <th scope="col" className="px-4 py-2 text-right font-medium whitespace-nowrap text-foreground sm:px-5">
+                      {t("salary.col.amount")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -192,6 +209,16 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
                           </ul>
                         </th>
                         <td className="px-4 py-3 text-right font-semibold tabular-nums sm:px-5">{formatHours(c.total)}</td>
+                        <td className="px-4 py-3 text-right tabular-nums sm:px-5">
+                          {c.amountOre === null ? (
+                            <span className="text-xs text-muted-foreground">{t("salary.noRate")}</span>
+                          ) : (
+                            <>
+                              <span className="font-semibold">{formatKr(c.amountOre)}</span>
+                              <span className="block text-xs text-muted-foreground">{formatKr(c.hourlyRateOre!)}/h</span>
+                            </>
+                          )}
+                        </td>
                       </tr>
                     );
                   })}
@@ -203,11 +230,54 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
                         {t("salary.total")}
                       </th>
                       <td className="px-4 py-2 text-right font-semibold tabular-nums sm:px-5">{formatHours(sum(result.coaches.map((c) => c.total)))}</td>
+                      <td className="px-4 py-2 text-right font-semibold tabular-nums sm:px-5">
+                        {withoutRate.length > 0 ? <span className="text-xs font-normal text-muted-foreground">{t("salary.totalUnknown")}</span> : formatKr(result.coaches.reduce((n, c) => n + (c.amountOre ?? 0), 0))}
+                      </td>
                     </tr>
                   </tfoot>
                 )}
               </table>
             </Surface>
+
+            <div className="flex flex-col gap-6">
+            <Panel title={t("salary.ratesTitle")} id="timlon">
+              <p className="text-sm text-muted-foreground">{t("salary.ratesHint")}</p>
+              {params.timlon === "1" && <Notice tone="success">{t("salary.ratesSaved")}</Notice>}
+              {withoutRate.length > 0 && <Notice tone="warning">{t("salary.ratesMissing", { names: withoutRate.map((c) => c.name).join(", ") })}</Notice>}
+              {coaches.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("salary.ratesEmpty")}</p>
+              ) : (
+                <form action={setRatesAction.bind(null, month)} className="flex flex-col gap-3">
+                  {coaches.map((c) => (
+                    <div key={c.id} className="flex items-center gap-3">
+                      <Label htmlFor={`rate-${c.id}`} className="min-w-0 flex-1 truncate font-normal">
+                        {c.name}
+                      </Label>
+                      <div className="flex items-center gap-1.5">
+                        <Input id={`rate-${c.id}`} name={`rate:${c.id}`} type="number" inputMode="decimal" min={0} max={10000} step={1} defaultValue={c.hourlyRateOre === null ? "" : String(c.hourlyRateOre / 100)} className="w-24 text-right tabular-nums" />
+                        <span className="text-sm text-muted-foreground">kr/h</span>
+                      </div>
+                    </div>
+                  ))}
+                  <SubmitButton variant="outline" className="self-start">
+                    {t("salary.ratesSave")}
+                  </SubmitButton>
+                </form>
+              )}
+            </Panel>
+
+            <Panel title={t("salary.accountantTitle")} id="revisor">
+              <p className="text-sm text-muted-foreground">{t("salary.accountantHint")}</p>
+              {params.revisor === "1" && <Notice tone="success">{t("salary.accountantSaved")}</Notice>}
+              {params.skickat === "1" && <Notice tone="success">{t("salary.sentNow")}</Notice>}
+              <form action={setAccountantEmailAction.bind(null, month)} className="flex flex-col gap-2">
+                <Label htmlFor="accountant-email">{t("salary.accountantEmail")}</Label>
+                <div className="flex gap-2">
+                  <Input id="accountant-email" name="email" type="email" defaultValue={accountant ?? ""} placeholder="namn@byra.se" className="min-w-0 flex-1" />
+                  <SubmitButton variant="outline">{t("salary.accountantSave")}</SubmitButton>
+                </div>
+              </form>
+            </Panel>
 
             <Panel title={t("salary.categories")} id="kategorier">
               <p className="text-sm text-muted-foreground">{locked ? t("salary.categoriesLocked") : t("salary.categoriesHint")}</p>
@@ -225,6 +295,7 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
                 )}
               </form>
             </Panel>
+            </div>
           </div>
 
           {(unassigned.length > 0 || notCounted.length > 0 || log.length > 0) && (
@@ -264,7 +335,7 @@ export default async function HoursPage({ searchParams }: { searchParams: Promis
                   <ul className="flex flex-col gap-1 text-sm">
                     {log.map((l, i) => (
                       <li key={i} className="flex flex-wrap justify-between gap-2">
-                        <span>{t(l.action === "lock" ? "salary.log.lock" : "salary.log.unlock", { who: l.by ?? t("salary.someone") })}</span>
+                        <span>{t(l.action === "lock" ? "salary.log.lock" : l.action === "sent" ? "salary.log.sent" : "salary.log.unlock", { who: l.by ?? t("salary.someone") })}</span>
                         <span className="text-muted-foreground">{formatDateTime(l.at)}</span>
                       </li>
                     ))}

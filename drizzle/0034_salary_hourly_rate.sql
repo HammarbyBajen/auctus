@@ -1,0 +1,1 @@
+ALTER TABLE "salary_instructor" ADD COLUMN "hourly_rate_ore" integer;

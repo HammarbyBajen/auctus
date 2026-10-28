@@ -99,6 +99,8 @@ export const studioSettings = pgTable("studio_settings", {
    * review with Erik both stay off, so every email goes to Resend's test address.
    */
   emailLive: boolean("email_live").notNull().default(false),
+  /** Where a locked month's hours go (Timmar, "Skicka till revisorn"). Owners set it on the Timmar page. */
+  accountantEmail: text("accountant_email"),
   /** Staff besides the owners who may write in Handbok (ticket 37), by user id. */
   handbookEditorIds: jsonb("handbook_editor_ids").$type<string[]>().notNull().default([]),
   /** The assistant's settings (ticket 30): its monthly cost cap and the studio's own words that mark a note as health-related. */
@@ -834,7 +836,7 @@ export const manaCreditBalance = pgTable(
 
 // ---- Salary (WFM) module (tickets 20-23): coach hours from Mana, names and hours only, no money ----
 
-/** A coach, straight from Mana's instructors (id and name, kept from the latest pull). */
+/** A coach, straight from Mana's instructors (id and name, kept from the latest pull), and what the owners pay them. */
 export const salaryInstructor = pgTable(
   "salary_instructor",
   {
@@ -844,6 +846,8 @@ export const salaryInstructor = pgTable(
     id: text("id").notNull(),
     name: text("name").notNull(),
     seenAt: timestamp("seen_at").notNull().defaultNow(),
+    /** Gross pay per hour, in öre; every class pays the same (Max, 2026-10-28). Null until an owner sets it. */
+    hourlyRateOre: integer("hourly_rate_ore"),
   },
   (table) => [primaryKey({ columns: [table.studioId, table.id] })],
 );

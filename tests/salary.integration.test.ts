@@ -81,7 +81,7 @@ describe.skipIf(!hasDb)("hours: pulling and locking a month", () => {
       ["course:kids", true],
       ["service:pt60", true],
     ]);
-    expect(await salary.listCoaches(db, studioId)).toEqual([{ id: "i-anna", name: "Anna A" }]);
+    expect(await salary.listCoaches(db, studioId)).toEqual([{ id: "i-anna", name: "Anna A", hourlyRateOre: null }]);
   });
 
   it("takes in hidden classes as their own categories, counted like the rest until an owner unticks them", async () => {

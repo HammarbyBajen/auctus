@@ -3,7 +3,7 @@ import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { emailEvent, emailMessage, emailSuppression, studio, studioSettings, user, type AtRiskEmail } from "@/db/schema";
 import { emailMode, fallbackFrom, normaliseAddress, recipientFor, validSender, type EmailMode } from "./mode";
-import { hasResendKey, resendTransport, type EmailTransport, type WebhookEvent } from "./transport";
+import { hasResendKey, resendTransport, type EmailTransport, type OutgoingEmail, type WebhookEvent } from "./transport";
 
 type Db = typeof defaultDb;
 
@@ -52,6 +52,8 @@ export type SendInput = {
   leadId?: string;
   manaUserId?: string;
   sentById: string;
+  /** A file to send along; not stored, so a retry must give it again. */
+  attachment?: OutgoingEmail["attachment"];
 };
 
 export type SendResult = { messageId: string; mode: EmailMode; status: "sent" | "not_sent" | "suppressed" | "failed" };
@@ -125,7 +127,7 @@ export async function sendEmail(db: Db, input: SendInput, transport: EmailTransp
 
   let resendId: string;
   try {
-    ({ id: resendId } = await transport.send({ from: settings.from, to: sentTo, replyTo: input.replyTo, subject, body, studioName, messageId: message.id }));
+    ({ id: resendId } = await transport.send({ from: settings.from, to: sentTo, replyTo: input.replyTo, subject, body, studioName, messageId: message.id, attachment: input.attachment ?? null }));
   } catch (error) {
     // Never the key or the address: only what went wrong.
     const reason = error instanceof Error ? error.message.slice(0, 300) : "okänt fel";

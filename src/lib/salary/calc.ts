@@ -27,7 +27,7 @@ export type Work = {
   status: string | null;
 };
 
-export type Coach = { id: string; name: string };
+export type Coach = { id: string; name: string; hourlyRateOre?: number | null };
 export type Category = { typeKey: string; label: string; source: string; counted: boolean };
 
 function addDays(day: string, n: number): string {
@@ -69,6 +69,10 @@ export type CoachResult = {
   byType: Record<string, number>;
   /** Hours in the categories that are counted. */
   total: number;
+  /** Gross pay per hour in öre as set when this was calculated (frozen with a locked month); null when not set yet. */
+  hourlyRateOre: number | null;
+  /** Hours × rate, in öre; null without a rate, so a missing rate is never mistaken for zero pay. */
+  amountOre: number | null;
 };
 
 export type MonthResult = {
@@ -102,7 +106,7 @@ export function calculateMonth(input: { month: string; work: Work[]; coaches: Co
     .map((w) => ({ id: w.id, typeLabel: w.typeLabel, startsAt: w.startsAt.toISOString(), minutes: minutesOf(w) }));
 
   // Every instructor with work is a coach; one Mana no longer lists keeps their hours under their id.
-  const names = new Map(input.coaches.map((c) => [c.id, c.name]));
+  const coachOf = new Map(input.coaches.map((c) => [c.id, c]));
   const minutes = new Map<string, Record<string, number>>();
   for (const w of done) {
     if (!w.instructorId) continue;
@@ -110,12 +114,18 @@ export function calculateMonth(input: { month: string; work: Work[]; coaches: Co
     own[w.typeKey] = (own[w.typeKey] ?? 0) + minutesOf(w);
     minutes.set(w.instructorId, own);
   }
-  const coaches: CoachResult[] = [...minutes].map(([id, byType]) => ({
-    coachId: id,
-    name: names.get(id) ?? `Okänd instruktör (${id.slice(0, 8)})`,
-    byType: Object.fromEntries(Object.entries(byType).map(([k, m]) => [k, hours(m)])),
-    total: hours(Object.entries(byType).reduce((n, [k, m]) => (isCounted(k) ? n + m : n), 0)),
-  }));
+  const coaches: CoachResult[] = [...minutes].map(([id, byType]) => {
+    const total = hours(Object.entries(byType).reduce((n, [k, m]) => (isCounted(k) ? n + m : n), 0));
+    const rate = coachOf.get(id)?.hourlyRateOre ?? null;
+    return {
+      coachId: id,
+      name: coachOf.get(id)?.name ?? `Okänd instruktör (${id.slice(0, 8)})`,
+      byType: Object.fromEntries(Object.entries(byType).map(([k, m]) => [k, hours(m)])),
+      total,
+      hourlyRateOre: rate,
+      amountOre: rate === null ? null : Math.round(total * rate),
+    };
+  });
 
   return {
     month,

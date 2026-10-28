@@ -16,6 +16,8 @@ export type OutgoingEmail = {
   studioName: string;
   /** Our message id: tagged on the email, and the idempotency key, so a retry is the same email. */
   messageId: string;
+  /** A file to send along, such as the month's hours for the accountant. */
+  attachment?: { filename: string; content: Buffer; contentType: string } | null;
 };
 
 export type EmailTransport = { send(email: OutgoingEmail): Promise<{ id: string }> };
@@ -36,6 +38,7 @@ export function resendTransport(): EmailTransport {
           subject: email.subject,
           html,
           text,
+          attachments: email.attachment ? [email.attachment] : undefined,
           // Ids only: nothing about the person goes into Resend's tags.
           tags: [{ name: "message", value: email.messageId }],
         },

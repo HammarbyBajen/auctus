@@ -124,6 +124,17 @@ describe.skipIf(!hasDb)("sending email from Tegen HQ (M8 phase 1)", () => {
     expect((await email.listSuppressions(db, studioId)).map((s) => s.address)).not.toContain("cia@example.test");
   });
 
+  it("hands a file along to Resend when one is given, and keeps the email itself as text", async () => {
+    process.env.RESEND_API_KEY = "re_test_only";
+    const transport = fake();
+    const attachment = { filename: "timmar-2026-10.xlsx", content: Buffer.from("PK"), contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" };
+    await email.sendEmail(db, { ...input("rev@example.test"), attachment }, transport);
+    expect(transport.sent[0].attachment).toEqual(attachment);
+    // Without one, nothing is attached.
+    await email.sendEmail(db, input("rev2@example.test"), transport);
+    expect(transport.sent[1].attachment).toBeNull();
+  });
+
   it("marks an email failed, without the address or key, when Resend refuses it", async () => {
     process.env.RESEND_API_KEY = "re_test_only";
     const result = await email.sendEmail(db, input(), { send: async () => Promise.reject(new Error("rate_limit_exceeded")) });

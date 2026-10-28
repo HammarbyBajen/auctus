@@ -3,7 +3,8 @@ import type { MonthResult } from "./calc";
 
 /**
  * The month's hours (ticket 23): one row per coach, one column per counted
- * category, then the total.
+ * category, then the total, the gross pay per hour and the amount (kronor;
+ * empty when no rate is set, never 0).
  * Hours are decimals. As CSV (Swedish Excel: semicolons, decimal commas, a
  * BOM so ÅÄÖ open right) and as a real .xlsx, written here without a
  * dependency: a zip with no compression around five small XML files.
@@ -13,8 +14,9 @@ export type Sheet = { header: string[]; rows: (string | number)[][] };
 
 export function exportSheet(result: MonthResult): Sheet {
   const counted = result.types.filter((t) => t.counted);
-  const header = ["Namn", ...counted.map((t) => t.label), "Timmar totalt"];
-  const rows = result.coaches.map((c) => [c.name, ...counted.map((t) => c.byType[t.typeKey] ?? 0), c.total]);
+  const header = ["Namn", ...counted.map((t) => t.label), "Timmar totalt", "Timlön (kr)", "Att betala (kr)"];
+  const kr = (ore: number | null) => (ore === null ? "" : ore / 100);
+  const rows = result.coaches.map((c) => [c.name, ...counted.map((t) => c.byType[t.typeKey] ?? 0), c.total, kr(c.hourlyRateOre), kr(c.amountOre)]);
   return { header, rows };
 }
 

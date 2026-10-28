@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
-import { salaryInstructor, salaryLog, salaryMonth, salaryTypeRule, salaryWork, user } from "@/db/schema";
+import { salaryInstructor, salaryLog, salaryMonth, salaryTypeRule, salaryWork, studioSettings, user } from "@/db/schema";
 import { ManaError } from "@/lib/mana/errors";
 import { t } from "@/lib/i18n";
 import { calculateMonth, pullWindow, type MonthResult, type Work } from "./calc";
@@ -140,7 +140,16 @@ export async function pullMonth(db: Db, source: SalarySource, studioId: string, 
 
 /** The coaches: Mana's instructors as of the latest pull. */
 export async function listCoaches(db: Db, studioId: string) {
-  return db.select({ id: salaryInstructor.id, name: salaryInstructor.name }).from(salaryInstructor).where(eq(salaryInstructor.studioId, studioId)).orderBy(asc(salaryInstructor.name));
+  return db
+    .select({ id: salaryInstructor.id, name: salaryInstructor.name, hourlyRateOre: salaryInstructor.hourlyRateOre })
+    .from(salaryInstructor)
+    .where(eq(salaryInstructor.studioId, studioId))
+    .orderBy(asc(salaryInstructor.name));
+}
+
+/** Sets a coach's gross pay per hour (öre; null clears it). A locked month keeps the rate it was locked with. */
+export async function setHourlyRate(db: Db, studioId: string, coachId: string, hourlyRateOre: number | null) {
+  await db.update(salaryInstructor).set({ hourlyRateOre }).where(and(eq(salaryInstructor.studioId, studioId), eq(salaryInstructor.id, coachId)));
 }
 
 // ---- Categories ----
@@ -219,6 +228,20 @@ export async function lockMonth(db: Db, studioId: string, month: string, userId:
     await tx.insert(salaryLog).values({ studioId, month, action: "lock", at: now, byId: userId });
   });
   return { status: "locked_now" as const };
+}
+
+export async function getAccountantEmail(db: Db, studioId: string): Promise<string | null> {
+  const [row] = await db.select({ email: studioSettings.accountantEmail }).from(studioSettings).where(eq(studioSettings.studioId, studioId)).limit(1);
+  return row?.email ?? null;
+}
+
+export async function setAccountantEmail(db: Db, studioId: string, email: string | null) {
+  await db.update(studioSettings).set({ accountantEmail: email, updatedAt: new Date() }).where(eq(studioSettings.studioId, studioId));
+}
+
+/** Notes that a locked month's hours went to the accountant, so the page can say so and nobody sends it twice by mistake. */
+export async function noteSentToAccountant(db: Db, studioId: string, month: string, userId: string, now: Date = new Date()) {
+  await db.insert(salaryLog).values({ studioId, month, action: "sent", at: now, byId: userId });
 }
 
 /** Unlocks a month (owners only, checked by the caller), and records who did. */

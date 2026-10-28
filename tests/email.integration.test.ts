@@ -158,6 +158,16 @@ describe.skipIf(!hasDb)("sending email from Tegen HQ (M8 phase 1)", () => {
     expect([row.status, row.resendId]).toEqual(["delivered", resendId]);
   });
 
+  it("lets Resend's own report win over a failure our side set when the answer was lost", async () => {
+    process.env.RESEND_API_KEY = "re_test_only";
+    // Resend took the email, but the answer never reached us: marked failed, with no Resend id.
+    const lost = await email.sendEmail(db, input("fia@example.test"), { send: async () => Promise.reject(new Error("timeout")) });
+    const resendId = `re_${tag}_${crypto.randomUUID()}`;
+    await email.handleEmailEvent(db, `${tag}-late`, { type: "email.delivered", emailId: resendId, messageId: lost.messageId, bounceType: null });
+    const [row] = await db.select().from(schema.emailMessage).where(eq(schema.emailMessage.id, lost.messageId));
+    expect([row.status, row.resendId]).toEqual(["delivered", resendId]);
+  });
+
   it("reads a temporary bounce as delayed, so a later delivery still shows", async () => {
     process.env.RESEND_API_KEY = "re_test_only";
     process.env.EMAIL_LIVE = "true";

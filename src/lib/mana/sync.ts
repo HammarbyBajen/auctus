@@ -263,6 +263,14 @@ export async function pauseRun(db: Db, runId: string, now: Date = new Date()): P
   return pausedUntil;
 }
 
+/** The sync itself went fine, but what runs after it (Won moves, Medlemmar, the day's figures) did not: shown as a failed night. */
+export async function markAfterSyncFailed(db: Db, runId: string, error: unknown) {
+  await db
+    .update(syncRun)
+    .set({ status: "failed", error: `Efterarbetet misslyckades: ${describeManaError(error)}` })
+    .where(eq(syncRun.id, runId));
+}
+
 export async function failRun(db: Db, runId: string, error: unknown) {
   await db
     .update(syncRun)

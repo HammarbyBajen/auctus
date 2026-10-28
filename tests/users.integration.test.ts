@@ -77,14 +77,16 @@ describe.skipIf(!hasDb)("user management", () => {
   it("switching someone off ends their sessions, blocks sign-in and is seen at once; an owner cannot change themselves", async () => {
     const [timmy] = (await users.listUsers(db, studioId)).filter((u) => u.email === `${tag}-timmy@example.test`);
     await users.setActive(db, studioId, timmy.id, false, ownerId);
-    expect(await users.isSwitchedOff(db, timmy.id)).toBe(true);
+    expect((await users.accountState(db, timmy.id)).switchedOff).toBe(true);
     expect(await db.select().from(schema.session).where(eq(schema.session.userId, timmy.id))).toEqual([]);
     expect((await signIn(timmy.email, "nytt-losenord-123")).status).not.toBe(200);
     await users.setActive(db, studioId, timmy.id, true, ownerId);
-    expect(await users.isSwitchedOff(db, timmy.id)).toBe(false);
+    expect((await users.accountState(db, timmy.id)).switchedOff).toBe(false);
 
     await users.setRole(db, studioId, timmy.id, "owner", ownerId);
     expect((await users.listUsers(db, studioId)).find((u) => u.id === timmy.id)?.role).toBe("owner");
+    // What every request reads, so a changed role applies before the session cookie expires.
+    expect((await users.accountState(db, timmy.id)).role).toBe("owner");
     await expect(users.setRole(db, studioId, ownerId, "staff", ownerId)).rejects.toThrow("self");
     await expect(users.setActive(db, studioId, ownerId, false, ownerId)).rejects.toThrow("self");
   });

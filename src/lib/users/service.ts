@@ -150,10 +150,10 @@ export async function setActive(db: Db, studioId: string, userId: string, active
   }
 }
 
-/** Whether an account has been switched off. One small lookup per page. */
-export async function isSwitchedOff(db: Db, userId: string): Promise<boolean> {
-  const [row] = await db.select({ banned: user.banned }).from(user).where(eq(user.id, userId)).limit(1);
-  return !row || Boolean(row.banned);
+/** Whether an account has been switched off, and its role as it is now. One small lookup per page. */
+export async function accountState(db: Db, userId: string): Promise<{ switchedOff: boolean; role: string | null }> {
+  const [row] = await db.select({ banned: user.banned, role: user.role }).from(user).where(eq(user.id, userId)).limit(1);
+  return { switchedOff: !row || Boolean(row.banned), role: row?.role ?? null };
 }
 
 /** The latest link made for a user (for showing when it runs out). */

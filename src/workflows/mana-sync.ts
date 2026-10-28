@@ -6,7 +6,7 @@ import { recordKpiSnapshot } from "@/lib/kpi/service";
 import { detectAtRisk, detectLeaving, syncVisits } from "@/lib/mana/at-risk-service";
 import { afterSync } from "@/lib/mana/leads";
 import { todayInStockholm } from "@/lib/tasks/dates";
-import { addExtraIds, addRunRequests, failRun, holdRun, pauseRun, runBatch, startRun } from "@/lib/mana/sync";
+import { addExtraIds, addRunRequests, failRun, holdRun, markAfterSyncFailed, pauseRun, runBatch, startRun } from "@/lib/mana/sync";
 import { and, eq, gte, sql } from "drizzle-orm";
 import { manaVisit, syncRun } from "@/db/schema";
 import { syncKlippkort } from "@/lib/mana/klippkort-service";
@@ -69,9 +69,10 @@ async function purchasesStep(studioId: string, runId: string) {
 async function visitsStep(studioId: string, runId: string) {
   "use step";
   // Class bookings and gym check-ins since a few days before the newest saved
-  // one (ticket 13). A failure only means the at-risk list is a day older, so
-  // it does not fail the sync. Anyone who visited since the last run is read
-  // in a partial run (ticket 28).
+  // one (ticket 13). A failure only means the at-risk list waits a day, so it
+  // does not fail the sync; it says so, and the list is then left as it is,
+  // since with no visits read everyone would look away. Anyone who visited
+  // since the last run is read in a partial run (ticket 28).
   // This step saves only at its end: keep the run from looking dead meanwhile.
   await holdRun(db, runId);
   let client: Awaited<ReturnType<typeof createManaClient>> | null = null;
@@ -86,8 +87,9 @@ async function visitsStep(studioId: string, runId: string) {
         .where(and(eq(manaVisit.studioId, studioId), gte(manaVisit.at, since)));
       await addExtraIds(db, runId, visitors.map((v) => v.id));
     }
+    return { visitsOk: true };
   } catch {
-    // The at-risk list waits a day; members with a current membership are read anyway.
+    return { visitsOk: false };
   } finally {
     if (client) await addRunRequests(db, runId, client.requestCount);
   }
@@ -127,18 +129,25 @@ async function memberStatsStep(studioId: string, runId: string) {
   }
 }
 
-async function afterSyncStep(studioId: string) {
+async function afterSyncStep(studioId: string, runId: string, visitsOk: boolean) {
   "use step";
   // Link CRM people to Mana, move leads whose person has just joined to Won,
   // then put ended memberships, day passes and klippkort on Medlemmar (if switched on), flag members who are away or leaving,
-  // note milestones reached, and save today's key numbers.
-  const won = await afterSync(db, studioId);
-  const winBack = await detectWinBacks(db, studioId);
-  const atRisk = await detectAtRisk(db, studioId);
-  const leaving = await detectLeaving(db, studioId);
-  const milestones = await detectMilestones(db, studioId);
-  const snapshot = await recordKpiSnapshot(db, studioId, todayInStockholm());
-  return { won, winBack, atRisk, leaving, milestones, snapshot: snapshot !== null };
+  // note milestones reached, and save today's key numbers. The run already says
+  // succeeded by now, so a failure here is written onto it: otherwise nothing would show it.
+  try {
+    const won = await afterSync(db, studioId);
+    const winBack = await detectWinBacks(db, studioId);
+    // Without tonight's visits, who is away is unknown: the list is left as it is rather than filled up.
+    const atRisk = visitsOk ? await detectAtRisk(db, studioId) : null;
+    const leaving = await detectLeaving(db, studioId);
+    const milestones = await detectMilestones(db, studioId);
+    const snapshot = await recordKpiSnapshot(db, studioId, todayInStockholm());
+    return { won, winBack, atRisk, leaving, milestones, snapshot: snapshot !== null };
+  } catch (error) {
+    await markAfterSyncFailed(db, runId, error);
+    throw error;
+  }
 }
 
 /**
@@ -155,7 +164,7 @@ export async function manaSyncWorkflow(studioId: string) {
   const { runId, busy } = await startStep(studioId);
   if (busy) return { runId, skipped: true };
   // Visits and payments first: in a partial run they say who else to read (ticket 28).
-  await visitsStep(studioId, runId);
+  const { visitsOk } = await visitsStep(studioId, runId);
   await purchasesStep(studioId, runId);
   let done = false;
   while (!done) {
@@ -166,6 +175,6 @@ export async function manaSyncWorkflow(studioId: string) {
   }
   await klippkortStep(studioId, runId);
   await memberStatsStep(studioId, runId);
-  const after = await afterSyncStep(studioId);
+  const after = await afterSyncStep(studioId, runId, visitsOk);
   return { runId, skipped: false, ...after };
 }

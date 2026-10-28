@@ -193,7 +193,9 @@ export async function handleEmailEvent(db: Db, eventId: string, event: WebhookEv
     const next = soft ? "delayed" : statusFor[event.type];
     // Read again inside the transaction: the sender may have moved it since.
     const [current] = await tx.select({ status: emailMessage.status }).from(emailMessage).where(eq(emailMessage.id, message.id));
-    if (next && (rank[next] ?? 0) >= (rank[current?.status ?? "queued"] ?? 0)) {
+    // "failed" without a Resend id was set here after Resend had taken the email (a timeout): Resend's own report wins.
+    const lostAnswer = current?.status === "failed" && !message.resendId;
+    if (next && (lostAnswer || (rank[next] ?? 0) >= (rank[current?.status ?? "queued"] ?? 0))) {
       await tx
         .update(emailMessage)
         .set({ status: next, resendId: message.resendId ?? event.emailId, updatedAt: new Date() })

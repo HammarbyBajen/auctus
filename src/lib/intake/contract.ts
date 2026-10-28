@@ -50,8 +50,8 @@ export const sourceForRoute: Record<IntakeRoute, string> = {
   escalate: "chat_bot",
 };
 
-/** Words that mark a lead as a test (the same as LAB37's reports). */
-const testMarkers = /test-lab37|ignorer|testlead/i;
+/** Words that mark a lead as a test (the same as LAB37's reports). "ignorer" only as a word of its own, so "ignorerat" in a real message is not a test. */
+export const testMarkers = /test-lab37|\bignorer\b|testlead/i;
 
 export function isTestLead(p: Pick<IntakePayload, "name" | "email" | "phone" | "message">): boolean {
   return testMarkers.test([p.name, p.email, p.phone, p.message].filter(Boolean).join(" "));

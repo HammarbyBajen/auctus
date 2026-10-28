@@ -139,7 +139,7 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
     const { lead } = await leads.createOrMatchLead(db, studioId, { name: "Anna Andersson", email: `anna-${tag}@example.test`, phone: "070-111 22 33", source: "contact_form" });
     await db.insert(schema.leadSubmission).values({
       studioId, senderId: `${tag}-s`, route: "qualification", isTest: false, outcome: "created", leadId: lead.id,
-      payload: { answers: { mål: "Styrka", erfarenhet: "Nybörjare", hälsa: "Ont i ryggen" }, landingPage: "https://crossfittegen.se/prova?fbclid=abc" },
+      payload: { answers: { mål: "Styrka", erfarenhet: "Nybörjare", hälsa: "Ont i ryggen", skador: "Axeln, sedan i våras" }, landingPage: "https://crossfittegen.se/prova?fbclid=abc" },
     });
     await leads.addNote(db, studioId, lead.id, "Ringde, nås på 070-111 22 33", ownerId);
     // The website's own note carries the landing page with its click id.
@@ -155,7 +155,7 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
       "Från webben (qualification): Vill bli starkare\nmål: Styrka\nSida: https://crossfittegen.se/prova",
       "Ringde, nås på [telefon]",
     ]);
-    for (const secret of ["Andersson", "example.test", "111 22 33", "knät", "ryggen", "Personlig", "fbclid"]) expect(text).not.toContain(secret);
+    for (const secret of ["Andersson", "example.test", "111 22 33", "knät", "ryggen", "Axeln", "Personlig", "fbclid"]) expect(text).not.toContain(secret);
   });
 
   it("carries out approved steps as the person who approved them, and refuses without the right", async () => {

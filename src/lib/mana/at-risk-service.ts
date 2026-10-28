@@ -97,9 +97,10 @@ export async function detectAtRisk(db: Db, studioId: string, now: Date = new Dat
   for (const a of away) {
     const previous = latestFor.get(a.manaUserId);
     if (previous?.status === "open") continue;
-    // The same absence as one already handled: no new alert until they have been in again,
-    // unless they were expected back by a day that has now passed.
-    const sameAbsence = previous && (a.lastVisitAt?.getTime() ?? 0) <= (previous.lastVisitAt?.getTime() ?? 0);
+    // The same absence as one staff handled: no new alert until they have been in again,
+    // unless they were expected back by a day that has now passed. One closed by itself
+    // (a freeze, a changed limit) was never handled, so it comes back.
+    const sameAbsence = previous && previous.status !== "resolved" && (a.lastVisitAt?.getTime() ?? 0) <= (previous.lastVisitAt?.getTime() ?? 0);
     const backByPassed = previous?.returnBy && previous.returnBy < today;
     if (sameAbsence && !backByPassed) continue;
     await db.insert(atRiskAlert).values({ studioId, manaUserId: a.manaUserId, lastVisitAt: a.lastVisitAt, createdAt: now });
@@ -162,8 +163,8 @@ export async function detectLeaving(db: Db, studioId: string, now: Date = new Da
       if (previous.changeDate !== l.changeDate) await db.update(atRiskAlert).set({ changeDate: l.changeDate }).where(eq(atRiskAlert.id, previous.id));
       continue;
     }
-    // Already handled for this notice or freeze.
-    if (previous && previous.changeDate === l.changeDate) continue;
+    // Already handled by staff for this notice or freeze; one that closed by itself comes back.
+    if (previous && previous.status !== "resolved" && previous.changeDate === l.changeDate) continue;
     await db.insert(atRiskAlert).values({ studioId, manaUserId: l.manaUserId, cause: l.cause, changeDate: l.changeDate, createdAt: now });
     created++;
   }

@@ -25,7 +25,7 @@ export const healthTerms = [
   "depression", "deprimer", "ångest", "stress", "cancer", "diabet", "astma", "hjärt", "blodtryck", "migrän",
   "yrsel", "illamå", "kräk", "bruten", "brutit", "bröt", "fraktur", "stuk", "sträckning", "ryggskott",
   "nackspärr", "hjärnskakning", "menisk", "korsband", "diskbråck", "ischias", "tennisarmbåge", "inflamm",
-  "allergi", "epilepsi", "mår illa", "mår dåligt",
+  "allergi", "epilepsi", "mår illa", "mår dåligt", "hälsa", "besvär", "begränsning",
 ] as const;
 
 /** Stems this short are caught only as a whole word or at the end of one. */

@@ -99,7 +99,8 @@ export async function leadContext(db: Db, actor: Actor, leadId: string, now: Dat
   const payload = (submission?.payload ?? {}) as { answers?: Record<string, unknown>; landingPage?: unknown };
   const answers = Object.fromEntries(
     Object.entries(payload.answers ?? {})
-      .filter((entry): entry is [string, string] => typeof entry[1] === "string" && !mentionsHealth(entry[1], terms))
+      // The question counts too: "skador: Knät" says health even when the answer alone does not.
+      .filter((entry): entry is [string, string] => typeof entry[1] === "string" && !mentionsHealth(`${entry[0]}: ${entry[1]}`, terms))
       .map(([key, value]) => [key, withoutContactDetails(value)]),
   );
   const lastContact = history.find((h) => h.kind === "contact_logged");

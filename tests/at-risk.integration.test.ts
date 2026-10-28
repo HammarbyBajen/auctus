@@ -108,6 +108,18 @@ describe.skipIf(!hasDb)("at-risk members", () => {
     expect((await risk.listAtRisk(db, studioId, day("2026-11-02", 9))).map((r) => r.name)).not.toContain("Namn ghost");
   });
 
+  it("brings back a member whose alert closed by itself without a visit (a freeze, a changed limit)", async () => {
+    const at = day("2026-11-02", 9);
+    const limit = (days: number) => db.update(schema.studioSettings).set({ atRiskDays: days }).where(eq(schema.studioSettings.studioId, studioId));
+    await limit(400);
+    const closed = await risk.detectAtRisk(db, studioId, at);
+    expect(closed.resolved).toBeGreaterThan(0);
+    expect(await risk.listAtRisk(db, studioId, at)).toEqual([]);
+    await limit(30);
+    // The next night (an hour on is enough): each run has its own time.
+    expect((await risk.detectAtRisk(db, studioId, day("2026-11-02", 10))).created).toBe(closed.resolved);
+  });
+
   it("keeps a note of every try, and takes a member off the list only when someone answered", async () => {
     const now = day("2026-11-03", 9);
     const [regular] = (await risk.listAtRisk(db, studioId, now)).filter((r) => r.name === "Namn regular");

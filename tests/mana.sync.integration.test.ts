@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ManaError } from "@/lib/mana/errors";
 import type { ManaSource } from "@/lib/mana/sync";
@@ -308,6 +308,17 @@ describe.skipIf(!hasDb)("Mana sync", () => {
     expect(await countFor(studioB)).toBe(5);
     await db.delete(schema.manaMember).where(eq(schema.manaMember.studioId, studioB));
     expect(await countFor(studioA)).toBe(5);
+  });
+
+  it("keeps everyone when Mana suddenly returns no people at all, and records the failure", async () => {
+    await fresh();
+    await sync.runToCompletion(db, new FakeMana(), studioA);
+    const empty = new FakeMana();
+    empty.users = [{ data: { items: [] }, links: { next: null }, meta: { totalCount: 0 } }] as never;
+    await expect(sync.runToCompletion(db, empty, studioA)).rejects.toMatchObject({ code: "contract" });
+    expect(await db.select().from(schema.manaMember).where(eq(schema.manaMember.studioId, studioA))).toHaveLength(5);
+    const [run] = await db.select().from(schema.syncRun).where(eq(schema.syncRun.studioId, studioA)).orderBy(desc(schema.syncRun.startedAt)).limit(1);
+    expect(run.status).toBe("failed");
   });
 
   it("records a failure with a safe message and stops", async () => {

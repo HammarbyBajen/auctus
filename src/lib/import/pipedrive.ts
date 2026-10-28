@@ -1,6 +1,7 @@
 import { and, eq, exists, inArray, isNotNull, isNull, notExists, or, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { emailMessage, lead, leadEvent, leadNote, person, task } from "@/db/schema";
+import { testMarkers } from "@/lib/intake/contract";
 import { initialStage } from "@/lib/leads/constants";
 import { normalizeEmail, normalizePhone } from "@/lib/leads/matching";
 
@@ -48,7 +49,6 @@ export const salesPipeline = "TEGEN SÄLJ 2026";
 const openStatus = "Pågående";
 /** Pipedrive keeps no reason for its open cold deals, so they get "Annat". */
 const coldReasonForImport = "other";
-const testMarkers = /test-lab37|ignorer|testlead/i;
 
 export type ImportLead = {
   ref: string;

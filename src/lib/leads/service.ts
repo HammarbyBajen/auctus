@@ -22,7 +22,8 @@ export type NewLeadInput = {
  * Registers a contact. People are recognised by email, then by phone:
  * - a known person with a lead: a note is added to their latest lead and any
  *   missing contact details are filled in (no second lead is made),
- * - a known person without a lead: a new lead is created for them,
+ * - a known person without a lead, or whose latest lead is cold: a new lead is
+ *   created for them, so someone asking again is seen in Ny lead,
  * - an unknown person: a new person and a new lead are created.
  */
 export async function createOrMatchLead(db: Db, studioId: string, input: NewLeadInput) {
@@ -63,12 +64,13 @@ export async function createOrMatchLead(db: Db, studioId: string, input: NewLead
         .returning();
 
       const [latest] = await tx
-        .select()
+        .select({ id: lead.id, kind: pipelineStage.kind })
         .from(lead)
+        .innerJoin(pipelineStage, and(eq(pipelineStage.studioId, lead.studioId), eq(pipelineStage.key, lead.stage)))
         .where(eq(lead.personId, existing.id))
         .orderBy(desc(lead.createdAt))
         .limit(1);
-      if (latest) {
+      if (latest && latest.kind !== "cold") {
         const details = [input.name, email, phone].filter(Boolean).join(", ");
         await tx.insert(leadNote).values({
           studioId,

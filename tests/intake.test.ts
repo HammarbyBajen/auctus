@@ -19,6 +19,8 @@ describe("intake contract", () => {
     expect(isTestLead({ name: "Ignorer detta", email: null, phone: "070", message: null })).toBe(true);
     expect(isTestLead({ name: "Anna", email: null, phone: null, message: "hej från test-lab37" })).toBe(true);
     expect(isTestLead({ name: "Anna Testsson", email: "anna@example.test", phone: null, message: null })).toBe(false);
+    // A real lead that happens to contain the word inside a longer one.
+    expect(isTestLead({ name: "Anna", email: null, phone: null, message: "Jag har ignorerat min rygg för länge" })).toBe(false);
   });
 });
 

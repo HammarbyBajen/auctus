@@ -359,6 +359,8 @@ export async function runBatch(
       progress.usersTotal = page.total;
       progress.nextUrl = page.next;
       if (page.next === null) {
+        // No people at all is Mana failing, not everyone leaving: stop before the mirror is emptied.
+        if (progress.usersSeen === 0) throw new ManaError("contract", "Mana gav inga personer alls, så ingen togs bort.");
         // Every page is read: anyone Mana did not return this time is gone.
         const removed = await db
           .delete(manaMember)

@@ -92,6 +92,16 @@ describe.skipIf(!hasDb)("leads", () => {
     expect(again.lead.id).toBe(first.lead.id);
   });
 
+  it("starts a new lead in Ny lead when someone whose lead went cold asks again", async () => {
+    const first = await service.createOrMatchLead(db, studioA, { name: "Kall Kalle", email: "kalle@example.test", source: "manual" });
+    await service.moveLeadStage(db, studioA, first.lead.id, "cold", { coldReason: "price" });
+    const again = await service.createOrMatchLead(db, studioA, { name: "Kalle", email: "kalle@example.test", source: "contact_form" });
+    expect(again.duplicate).toBe(false);
+    expect(again.lead.id).not.toBe(first.lead.id);
+    expect(again.person.id).toBe(first.person.id);
+    expect(again.lead).toMatchObject({ stage: "new_lead", source: "contact_form" });
+  });
+
   it("creates a new lead for a known person who has none yet", async () => {
     const [known] = await db
       .insert(schema.person)

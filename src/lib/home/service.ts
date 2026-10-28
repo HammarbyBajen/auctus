@@ -1,4 +1,4 @@
-import { and, count, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, count, countDistinct, eq, gte, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { db as defaultDb } from "@/db";
 import {
@@ -94,8 +94,9 @@ export async function getHomeData(
       .select({ n: count() })
       .from(lead)
       .where(and(eq(lead.studioId, studioId), eq(lead.stage, "booked_test_training"))),
+    // Each lead once, as in Rapport: moved to Medlem, back and to Medlem again is still one new member.
     db
-      .select({ n: count(leadEvent.leadId) })
+      .select({ n: countDistinct(leadEvent.leadId) })
       .from(leadEvent)
       .innerJoin(
         pipelineStage,

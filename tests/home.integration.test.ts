@@ -130,6 +130,9 @@ describe.skipIf(!hasDb)("home page data", () => {
     await leads.moveLeadStage(db, studioB, test1.id, "booked_test_training");
     await leads.moveLeadStage(db, studioB, test2.id, "booked_test_training");
     await leads.moveLeadStage(db, studioB, old.id, "won");
+    // Moved back and to Medlem again: still one new member, as in Rapport.
+    await leads.moveLeadStage(db, studioB, old.id, "contacted");
+    await leads.moveLeadStage(db, studioB, old.id, "won");
     expect(fresh.id).toBeTruthy();
 
     const counts = (await home.getHomeData(db, studioB, "x", "all", now)).counts;

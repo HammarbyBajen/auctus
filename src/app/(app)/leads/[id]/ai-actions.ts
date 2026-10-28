@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/db";
 import { aiSuggestion } from "@/db/schema";
@@ -52,7 +52,8 @@ export async function saveSteps(leadId: string, suggestionId: string, _: StepsSt
   const [row] = await db
     .select({ suggestion: aiSuggestion.suggestion })
     .from(aiSuggestion)
-    .where(and(eq(aiSuggestion.studioId, user.studioId), eq(aiSuggestion.id, suggestionId), eq(aiSuggestion.leadId, leadId), eq(aiSuggestion.kind, "after_call"), eq(aiSuggestion.status, "ok")))
+    // Undecided only: a retry of the same save must not log the call, the note and the task twice.
+    .where(and(eq(aiSuggestion.studioId, user.studioId), eq(aiSuggestion.id, suggestionId), eq(aiSuggestion.leadId, leadId), eq(aiSuggestion.kind, "after_call"), eq(aiSuggestion.status, "ok"), isNull(aiSuggestion.decision)))
     .limit(1);
   if (!row) return { error: "failed" };
   const steps = await usableSteps(db, user.studioId, (row.suggestion as { steps?: unknown } | null)?.steps);

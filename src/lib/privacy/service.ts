@@ -1,4 +1,4 @@
-import { and, count, desc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, lt, or, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/db";
 import { forgetMemberMilestones } from "@/lib/mana/milestones-service";
 import { aiSuggestion, atRiskAlert, atRiskNote, deletionLog, emailMessage, lead, leadNote, leadSubmission, person, pipelineStage, task } from "@/db/schema";
@@ -55,9 +55,15 @@ export async function deletePerson(db: Db, studioId: string, personId: string, d
       // Their milestones and the figures behind them (ticket 35).
       await forgetMemberMilestones(tx as unknown as Db, studioId, preview.person.manaUserId);
     }
-    // The raw web submissions hold the same personal data, so they go too (ticket 09).
+    // The raw web submissions hold the same personal data, so they go too (ticket 09): the ones on their
+    // leads, and any with their email or phone that lost its lead (a replaced import, an earlier deletion).
     const ids = (await tx.select({ id: lead.id }).from(lead).where(eq(lead.personId, personId))).map((l) => l.id);
-    if (ids.length > 0) await tx.delete(leadSubmission).where(inArray(leadSubmission.leadId, ids));
+    const theirs = [
+      ...(ids.length > 0 ? [inArray(leadSubmission.leadId, ids)] : []),
+      ...(preview.person.emailNormalized ? [sql`lower(trim(${leadSubmission.payload}->>'email')) = ${preview.person.emailNormalized}`] : []),
+      ...(preview.person.phoneNormalized ? [sql`regexp_replace(${leadSubmission.payload}->>'phone', '\D', '', 'g') like ${"%" + preview.person.phoneNormalized.slice(-9)}`] : []),
+    ];
+    if (theirs.length > 0) await tx.delete(leadSubmission).where(and(eq(leadSubmission.studioId, studioId), or(...theirs)));
     await tx.delete(lead).where(eq(lead.personId, personId));
     await tx.delete(person).where(and(eq(person.studioId, studioId), eq(person.id, personId)));
     await tx.insert(deletionLog).values({ studioId, deletedById, leads: preview.leads, notes: preview.notes, tasks: preview.tasks });

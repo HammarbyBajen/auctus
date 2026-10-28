@@ -51,6 +51,24 @@ describe.skipIf(!hasDb)("privacy tools", () => {
     await pool.end();
   });
 
+  it("deletes a web submission that lost its lead, found by the person's email", async () => {
+    const { lead, person } = await newLead("Cia Form");
+    // The raw submission, as the website sent it, whose lead was later removed (a replaced import).
+    await db.insert(schema.leadSubmission).values({
+      studioId, senderId: `${tag}-orphan`, route: "contact", isTest: false, outcome: "created", leadId: null,
+      payload: { name: "Cia Form", email: person.email!.toUpperCase(), phone: null, message: "Hej" },
+    });
+    await db.insert(schema.leadSubmission).values({
+      studioId, senderId: `${tag}-other`, route: "contact", isTest: false, outcome: "created", leadId: null,
+      payload: { name: "Någon annan", email: `other-${tag}@example.test`, phone: null, message: "Hej" },
+    });
+    expect(lead.id).toBeTruthy();
+    await privacy.deletePerson(db, studioId, person.id, ownerId);
+    const left = await db.select({ senderId: schema.leadSubmission.senderId }).from(schema.leadSubmission).where(eq(schema.leadSubmission.studioId, studioId));
+    expect(left.map((s) => s.senderId)).toEqual([`${tag}-other`]);
+    await db.delete(schema.leadSubmission).where(eq(schema.leadSubmission.studioId, studioId));
+  });
+
   it("deletes a person with every lead, note, history entry, task and at-risk alert, logs it, and leaves others alone", async () => {
     const { lead, person } = await newLead("Anna Radera");
     await db.update(schema.person).set({ manaUserId: `${tag}-mana` }).where(eq(schema.person.id, person.id));

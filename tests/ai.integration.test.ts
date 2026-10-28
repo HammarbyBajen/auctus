@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { AiTransport } from "@/lib/ai/client";
@@ -79,6 +79,8 @@ describe.skipIf(!hasDb)("the assistant's foundation (ticket 30)", () => {
     await ai.decideSuggestion(db, studioId, row.id, "accepted", ownerId);
     const [decided] = await db.select().from(schema.aiSuggestion).where(eq(schema.aiSuggestion.id, row.id));
     expect(decided.decision).toBe("accepted");
+    // Once decided, it is no longer open to be carried out again (saveSteps looks only for undecided ones).
+    expect(await db.select().from(schema.aiSuggestion).where(and(eq(schema.aiSuggestion.id, row.id), isNull(schema.aiSuggestion.decision)))).toEqual([]);
   });
 
   it("prices each model that ran when a fallback rescued a declined request", async () => {

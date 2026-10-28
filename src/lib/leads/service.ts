@@ -33,6 +33,10 @@ export async function createOrMatchLead(db: Db, studioId: string, input: NewLead
   const phoneNormalized = normalizePhone(phone);
 
   return db.transaction(async (tx) => {
+    // Two submissions for the same person at once (the form and the chat bot) would both find nobody
+    // and make two people: the second waits for the first, then finds them.
+    const key = emailNormalized ?? phoneNormalized;
+    if (key) await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`lead:${studioId}:${key}`}))`);
     let existing: typeof person.$inferSelect | undefined;
     if (emailNormalized) {
       [existing] = await tx

@@ -92,6 +92,17 @@ describe.skipIf(!hasDb)("leads", () => {
     expect(again.lead.id).toBe(first.lead.id);
   });
 
+  it("makes one person when two leads for them arrive at the same instant", async () => {
+    const email = `same-${tag}@example.test`;
+    const [a, b] = await Promise.all([
+      service.createOrMatchLead(db, studioA, { name: "Sam Tidig", email, source: "contact_form" }),
+      service.createOrMatchLead(db, studioA, { name: "Sam", email, source: "chat_bot" }),
+    ]);
+    expect(a.person.id).toBe(b.person.id);
+    expect([a.duplicate, b.duplicate].sort()).toEqual([false, true]);
+    expect(await db.select().from(schema.lead).where(eq(schema.lead.personId, a.person.id))).toHaveLength(1);
+  });
+
   it("starts a new lead in Ny lead when someone whose lead went cold asks again", async () => {
     const first = await service.createOrMatchLead(db, studioA, { name: "Kall Kalle", email: "kalle@example.test", source: "manual" });
     await service.moveLeadStage(db, studioA, first.lead.id, "cold", { coldReason: "price" });

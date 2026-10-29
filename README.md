@@ -1,6 +1,6 @@
 # Tegen HQ
 
-Tegen HQ is a lead and retention CRM for CrossFit Tegen, built on top of Mana. Start with [docs/SYSTEM.md](docs/SYSTEM.md) for what has been built and how it fits together; see [docs/PRD.md](docs/PRD.md) for the plan and `.scratch/tegen-hq/issues/` for the tickets.
+Tegen HQ is a lead and retention CRM for CrossFit Tegen, built on top of Mana. Start with [docs/SYSTEM.md](docs/SYSTEM.md) for what has been built and how it fits together; see [docs/PRD.md](docs/PRD.md) for the plan and the tickets are kept outside the repo.
 
 ## Getting started
 

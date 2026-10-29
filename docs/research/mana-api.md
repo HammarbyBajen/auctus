@@ -17,7 +17,7 @@ Research date: 2026-10-07. Primary sources only.
 
 - S2: "a JSON HTTP API for one studio", with paths scoped to a studio id. It covers members, bookings, waitlists, memberships, credits, courses, payments, check-ins, venues, rooms and instructors. Status stated as alpha, shapes may change. (S2)
 - S3 `info`: title "Mana studio API", version `alpha`. "HTTP API for app and integration clients." Two credentials work: a Supabase user JWT (a signed-in person) and a studio API key (server-to-server). (S3)
-- Example studio in S2: CrossFit Tegen, slug `tegen`, id `0ce2dee6-f72a-4d48-8421-bf9a22203e0c`, timezone `Europe/Stockholm`, currency SEK. (S2)
+- Example studio in S2: CrossFit Tegen, slug `tegen`, id `<studio id>`, timezone `Europe/Stockholm`, currency SEK. (S2)
 
 ## 2. Base URL
 
@@ -87,7 +87,7 @@ Unless an operation says "bearer required", S3 declares no `security`, which the
 
 ```bash
 curl -H "Authorization: Bearer $MANA_API_KEY" \
-  "https://www.getmana.app/api/v1/studios/0ce2dee6-f72a-4d48-8421-bf9a22203e0c"
+  "https://www.getmana.app/api/v1/studios/<studio id>"
 ```
 
 #### `GET /api/v1/friends`

@@ -1,6 +1,6 @@
 # Resend: research notes
 
-Research date: 2026-10-15. Every page below was read on that date. Brief: `.scratch/tegen-hq/resend-research-prompt.md`.
+Research date: 2026-10-15. Every page below was read on that date. Brief: resend-research-prompt.md in the notes folder outside the repo.
 
 Method note: pages were read with WebFetch (summarised by a small model) and WebSearch restricted to official domains. Where a page did not say something, this note says "unknown" or "not stated". The installed skills (`.claude/skills/resend`, `react-email`, `email-best-practices`) were read as background only, and every fact taken from them was checked against the primary source. Where they disagree, the primary source wins (see "Where the skills disagree with the docs" at the end). Numbers should be checked again on the page before they are hard-coded, because the Resend API changes often.
 

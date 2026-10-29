@@ -6,7 +6,7 @@ import { createCategory, createPage, listCategories, listPages } from "@/lib/han
 // Handbok guides for using Tegen HQ (written 2026-10-26, approved by Max). Added to production on 2026-10-26;
 // four updated there the same day for the Från Mana column, Säger upp and Fryser, and Sammanfatta;
 // on 2026-10-27 "Leads från Mana" became "Från Mana" and Medlemmar got Har slutat, Dagpass and Klippkort.
-// To add them again (only missing titles are added): copy to scripts/, then run with the database's env loaded and NODE_OPTIONS="--conditions=react-server".
+// To add them again (only missing titles are added): run with the database's env loaded and NODE_OPTIONS="--conditions=react-server".
 type Block = ["h2" | "h3" | "p", string] | ["ul" | "ol" | "tasks", string[]];
 const text = (t: string) => [{ type: "text", text: t }];
 const para = (t: string) => ({ type: "paragraph", content: text(t) });

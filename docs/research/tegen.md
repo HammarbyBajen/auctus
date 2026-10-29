@@ -58,7 +58,7 @@ Member and class booking (T3, T1):
 
 ## 5. Tooling visible on the site
 
-- **Mana** (getmana.app): booking, memberships, classes, credits. The site's privacy text lists "Bokningssystem (Mana) for managing memberships and classes" as a data recipient. (T4 raw page, T1, T3). Studio slug `tegen`; account URL above; API notes in `mana-api.md` (studio id `0ce2dee6-f72a-4d48-8421-bf9a22203e0c` per [M]).
+- **Mana** (getmana.app): booking, memberships, classes, credits. The site's privacy text lists "Bokningssystem (Mana) for managing memberships and classes" as a data recipient. (T4 raw page, T1, T3). Studio slug `tegen`; account URL above; API notes in `mana-api.md` (studio id `<studio id>` per [M]).
 - **Website built by LAB37** (lab37.io) (T1 footer credit via fetch; raw HTML of T2 also links lab37.io).
 - **Google Tag Manager** (container id GTM-MQTKC5QV seen in raw HTML of T2), **Google Analytics**, **Meta pixel / Facebook Connect**, **Cloudflare Web Analytics**. (T2/T4 raw HTML and T4 privacy text)
 - Privacy text (T4) states that on form submit, email and phone are shared in hashed form with Meta and Google Ads for ad measurement, plus technical data such as IP address (truncated in my capture; read the page for the full wording).

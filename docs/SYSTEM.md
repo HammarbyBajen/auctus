@@ -1,6 +1,6 @@
 # Tegen HQ: what has been built
 
-Written for an AI agent (or a new developer) opening this repository for the first time. It says what the system is, how the pieces fit, what the rules are, and where to look. It describes the state on 2026-10-28. For the original plan read `docs/PRD.md`; for operating it read `docs/runbook.md`; for how it should look read `docs/DESIGN.md`; for the history of each feature read `.scratch/tegen-hq/issues/` (37 tickets, each with its decisions).
+Written for an AI agent (or a new developer) opening this repository for the first time. It says what the system is, how the pieces fit, what the rules are, and where to look. It describes the state on 2026-10-28. For the original plan read `docs/PRD.md`; for operating it read `docs/runbook.md`; for how it should look read `docs/DESIGN.md`; for the history of each feature read the tickets (37, each with its decisions), kept outside the repo in `../Auctus-notes/tegen-hq/issues/`.
 
 ## What it is
 
@@ -32,7 +32,7 @@ drizzle/              migrations, numbered; 0035 is the latest
 tests/                one file per module; *.integration.test.ts need DATABASE_URL
 scripts/              seed, dev user, Pipedrive import; scripts/_*.ts are ignored by git (temporary)
 docs/                 PRD, design system, runbook, lead-intake contract, ADRs, this file
-.scratch/tegen-hq/    tickets and working notes, committed, never personal data
+../Auctus-notes/     tickets and working notes, outside the repo (not on GitHub), never personal data
 ```
 
 Every page calls `requireUser()` or `requirePermission(resource, action)` from `src/lib/session.ts`. Roles are two: `owner` and `staff`, fixed in `src/lib/permissions.ts`. The role is read fresh from the database on every request, so a change applies at once.
@@ -81,7 +81,7 @@ Live in production and used: everything above. Not yet gone live as the only sys
 
 ## If you are an agent asked to change something
 
-1. Read the ticket in `.scratch/tegen-hq/issues/` for the module; decisions and the reasons are there.
+1. Read the ticket in `../Auctus-notes/tegen-hq/issues/` for the module (ask Max if you do not have it); decisions and the reasons are there.
 2. Find the rule in `src/lib/<module>/`, change it once in the shared code, and update the test beside it (`tests/<module>*.test.ts`). Database tests need a local `DATABASE_URL`.
 3. Run `pnpm typecheck`, `pnpm lint`, `pnpm test`.
 4. Copy shown to users goes in `src/messages/sv.json` and is approved by Max before it ships.

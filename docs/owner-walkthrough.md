@@ -74,4 +74,4 @@ Make these together in the meeting; each is a few clicks.
 
 ## After the meeting
 
-Tick ticket 18's "Owners walked through the system", write down the go-live date and the decisions in `.scratch/tegen-hq/issues/18-*.md`, and update the ticket board.
+Tick ticket 18's "Owners walked through the system", write down the go-live date and the decisions in the ticket (`../Auctus-notes/tegen-hq/issues/18-*.md`), and update the ticket board.
